@@ -1,0 +1,42 @@
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: uniclub_postgres
+    # Bu kimlik bilgileri YALNIZCA yerel geliştirme içindir — gizli değildir.
+    # Prod için bkz. docker-compose.prod.yml (tüm değerler env'den gelir).
+    environment:
+      POSTGRES_USER: uniclub
+      POSTGRES_PASSWORD: uniclub_dev
+      POSTGRES_DB: uniclub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: uniclub_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # Sahte SMTP sunucusu — GERÇEK mail göndermez, hepsini yakalar.
+  # 1025: uygulamanın bağlandığı SMTP portu (env.SMTP_PORT)
+  # 8025: gelen mailleri HTML'iyle görebileceğin web arayüzü → http://localhost:8025
+  # Prod'a geçerken tek yapılacak: SMTP_HOST/PORT/USER/PASS'i gerçek sağlayıcıya çevirmek.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: uniclub_mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1      # kimlik doğrulaması olmadan da kabul et
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1  # TLS'siz bağlantıya izin ver (yerel geliştirme)
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    // Environment
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "types": ["node", "bun-types"],
+
+    // Strictness
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    // JSX (hono/jsx — used by email templates)
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
+  }
+}

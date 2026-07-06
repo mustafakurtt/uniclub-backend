@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets — asla commit'leme
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+bun-debug.log*
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Stale drizzle-kit output (aktif migrations: src/db/migrations)
+/drizzle/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Local Claude Code state
+.claude/
