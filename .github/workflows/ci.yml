@@ -6,7 +6,13 @@ on:
   pull_request:
     branches: [main, develop]
 
+# Aynı dal için yeni push gelirse eskisini iptal et — CI dakikası boşa gitmesin.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # ── Statik kontrol: hızlı, altyapı istemez ────────────────
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
@@ -23,3 +29,87 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+  # ── Duman testi: gerçek Postgres + Redis ile uçtan uca ────
+  # Migration'lar temiz bir veritabanında uygulanıyor mu, seed çalışıyor mu,
+  # uygulama gerçekten ayağa kalkıp /health dönüyor mu?
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uniclub
+          POSTGRES_PASSWORD: uniclub_ci
+          POSTGRES_DB: uniclub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uniclub -d uniclub"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PORT: 3000
+      NODE_ENV: development
+      DATABASE_URL: postgres://uniclub:uniclub_ci@localhost:5432/uniclub
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-secret-not-used-anywhere-else
+      APP_URL: http://localhost:3000
+      # CI'da gerçek SMTP yok; mail bağlantısı başarısız olur ama uygulama çökmez.
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      MAIL_FROM: UniClub CI <ci@uniclub.local>
+      RATE_LIMIT_DISABLED: "true"
+      TRUST_PROXY: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Migration'lar sıfırdan bir veritabanında sorunsuz uygulanmalı.
+      # Bu, "bende çalışıyordu" sınıfı hataları prod'a varmadan yakalar.
+      - name: Run migrations
+        run: bun run db:migrate
+
+      - name: Seed database
+        run: bun run db:seed
+
+      - name: Boot app and check /health
+        run: |
+          bun run src/index.ts &
+          APP_PID=$!
+          # En fazla 30 sn bekle; /health 200 dönene kadar dene.
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/health > /tmp/health.json 2>/dev/null; then
+              echo "✓ Uygulama ${i}. saniyede ayağa kalktı"
+              cat /tmp/health.json
+              kill $APP_PID
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "✗ Uygulama 30 sn içinde /health döndürmedi"
+          kill $APP_PID 2>/dev/null || true
+          exit 1
