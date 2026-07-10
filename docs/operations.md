@@ -172,6 +172,36 @@ previous image**.
 ./scripts/deploy-agent.sh --watch    # poll every 5 minutes
 ```
 
+Secrets never travel through git, so `.env.prod` is placed in the deploy
+directory by hand, once, before the first deploy.
+
+To keep it running on the production machine, schedule it rather than leaving a
+terminal open. On Windows:
+
+```powershell
+schtasks /create /tn "uniclub-deploy-agent" /sc minute /mo 5 ^
+  /tr "\"C:\Program Files\Git\bin\bash.exe\" -lc \"~/uniclub-prod/scripts/deploy-agent.sh\""
+schtasks /delete /tn "uniclub-deploy-agent" /f    # to stop
+```
+
+On Linux, a systemd timer or a cron entry does the same job.
+
+### Two machines
+
+The development machine never touches production. It pushes to GitHub; the
+production machine pulls from it. Neither needs to reach the other, so the
+laptop can sit behind a home router with no ports open.
+
+```
+  desktop (development)          GitHub              laptop (production)
+      bun run dev        ──push──▶  CI  ◀──poll──  deploy-agent.sh
+                                  release              ▼
+                                                  :8080 prod stack
+```
+
+If the production machine is asleep when a release is cut, nothing breaks: the
+agent deploys it on its next poll.
+
 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) still builds
 and smoke-tests the image on every push, so a release candidate that compiles
 but cannot start is caught before anyone tags it.
