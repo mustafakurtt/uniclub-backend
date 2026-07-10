@@ -100,6 +100,22 @@ if [[ "$HEALTHY" -ne 1 ]]; then
   exit 1
 fi
 
+# ── 7. Proxy config'ini tazele ────────────────────────────────
+# Reverse proxy ayrı ve uzun ömürlü bir compose projesi (uniclub-proxy), ama
+# CONFIG'i (deploy/Caddyfile) bu repo'da ve release'lerle değişebilir. Deploy
+# klonu yeni commit'e alındığında Caddyfile güncellenir; Caddy'ye yeniden
+# okuması söylenmezse eski yönlendirmeyle çalışmaya devam eder.
+# `caddy reload` config'i kesintisiz yeniler (restart değil).
+if docker ps --format '{{.Names}}' | grep -qx uniclub_proxy; then
+  # MSYS_NO_PATHCONV: Git Bash, container içi /etc/caddy/... yolunu Windows
+  # yoluna çevirip komutu bozuyor. Sadece bu docker exec için kapatıyoruz.
+  if MSYS_NO_PATHCONV=1 docker exec uniclub_proxy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+    echo "▶ Proxy config yeniden yüklendi"
+  else
+    echo "  ⚠ Proxy reload başarısız — Caddyfile'ı elle kontrol et" >&2
+  fi
+fi
+
 echo
 echo "✓ Deploy tamam: uniclub-backend:${NEW_TAG}"
 echo "  Uygulama : http://localhost:${APP_PORT}"
