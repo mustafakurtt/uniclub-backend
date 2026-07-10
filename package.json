@@ -33,6 +33,9 @@
     "db:sync-permissions": "bun run src/db/sync-permissions.ts",
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "bash scripts/db-restore.sh",
+    "proxy:up": "docker compose -p uniclub-proxy -f docker-compose.proxy.yml --env-file .env.prod up -d",
+    "proxy:down": "docker compose -p uniclub-proxy -f docker-compose.proxy.yml down",
+    "proxy:logs": "docker compose -p uniclub-proxy -f docker-compose.proxy.yml logs -f",
     "db:reset": "drizzle-kit drop && bun run db:generate && bun run db:migrate && bun run db:seed"
   },
   "dependencies": {

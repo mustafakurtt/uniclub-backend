@@ -186,6 +186,57 @@ schtasks /delete /tn "uniclub-deploy-agent" /f    # to stop
 
 On Linux, a systemd timer or a cron entry does the same job.
 
+## Local network access
+
+Both environments sit behind a Caddy reverse proxy
+([`docker-compose.proxy.yml`](../docker-compose.proxy.yml),
+[`deploy/Caddyfile`](../deploy/Caddyfile)):
+
+| URL | Goes to |
+| --- | --- |
+| `https://uniclub.test` | production container |
+| `https://test.uniclub.test` | development server (`bun run dev`) |
+
+`.test` is reserved by RFC 6761 for exactly this. Nobody can buy it, so it can
+never collide with a real site — unlike squatting a domain you do not own, which
+would also make a real certificate impossible.
+
+### Nothing leaves the network
+
+`BIND_ADDR` in `.env.prod` decides which interface everything listens on, and it
+is a **security setting**:
+
+| Value | Reachable from |
+| --- | --- |
+| `127.0.0.1` (default) | this machine only — correct on a shared/school/café network |
+| the machine's LAN IP | other devices on the home network |
+| `0.0.0.0` | every interface — don't |
+
+Nothing is reachable from the internet as long as the router has no port
+forwarding. Do not add any.
+
+Caddy issues certificates from its **own local CA** (`local_certs` in the
+Caddyfile). It never contacts Let's Encrypt — which both keeps traffic inside the
+network and is the only thing that can work for a `.test` name.
+
+### Trusting the certificate
+
+```powershell
+# Export the root certificate from the proxy
+docker cp uniclub_proxy:/data/caddy/pki/authorities/local/root.crt .\deploy\ca\caddy-local-root.crt
+
+# Then, in an ADMINISTRATOR PowerShell:
+.\scripts\setup-local-dns.ps1 -CertPath .\deploy\ca\caddy-local-root.crt
+```
+
+The script writes the `hosts` entries and installs the root certificate. It is
+idempotent; `-Remove` undoes the `hosts` entries. On the development machine,
+pass the production machine's LAN IP: `-IPAddress 192.168.1.42`.
+
+The CA's private key lives in the `caddy_data` volume. It only signs names this
+proxy serves, but anyone who steals that key can impersonate any site to a
+machine that trusts it. Do not copy it around.
+
 ### Two machines
 
 The development machine never touches production. It pushes to GitHub; the
@@ -196,11 +247,24 @@ laptop can sit behind a home router with no ports open.
   desktop (development)          GitHub              laptop (production)
       bun run dev        ──push──▶  CI  ◀──poll──  deploy-agent.sh
                                   release              ▼
-                                                  :8080 prod stack
+                                              Caddy :443 ──▶ prod container
+                                            https://uniclub.test
 ```
 
 If the production machine is asleep when a release is cut, nothing breaks: the
 agent deploys it on its next poll.
+
+**Give the production machine a static address.** Its LAN IP comes from DHCP, so
+a router reboot can change it and every `hosts` entry pointing at it goes stale.
+Reserve the address for its MAC in the router's DHCP settings before pointing
+other machines at it.
+
+At home, switch `BIND_ADDR` in `.env.prod` from `127.0.0.1` to that reserved IP
+and restart the proxy (`bun run proxy:up`), then run `setup-local-dns.ps1` on the
+desktop with `-IPAddress <that IP>`. Scaling past a handful of devices is where a
+local DNS server (dnsmasq, AdGuard Home) replaces `hosts` files — every device on
+the network resolves the names automatically, at the cost of the whole network
+losing DNS if that container dies.
 
 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) still builds
 and smoke-tests the image on every push, so a release candidate that compiles

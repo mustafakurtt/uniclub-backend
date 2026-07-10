@@ -1,0 +1,44 @@
+# Yerel ağ reverse proxy'si (Caddy).
+#
+#   docker compose -p uniclub-proxy -f docker-compose.proxy.yml --env-file .env.prod up -d
+#
+# BIND_ADDR, dinlenen arayüzü belirler ve bu bir GÜVENLİK ayarıdır:
+#
+#   127.0.0.1      → yalnızca bu makine. Paylaşımlı/okul ağında VARSAYILAN bu olmalı.
+#   10.x.x.x       → ev ağındaki diğer cihazlar da erişir (masaüstü, telefon).
+#   0.0.0.0        → tüm arayüzler. Ne yaptığını bilmiyorsan yazma.
+#
+# Hiçbir durumda internete açılmaz: router'da port yönlendirmesi yoksa
+# dışarıdan erişilemez. Port yönlendirmesi AÇMA.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: uniclub_proxy
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:80:80"
+      - "${BIND_ADDR:-127.0.0.1}:443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Yerel CA'nın kök sertifikası ve anahtarı burada yaşar. Volume silinirse
+      # yeni bir CA üretilir ve makinelere kökü yeniden kurman gerekir.
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      # Container'dan host'taki `bun run dev` sunucusuna çıkış.
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - prod
+
+networks:
+  # Production stack'in ağı. `docker compose -p uniclub-prod` onu yaratır,
+  # bu yüzden burada external olarak bağlanıyoruz.
+  prod:
+    external: true
+    name: uniclub-prod_default
+
+volumes:
+  caddy_data:
+  caddy_config:

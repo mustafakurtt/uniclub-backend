@@ -1,0 +1,50 @@
+# Yerel ağ reverse proxy'si.
+#
+#   https://uniclub.test        → production  (container: uniclub_prod_app)
+#   https://test.uniclub.test   → development (host'ta: bun run dev, :3000)
+#
+# `.test` TLD'si RFC 6761 ile test amaçlı rezerve edilmiştir; kimse satın
+# alamaz, gerçek bir siteyle çakışmaz.
+
+{
+	# Sertifikaları Caddy'nin KENDİ yerel CA'sı üretir.
+	# Bu satır olmadan Caddy Let's Encrypt'e bağlanmayı dener — hem `.test`
+	# için sertifika alamaz, hem de "dış ağa çıkma" kuralımızı çiğner.
+	local_certs
+
+	# ACME'ye hiç gitmeyeceğimiz için e-posta da gerekmez.
+	admin off
+}
+
+# ── PRODUCTION ────────────────────────────────────────────────
+uniclub.test {
+	# uniclub_prod_app, uniclub-prod compose ağında. Proxy o ağa bağlı.
+	reverse_proxy uniclub_prod_app:3000 {
+		# Uygulama TRUST_PROXY=true ile bu başlıklara güveniyor.
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+# ── DEVELOPMENT ───────────────────────────────────────────────
+# Dev sunucusu container'da değil, host'ta `bun run dev` ile çalışıyor.
+# host.docker.internal, container'dan host'a çıkan adrestir.
+test.uniclub.test {
+	reverse_proxy host.docker.internal:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Dev ayakta değilse anlaşılır bir mesaj ver; 502 sayfası kafa karıştırır.
+	handle_errors {
+		respond "Development sunucusu çalışmıyor. Proje dizininde `bun run dev` çalıştır. (upstream: {err.status_code})" 503
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
