@@ -32,6 +32,16 @@ APP_CONTAINER="uniclub_prod_app"
 
 command -v gh >/dev/null 2>&1 || { echo "HATA: gh CLI gerekli." >&2; exit 1; }
 
+# Ajan çoğu zaman zamanlanmış bir görev olarak, kimse bakmadan çalışır.
+# Ekrana yazdığı her şeyi bir dosyaya da düşürüyoruz ki sonradan "gece ne oldu?"
+# sorusunun cevabı olsun. LOG_FILE=/dev/null ile kapatılabilir.
+LOG_FILE="${LOG_FILE:-${DEPLOY_DIR}/logs/deploy-agent.log}"
+if [[ "$LOG_FILE" != "/dev/null" ]]; then
+  mkdir -p "$(dirname "$LOG_FILE")"
+  # stdout ve stderr'i hem ekrana hem dosyaya ver.
+  exec > >(tee -a "$LOG_FILE") 2>&1
+fi
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 latest_release_tag() {

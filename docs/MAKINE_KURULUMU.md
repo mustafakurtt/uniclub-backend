@@ -193,6 +193,125 @@ uyanınca yapar.
 
 ---
 
+## Push'tan production'a: ne oluyor, nereden izlenir
+
+Masaüstünden bir değişiklik gönderdiğinde zincir şöyle işler. Her aşamanın
+kendi gözlem noktası var.
+
+### 1. `develop`'a push
+
+```sh
+git push                     # masaüstü
+```
+
+GitHub'da **CI** workflow'u tetiklenir: `Typecheck` ve `Integration`
+(gerçek Postgres + Redis ile migration → seed → uygulama açılışı → `/health`).
+Ayrıca **Release check** imajı derleyip duman testinden geçirir.
+
+```sh
+gh run list --branch develop --limit 3
+gh run watch                          # canlı izle
+gh run view --log-failed              # kırmızıysa yalnızca hatalı adım
+```
+
+**Production'a hiçbir şey olmaz.** `develop` prod'u tetiklemez.
+
+### 2. `main`'e PR
+
+```sh
+gh pr create --base main --head develop --title "release: v1.3.0"
+```
+
+`main` korumalı: `Typecheck` + `Integration` yeşil olmadan merge düğmesi açılmaz.
+Force-push kapalı, admin bile atlayamaz.
+
+```sh
+gh pr checks                          # PR'ın kontrol tablosu
+```
+
+Merge edildiğinde `main` üzerinde CI bir kez daha koşar. **Prod hâlâ eski
+sürümde** — çünkü ajan commit'leri değil, **release'leri** izler.
+
+### 3. Release kesmek — deploy'un insan kapısı
+
+```sh
+git switch main && git pull
+git tag -a v1.3.0 -m "v1.3.0" && git push origin v1.3.0
+gh release create v1.3.0 --generate-notes
+```
+
+Bu, prod'a çıkışın **tek tetikleyicisidir**. Buraya kadar hiçbir otomasyon
+production'a dokunmadı.
+
+### 4. Ajan devralır (laptop, 5 dakikada bir)
+
+Zamanlanmış görev `~/uniclub-prod/run-agent.sh` çalıştırır. Ajan sırayla:
+
+1. En son release'i sorar (`gh api .../releases/latest`)
+2. Şu an çalışan imaj etiketiyle karşılaştırır (`docker inspect`)
+3. Farklıysa **o commit'in CI'ı yeşil mi** diye bakar — değilse deploy etmez
+4. Deploy klonunu (`~/uniclub-prod`) o commit'e alır
+5. `deploy-local.sh`'a devreder
+
+`deploy-local.sh` ise: **veritabanı yedeği** → imajı release tag'iyle derle →
+migration'ları ayrı container'da uygula → uygulamayı yeniden başlat →
+`/health` yeşil yanana kadar bekle → yanmazsa **önceki imaja geri dön**.
+
+```sh
+bun run deploy:logs                   # ajanın canlı akışı
+bun run deploy:agent                  # elle tetikle, beklemeden gör
+```
+
+Ajan idempotenttir: güncel sürüm zaten çalışıyorsa `Güncel: v1.3.0 zaten
+çalışıyor.` yazıp çıkar.
+
+### 5. Çalışan sistemi izlemek
+
+```sh
+bun run prod:ps                       # container'lar ve sağlık durumları
+bun run prod:logs                     # uygulama logları (pino JSON)
+docker logs -f uniclub_proxy          # Caddy erişim logları
+docker inspect uniclub_prod_app -f '{{.Config.Image}}'   # hangi sürüm çalışıyor
+```
+
+Uygulama logu her istek için bir JSON satırı yazar:
+
+```json
+{"level":30,"module":"http","requestId":"2b27de2f-...","method":"GET","path":"/health","status":200,"durationMs":1}
+```
+
+`requestId`, Caddy'nin erişim logundaki `X-Request-Id` ile **aynıdır**. Bir
+kullanıcı hata bildirdiğinde, yanıtındaki id ile hem proxy hem uygulama logunda
+o isteği bulabilirsin. `level` 50 = hata, 40 = uyarı.
+
+### Görev çalışıyor mu?
+
+```powershell
+Get-ScheduledTaskInfo -TaskName "uniclub-deploy-agent"
+Start-ScheduledTask   -TaskName "uniclub-deploy-agent"   # elle tetikle
+```
+
+`LastTaskResult` `0` ise script başarıyla bitti. Ajanın kendi kararı (deploy
+etti / etmedi) log dosyasındadır — görev sonucu değildir.
+
+### Deploy başarısız olursa
+
+`deploy-local.sh` sağlık kontrolü geçmezse otomatik olarak önceki imaja döner ve
+`exit 1` verir. Logda görürsün:
+
+```
+✗ Sağlık kontrolü BAŞARISIZ. Son loglar:
+▶ v1.2.0 imajına geri dönülüyor
+  ⚠ Geri dönüldü. NOT: migration'lar geri ALINMAZ.
+```
+
+**Migration'lar geri alınmaz.** Kötü sürüm yıkıcı bir migration içeriyorsa
+yedekten dönmen gerekir — deploy öncesi yedek `~/uniclub-prod/backups/` altında.
+Bu yüzden yıkıcı şema değişiklikleri, o kolonu kullanmayı bırakan koddan **ayrı
+bir sürümde** çıkar (bkz. [operations.md](operations.md)).
+
+---
+
 ## Frontend notları
 
 Frontend ayrı repo: `mustafakurtt/uniclub-frontend`. Endpoint sözleşmelerinin
