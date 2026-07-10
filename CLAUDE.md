@@ -21,10 +21,16 @@ bun run db:generate        # drizzle-kit generate — create SQL migration from 
 bun run db:migrate         # drizzle-kit migrate — apply pending migrations
 bun run db:push            # drizzle-kit push  — push schema directly without a migration file
 bun run db:seed            # bun run src/db/seed.ts — seeds 3 universities (tenant-isolation scenarios), the 9-role RBAC catalog + bundles, sample users for every role, clubs in every status, applications, memberships
-bun run db:reset           # drop + generate + migrate + seed, in one shot
+bun run db:reset           # drop + generate + migrate + seed, in one shot (interactive — drizzle-kit drop prompts)
+
+bun run typecheck          # tsc --noEmit — the check CI runs; must pass before pushing
 ```
 
-There is currently no lint, typecheck, or test script defined in `package.json` — don't assume `bun test` or `bun run lint` exist.
+`typecheck` is the only quality gate wired up — there is no lint or test script defined in `package.json`, so don't assume `bun test` or `bun run lint` exist.
+
+**Branching**: `main` is protected (PR + green CI + 1 approval); daily work branches off `develop`. Never commit straight to `main`. See `CONTRIBUTING.md`.
+
+**Environments are not branches.** `main` and `develop` hold identical files. Dev/prod differ by env vars and by build scope — `.dockerignore` keeps `docs/`, `.github/` and dev tooling out of the production image (`Dockerfile`, `docker-compose.prod.yml`).
 
 Required env vars (validated at startup, see below): `PORT`, `NODE_ENV`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`. Mail-related vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, `APP_URL`) and rate-limit vars (`RATE_LIMIT_DISABLED`, `TRUST_PROXY`) all have dev defaults. Boolean env vars go through the `envBoolean` helper in `env.ts`, **not** `z.coerce.boolean()` — the latter turns the string `"false"` into `true`.
 
@@ -47,7 +53,7 @@ Required env vars (validated at startup, see below): `PORT`, `NODE_ENV`, `DATABA
 - `clubs` has three distinct many-to-many relationships to `users` (creator via `createdBy`, advisors via `clubAdvisors`, members via `clubMembers`) — `relations.ts` gives each an explicit `alias` (`creator_club`/`advisor_club`/`member_club`) because Drizzle's relational query API requires disambiguation when two tables are linked more than once.
 - `clubApplications` + `clubApplicationApprovals` model an extensible multi-step approval chain (`step` int) — currently only step 1 (advisor) is used; adding a second approval stage (e.g. student affairs office) means inserting a `step: 2` row, not a schema change.
 - `relations.ts` uses Drizzle's newer `defineRelations` (v2 relational API, `r.one`/`r.many`), not the older `relations()` helper — repositories query via `db.query.<table>.findFirst({ where: {...} })` object-style `where`, not the legacy callback/operator style.
-- Migrations: `drizzle.config.ts` points `out` at `src/db/migrations`. A stale top-level `drizzle/` directory also exists from before that config was set — it is not the active migrations output and should be disregarded (or cleaned up) rather than added to.
+- Migrations: `drizzle.config.ts` points `out` at `src/db/migrations` — that is the only migrations directory. (A stale top-level `drizzle/` directory from before that config was set has been removed and is `.gitignore`d, so it can't come back.)
 
 **Config** (`src/config/env.ts`): all env access must go through the zod-validated `env` export — never read `process.env` directly in app code. Invalid/missing env vars throw immediately at import time with a Turkish message identifying the field. `drizzle.config.ts` is the one exception (reads `process.env.DATABASE_URL` directly, since drizzle-kit runs outside the app's module graph).
 
