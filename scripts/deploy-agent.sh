@@ -32,6 +32,16 @@ APP_CONTAINER="uniclub_prod_app"
 
 command -v gh >/dev/null 2>&1 || { echo "HATA: gh CLI gerekli." >&2; exit 1; }
 
+# Ajan çoğu zaman zamanlanmış bir görev olarak, kimse bakmadan çalışır.
+# Ekrana yazdığı her şeyi bir dosyaya da düşürüyoruz ki sonradan "gece ne oldu?"
+# sorusunun cevabı olsun. LOG_FILE=/dev/null ile kapatılabilir.
+LOG_FILE="${LOG_FILE:-${DEPLOY_DIR}/logs/deploy-agent.log}"
+if [[ "$LOG_FILE" != "/dev/null" ]]; then
+  mkdir -p "$(dirname "$LOG_FILE")"
+  # stdout ve stderr'i hem ekrana hem dosyaya ver.
+  exec > >(tee -a "$LOG_FILE") 2>&1
+fi
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 latest_release_tag() {
@@ -62,11 +72,16 @@ deployed_version() {
   docker inspect "$APP_CONTAINER" -f '{{.Config.Image}}' 2>/dev/null | sed 's/.*://' || true
 }
 
+# `git clone` boş olmayan bir dizine yazmayı reddeder — ve bu dizin boş olmaz:
+# .env.prod klondan önce oraya konur (secret git'te taşınmaz). Bu yüzden klonlamak
+# yerine dizini bir repo'ya dönüştürüp fetch ediyoruz.
 ensure_clone() {
-  if [[ ! -d "${DEPLOY_DIR}/.git" ]]; then
-    log "Deploy klonu oluşturuluyor: ${DEPLOY_DIR}"
-    git clone --quiet "https://github.com/${REPO}.git" "$DEPLOY_DIR"
-  fi
+  [[ -d "${DEPLOY_DIR}/.git" ]] && return 0
+  log "Deploy repo'su hazırlanıyor: ${DEPLOY_DIR}"
+  mkdir -p "$DEPLOY_DIR"
+  git -C "$DEPLOY_DIR" init --quiet
+  git -C "$DEPLOY_DIR" remote add origin "https://github.com/${REPO}.git" 2>/dev/null || true
+  git -C "$DEPLOY_DIR" fetch --quiet --tags origin
 }
 
 # .env.prod git'te değildir (secret içerir); klona bir kez elle konur.

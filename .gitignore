@@ -11,6 +11,9 @@ node_modules/
 backups/
 *.dump
 
+# Yerel CA'dan çıkarılan kök sertifika — makineye özgü, her kurulumda yeniden üretilir
+deploy/ca/
+
 # Logs
 *.log
 logs/
