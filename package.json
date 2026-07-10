@@ -30,6 +30,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "bun run src/db/seed.ts",
+    "db:bootstrap": "bun run src/db/bootstrap.ts",
     "db:sync-permissions": "bun run src/db/sync-permissions.ts",
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "bash scripts/db-restore.sh",

@@ -20,6 +20,12 @@ services:
     container_name: uniclub_prod_migrate
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:?zorunlu}:${POSTGRES_PASSWORD:?zorunlu}@postgres:5432/${POSTGRES_DB:?zorunlu}
+      # Aynı imaj `db:bootstrap` için de kullanılır (RBAC + ilk super_admin).
+      # Değerler yoksa bootstrap RBAC'ı kurar ama admin oluşturmayı atlar.
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      SUPER_ADMIN_FIRST_NAME: ${SUPER_ADMIN_FIRST_NAME:-}
+      SUPER_ADMIN_LAST_NAME: ${SUPER_ADMIN_LAST_NAME:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,9 +60,12 @@ services:
       # yalnızca bu makineye açıktır — paylaşımlı bir ağda 0.0.0.0'a bind
       # etmek uygulamayı tüm ağa açar.
       - "${BIND_ADDR:-127.0.0.1}:${APP_PORT:-8080}:3000"
+    # migrate BİLİNÇLİ olarak depends_on'da değil: kısa ömürlü bir container'ı
+    # `compose up` orkestrasyonuna sokmak, container bitip temizlenirken
+    # "No such container" hatasına ve yanlış-negatif deploy'a yol açıyor.
+    # Migration'ı deploy-local.sh ayrı bir `compose run` adımıyla, uygulamadan
+    # önce çalıştırır.
     depends_on:
-      migrate:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
     restart: unless-stopped

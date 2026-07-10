@@ -3,64 +3,7 @@ import { db } from "./index";
 import * as schema from "./schema";
 import { env } from "../config/env";
 import { hashPassword } from "../shared/utils/password.util";
-import { UniversityPermission, UNIVERSITY_PERMISSION_CATALOG } from "../features/university/university.permissions";
-import { AuthPermission } from "../features/auth/auth.permissions";
-import { AdminPermission, ADMIN_PERMISSION_CATALOG } from "../features/admin/admin.permissions";
-import { ClubPermission, CLUB_PERMISSION_CATALOG } from "../features/clubs/clubs.permissions";
-import { AnnouncementPermission, ANNOUNCEMENT_PERMISSION_CATALOG } from "../features/announcements/announcements.permissions";
-import { GalleryPermission, GALLERY_PERMISSION_CATALOG } from "../features/gallery/gallery.permissions";
-import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/audit.permissions";
-
-/**
- * Global rol → yetki demetleri (kurumsal model, bkz. docs/yonetim/06 §B4).
- * super_admin tüm yetkileri alır (aşağıda ayrıca ele alınır). Buradaki roller
- * "global şablon" (universityId: null) olarak kurulur.
- */
-const ROLE_BUNDLES: Record<string, string[]> = {
-  // Tenant yöneticisi (eski "admin"): kendi üniversitesinin tamamı + moderasyon +
-  // (tenant-scoped) rol yönetimi. Platform işleri (university.create/delete,
-  // permission.manage) HARİÇ.
-  university_admin: [
-    AdminPermission.USER_VIEW, AdminPermission.USER_MANAGE,
-    ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW, ClubPermission.APPROVE,
-    ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE, ClubPermission.DELETE,
-    AnnouncementPermission.MODERATE, GalleryPermission.MODERATE,
-    UniversityPermission.UPDATE,
-    UniversityPermission.FACULTY_CREATE, UniversityPermission.FACULTY_UPDATE, UniversityPermission.FACULTY_DELETE,
-    UniversityPermission.DEPARTMENT_CREATE, UniversityPermission.DEPARTMENT_UPDATE, UniversityPermission.DEPARTMENT_DELETE,
-    UniversityPermission.DOMAIN_CREATE, UniversityPermission.DOMAIN_UPDATE, UniversityPermission.DOMAIN_DELETE,
-    AuthPermission.ROLE_MANAGE,
-    AuditPermission.VIEW,
-  ],
-  // SKS / Öğrenci Kulüpleri Koordinatörlüğü: kulüp yaşam döngüsü + moderasyon.
-  student_affairs: [
-    AdminPermission.USER_VIEW,
-    ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW, ClubPermission.APPROVE,
-    ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE,
-    AnnouncementPermission.MODERATE, GalleryPermission.MODERATE,
-  ],
-  // Öğrenci İşleri / BİDB: akademik yapı + bölüm atama.
-  academic_affairs: [
-    AdminPermission.USER_VIEW, AdminPermission.USER_MANAGE,
-    UniversityPermission.FACULTY_CREATE, UniversityPermission.FACULTY_UPDATE, UniversityPermission.FACULTY_DELETE,
-    UniversityPermission.DEPARTMENT_CREATE, UniversityPermission.DEPARTMENT_UPDATE, UniversityPermission.DEPARTMENT_DELETE,
-    UniversityPermission.DOMAIN_CREATE, UniversityPermission.DOMAIN_UPDATE, UniversityPermission.DOMAIN_DELETE,
-  ],
-  // İçerik moderatörü.
-  content_moderator: [
-    ClubPermission.VIEW, AnnouncementPermission.MODERATE, GalleryPermission.MODERATE,
-  ],
-  // Denetim / İzleme (salt-okunur, kendi tenant). Denetim izi bu rolün ana ekranıdır.
-  auditor: [
-    AdminPermission.USER_VIEW, ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW,
-    AuditPermission.VIEW,
-  ],
-  // Platform Destek (salt-okunur, çapraz tenant — tenant scope bypass'ı roldedir).
-  platform_support: [
-    AdminPermission.USER_VIEW, ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW,
-    AuditPermission.VIEW,
-  ],
-};
+import { provisionRbacCatalog } from "./rbac-catalog";
 
 /**
  * ÇOK ÜNİVERSİTELİ (multi-tenant) TEST SEED'İ
@@ -151,70 +94,10 @@ async function main() {
     // ═══════════════════════════════════════════════
     // 1. GLOBAL ROLLER VE YETKİLER (tek sefer, tenant'tan bağımsız)
     // ═══════════════════════════════════════════════
-    console.log("🔐 Global Roller ekleniyor (kurumsal 9 rol, rütbeli)...");
-    // Kurumsal model (bkz. docs/yonetim/06 + 07): platform + tenant + akademik + öğrenci.
-    // `rank` = yetki derecesi (yüksek = daha yetkili). Bir aktör YALNIZCA kendinden
-    // DÜŞÜK rütbeli rolü atayıp kaldırabilir ve yalnızca kendinden düşük rütbeli
-    // kullanıcıya dokunabilir → moderatör admini söküp atamaz, admin kendini düşüremez.
-    // Aradaki boşluklar (10'ar) bilinçlidir: ileride ara kademe rol eklenebilsin.
-    const roleDefs = [
-      { name: "student", description: "Öğrenci", rank: 10 },
-      { name: "advisor", description: "Danışman Hoca (kulüp danışmanı atanabilme etiketi)", rank: 20 },
-      { name: "auditor", description: "Denetim / İzleme — salt-okunur", rank: 30 },
-      { name: "content_moderator", description: "İçerik Moderatörü — duyuru/galeri", rank: 30 },
-      { name: "student_affairs", description: "SKS / Öğrenci Kulüpleri Koordinatörlüğü", rank: 45 },
-      { name: "academic_affairs", description: "Öğrenci İşleri / BİDB — akademik yapı", rank: 45 },
-      { name: "university_admin", description: "Okul Yöneticisi — tenant'ın tamamı", rank: 60 },
-      { name: "platform_support", description: "Platform Destek — salt-okunur, çapraz tenant", rank: 90 },
-      { name: "super_admin", description: "Sistem Yöneticisi — platform + tüm tenantlar", rank: 100 },
-    ];
-
-    const roleIdByName: Record<string, string> = {};
-    for (const def of roleDefs) {
-      const [inserted] = await tx.insert(schema.roles).values(def).returning();
-      roleIdByName[def.name] = inserted.id;
-    }
-
-    console.log("🗝️ Yetki (permission) kataloğu ekleniyor...");
-    const insertedPermissions = await tx.insert(schema.permissions).values([
-      // user.view / user.manage (okuma-yazma ayrık)
-      ...ADMIN_PERMISSION_CATALOG,
-      // club.* granüler yetkileri (view / application.view / approve / update / advisor / member / delete)
-      ...CLUB_PERMISSION_CATALOG,
-      // university.* granüler yetkileri (üniversite/domain/fakülte/bölüm × create/update/delete)
-      ...UNIVERSITY_PERMISSION_CATALOG,
-      // içerik moderasyonu (tenant override)
-      ...ANNOUNCEMENT_PERMISSION_CATALOG,
-      ...GALLERY_PERMISSION_CATALOG,
-      // denetim izi görüntüleme (salt-okunur)
-      ...AUDIT_PERMISSION_CATALOG,
-      { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
-      { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
-    ]).returning();
-
-    const permissionIdByKey: Record<string, string> = {};
-    for (const p of insertedPermissions) {
-      permissionIdByKey[p.key] = p.id;
-    }
-
-    // Rol → yetki demetleri (ROLE_BUNDLES). super_admin ayrıca TÜM yetkileri alır.
-    for (const [roleName, keys] of Object.entries(ROLE_BUNDLES)) {
-      if (keys.length === 0) continue;
-      await tx.insert(schema.rolePermissions).values(
-        keys.map((key) => ({
-          roleId: roleIdByName[roleName],
-          permissionId: permissionIdByKey[key],
-        }))
-      );
-    }
-
-    // super_admin: tüm yetkiler (platform dahil)
-    await tx.insert(schema.rolePermissions).values(
-      insertedPermissions.map((p) => ({
-        roleId: roleIdByName["super_admin"],
-        permissionId: p.id,
-      }))
-    );
+    console.log("🔐 RBAC kataloğu kuruluyor (roller + yetkiler + demetler)...");
+    // Katalog artık tek kaynakta: src/db/rbac-catalog.ts. Bootstrap (prod) da
+    // aynı fonksiyonu kullanır, böylece seed ile drift etmez. Idempotent.
+    const roleIdByName = await provisionRbacCatalog(tx);
 
     // ═══════════════════════════════════════════════
     // YARDIMCILAR — tekrar eden insert kalıplarını sadeleştirir
