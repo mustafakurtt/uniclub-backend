@@ -1,7 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
+import { sql } from "drizzle-orm";
 import { env } from "./config/env";
+import { db } from "./db";
+import { redis } from "./shared/redis/redis.client";
 
 import { authRoutes } from "./features/auth/auth.routes";
 import { adminRoutes } from "./features/admin/admin.routes";
@@ -37,13 +40,45 @@ registerAuditSink();
 // Hata Yakalayıcı
 app.onError(errorHandler);
 
-// Health Check
-app.get("/health", (c) => {
-  return c.json({ 
-    status: "ok",
-    environment: env.NODE_ENV,
-    timestamp: new Date().toISOString()
+// Health Check — READINESS kontrolü.
+//
+// Yalnızca "süreç ayakta mı" demek yetmez: veritabanı düşükken 200 dönersek
+// load balancer bu instance'a trafik göndermeye devam eder ve kullanıcı 500 alır.
+// Bağımlılıklar yoklanır; biri cevap vermiyorsa 503 döneriz ve LB bizi havuzdan çıkarır.
+const HEALTH_CHECK_TIMEOUT_MS = 2000;
+
+/** Askıda kalan bir bağımlılık, health check'i de askıda bırakmasın. */
+const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("timeout")), ms);
   });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
+};
+
+app.get("/health", async (c) => {
+  const [dbCheck, redisCheck] = await Promise.allSettled([
+    withTimeout(db.execute(sql`select 1`), HEALTH_CHECK_TIMEOUT_MS),
+    withTimeout(redis.ping(), HEALTH_CHECK_TIMEOUT_MS),
+  ]);
+
+  const database = dbCheck.status === "fulfilled" ? "up" : "down";
+  const cache = redisCheck.status === "fulfilled" ? "up" : "down";
+  const healthy = database === "up" && cache === "up";
+
+  if (!healthy) {
+    log.error({ database, cache }, "Health check başarısız — bağımlılık erişilemiyor");
+  }
+
+  return c.json(
+    {
+      status: healthy ? "ok" : "degraded",
+      environment: env.NODE_ENV,
+      checks: { database, cache },
+      timestamp: new Date().toISOString(),
+    },
+    healthy ? 200 : 503,
+  );
 });
 
 // Rotaları Bağlama
