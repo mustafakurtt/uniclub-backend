@@ -1,20 +1,28 @@
-name: Deploy
+name: Release check
 
-# develop → development ortamı (onaysız)
-# main    → production ortamı  (GitHub'da manuel onay bekler)
+# Production'a deploy BURADA olmaz.
+#
+# Deploy, pull-based bir ajanla yapılır (scripts/deploy-agent.sh): production
+# makinesi GitHub'ı okur, en son release'i görür, CI'ının yeşil olduğunu
+# doğrular ve kendini deploy eder. GitHub production makinesine hiçbir zaman
+# bağlanmaz — public bir repo'da self-hosted runner, fork PR'larına makinede
+# kod çalıştırma yüzeyi açardı.
+#
+# Bu workflow'un işi: release'e aday her commit için, prod imajının gerçekten
+# derlendiğini ve ayağa kalktığını kanıtlamak. "Derlendi" yetmez; container
+# migration'lardan sonra /health döndürmeli.
+
 on:
   push:
     branches: [main, develop]
   workflow_dispatch:
 
 concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false # deploy'u yarıda kesme
+  group: release-check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # ── Prod imajını derle ve gerçekten çalıştığını kanıtla ────
-  # "Build oldu" yetmez: container ayağa kalkıp /health dönmeli.
-  build-image:
+  image:
     name: Build & smoke-test image
     runs-on: ubuntu-latest
 
@@ -36,9 +44,6 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 10s --health-timeout 5s --health-retries 5
 
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tag }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -46,21 +51,19 @@ jobs:
         id: meta
         run: echo "tag=uniclub-backend:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Build image
-        run: docker build -t "${{ steps.meta.outputs.tag }}" .
+      - name: Build application image
+        run: docker build --target runner -t "${{ steps.meta.outputs.tag }}" .
 
-      # Şema hazır olmalı ki uygulama anlamlı biçimde ayağa kalksın.
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      # Migration'lar prod imajından DEĞİL, ayrı bir migrator imajından koşar:
+      # prod imajında drizzle-kit (devDependency) yoktur ve olmamalıdır.
+      - name: Build migrator image
+        run: docker build --target migrator -t uniclub-migrator:ci .
 
-      - name: Apply migrations
-        env:
-          DATABASE_URL: postgres://uniclub:uniclub_ci@localhost:5432/uniclub
+      - name: Apply migrations from the migrator image
         run: |
-          bun install --frozen-lockfile
-          bun run db:migrate
+          docker run --rm --network host \
+            -e DATABASE_URL="postgres://uniclub:uniclub_ci@localhost:5432/uniclub" \
+            uniclub-migrator:ci
 
       - name: Run container and check /health
         run: |
@@ -87,52 +90,3 @@ jobs:
           docker logs smoke
           docker rm -f smoke >/dev/null
           exit 1
-
-  # ── development ortamına deploy (onaysız) ─────────────────
-  deploy-development:
-    name: Deploy to development
-    if: github.ref == 'refs/heads/develop'
-    needs: build-image
-    runs-on: ubuntu-latest
-    environment:
-      name: development
-      url: ${{ vars.APP_URL }}
-    steps:
-      - name: Deploy
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: |
-          echo "İmaj: ${{ needs.build-image.outputs.image-tag }}"
-          echo "Hedef: ${{ vars.APP_URL }}"
-          echo "JWT_SECRET ortamdan geldi (uzunluk: ${#JWT_SECRET})"
-          echo
-          echo "⚠ Gerçek deploy adımı henüz bağlı değil."
-          echo "  Bir hosting hedefi (Fly.io / Railway / VPS) seçilince buraya gelecek."
-
-  # ── production ortamına deploy (MANUEL ONAY BEKLER) ────────
-  # 'environment: production' satırı, GitHub'ın onay kapısını devreye sokar.
-  # Onaylayan kişi Settings → Environments → production altında tanımlıdır.
-  deploy-production:
-    name: Deploy to production
-    if: github.ref == 'refs/heads/main'
-    needs: build-image
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ vars.APP_URL }}
-    steps:
-      - name: Deploy
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: |
-          echo "İmaj: ${{ needs.build-image.outputs.image-tag }}"
-          echo "Hedef: ${{ vars.APP_URL }}"
-          echo "JWT_SECRET ortamdan geldi (uzunluk: ${#JWT_SECRET})"
-          echo
-          echo "⚠ Gerçek deploy adımı henüz bağlı değil."
-          echo "  İlk gerçek deploy'dan önce production ortamına eklenmesi gerekenler:"
-          echo "    • DATABASE_URL   (secret)"
-          echo "    • REDIS_URL      (secret)"
-          echo "    • SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS (secret)"
-          echo "  Ayrıca migration'lar deploy'dan ÖNCE, geriye uyumlu şekilde uygulanmalı."
-          echo "  Bkz. docs/operations.md"
