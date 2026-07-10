@@ -1,0 +1,33 @@
+# Bu dosyalar prod imajına GİRMEZ. Dev/prod ayrımı branch ile değil,
+# build kapsamı + environment variables ile yapılır.
+
+# Git & CI
+.git
+.git.bak
+.github
+.gitignore
+.gitattributes
+
+# Dokümantasyon (imajda işi yok — repoda kalır)
+docs
+README.md
+CONTRIBUTING.md
+CLAUDE.md
+LICENSE
+
+# Geliştirme ortamı
+node_modules
+.vscode
+.claude
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Secrets — asla imaja kopyalanmaz
+.env
+.env.*
+
+# Artıklar
+*.log
+dist
+build

@@ -1,0 +1,72 @@
+# Production compose — dev'den farkı: uygulama container olarak çalışır,
+# Mailpit yoktur (gerçek SMTP kullanılır), portlar dışarı açılmaz.
+#
+# Kullanım:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Tüm secret'lar ortam değişkeninden gelir — bu dosyada ASLA değer yazılmaz.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: uniclub_app
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL zorunlu}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL zorunlu}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET zorunlu}
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST zorunlu}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      MAIL_FROM: ${MAIL_FROM}
+      APP_URL: ${APP_URL:?APP_URL zorunlu}
+      # Ters proxy (nginx/Cloudflare) arkasındaysan true.
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      RATE_LIMIT_DISABLED: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: uniclub_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER zorunlu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD zorunlu}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB zorunlu}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # Port dışarı AÇILMAZ — sadece compose ağı içinden erişilir.
+
+  redis:
+    image: redis:7-alpine
+    container_name: uniclub_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
