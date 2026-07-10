@@ -1,0 +1,138 @@
+name: Deploy
+
+# develop → development ortamı (onaysız)
+# main    → production ortamı  (GitHub'da manuel onay bekler)
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false # deploy'u yarıda kesme
+
+jobs:
+  # ── Prod imajını derle ve gerçekten çalıştığını kanıtla ────
+  # "Build oldu" yetmez: container ayağa kalkıp /health dönmeli.
+  build-image:
+    name: Build & smoke-test image
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uniclub
+          POSTGRES_PASSWORD: uniclub_ci
+          POSTGRES_DB: uniclub
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U uniclub -d uniclub"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: meta
+        run: echo "tag=uniclub-backend:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        run: docker build -t "${{ steps.meta.outputs.tag }}" .
+
+      # Şema hazır olmalı ki uygulama anlamlı biçimde ayağa kalksın.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://uniclub:uniclub_ci@localhost:5432/uniclub
+        run: |
+          bun install --frozen-lockfile
+          bun run db:migrate
+
+      - name: Run container and check /health
+        run: |
+          docker run -d --name smoke --network host \
+            -e NODE_ENV=production -e PORT=3000 \
+            -e DATABASE_URL="postgres://uniclub:uniclub_ci@localhost:5432/uniclub" \
+            -e REDIS_URL="redis://localhost:6379" \
+            -e JWT_SECRET="smoke-test-only" \
+            -e APP_URL="http://localhost:3000" \
+            -e SMTP_HOST=localhost -e SMTP_PORT=1025 -e SMTP_SECURE=false \
+            -e MAIL_FROM="UniClub <ci@uniclub.local>" \
+            -e RATE_LIMIT_DISABLED=false -e TRUST_PROXY=true \
+            "${{ steps.meta.outputs.tag }}"
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/health; then
+              echo; echo "✓ Container ${i}. saniyede sağlıklı"
+              docker rm -f smoke >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "✗ Container /health döndürmedi"
+          docker logs smoke
+          docker rm -f smoke >/dev/null
+          exit 1
+
+  # ── development ortamına deploy (onaysız) ─────────────────
+  deploy-development:
+    name: Deploy to development
+    if: github.ref == 'refs/heads/develop'
+    needs: build-image
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: ${{ vars.APP_URL }}
+    steps:
+      - name: Deploy
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          echo "İmaj: ${{ needs.build-image.outputs.image-tag }}"
+          echo "Hedef: ${{ vars.APP_URL }}"
+          echo "JWT_SECRET ortamdan geldi (uzunluk: ${#JWT_SECRET})"
+          echo
+          echo "⚠ Gerçek deploy adımı henüz bağlı değil."
+          echo "  Bir hosting hedefi (Fly.io / Railway / VPS) seçilince buraya gelecek."
+
+  # ── production ortamına deploy (MANUEL ONAY BEKLER) ────────
+  # 'environment: production' satırı, GitHub'ın onay kapısını devreye sokar.
+  # Onaylayan kişi Settings → Environments → production altında tanımlıdır.
+  deploy-production:
+    name: Deploy to production
+    if: github.ref == 'refs/heads/main'
+    needs: build-image
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    steps:
+      - name: Deploy
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          echo "İmaj: ${{ needs.build-image.outputs.image-tag }}"
+          echo "Hedef: ${{ vars.APP_URL }}"
+          echo "JWT_SECRET ortamdan geldi (uzunluk: ${#JWT_SECRET})"
+          echo
+          echo "⚠ Gerçek deploy adımı henüz bağlı değil."
+          echo "  İlk gerçek deploy'dan önce production ortamına eklenmesi gerekenler:"
+          echo "    • DATABASE_URL   (secret)"
+          echo "    • REDIS_URL      (secret)"
+          echo "    • SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS (secret)"
+          echo "  Ayrıca migration'lar deploy'dan ÖNCE, geriye uyumlu şekilde uygulanmalı."
+          echo "  Bkz. docs/operations.md"
