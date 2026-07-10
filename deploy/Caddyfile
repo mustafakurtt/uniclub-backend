@@ -23,8 +23,9 @@
 	# için sertifika alamaz, hem de "dış ağa çıkma" kuralımızı çiğner.
 	local_certs
 
-	# ACME'ye hiç gitmeyeceğimiz için e-posta da gerekmez.
-	admin off
+	# Admin API açık kalır (yalnızca container içi localhost:2019, dışarı
+	# publish edilmiyor). `caddy reload` bunu kullanır — deploy sonrası config'i
+	# kesintisiz yenilemek için gerekli. `admin off` deseydik reload çalışmazdı.
 }
 
 # ── PRODUCTION ────────────────────────────────────────────────
