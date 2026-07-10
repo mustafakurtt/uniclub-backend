@@ -164,6 +164,12 @@ docker compose -f docker-compose.prod.yml up -d --build
 All secrets come from the environment; `docker-compose.prod.yml` contains no
 values and fails fast if a required variable is missing.
 
+CI builds the image, applies migrations to a clean database, boots the container
+and waits for `/health` before anything is deployed. `develop` deploys to the
+`development` environment automatically; `main` deploys to `production` behind a
+required manual approval. Backups, migration rules and incident response are
+documented in **[docs/operations.md](docs/operations.md)**.
+
 ## API & docs
 
 - **[docs/API.md](docs/API.md)** — REST endpoint reference
