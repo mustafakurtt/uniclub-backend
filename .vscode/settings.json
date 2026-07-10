@@ -1,0 +1,24 @@
+{
+  // Takımda tutarlı düzen — repo'yu açan herkes aynı ayarları alır.
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  // Projenin TypeScript sürümünü kullan (VS Code'un gömülü sürümünü değil).
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bun.lock": true,
+    "**/src/db/migrations/**/snapshot.json": true
+  },
+
+  "files.associations": {
+    "*.env.example": "dotenv"
+  }
+}

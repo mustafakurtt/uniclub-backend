@@ -1,0 +1,13 @@
+{
+  // Repo'yu açan herkese önerilen eklentiler (VS Code otomatik sorar).
+  "recommendations": [
+    "oven.bun-vscode",
+    "github.vscode-pull-request-github",
+    "eamodio.gitlens",
+    "bradlc.vscode-tailwindcss",
+    "esbenp.prettier-vscode",
+    "ms-azuretools.vscode-docker",
+    "mtxr.sqltools",
+    "editorconfig.editorconfig"
+  ]
+}
