@@ -1,10 +1,21 @@
 # Yerel ağ reverse proxy'si.
 #
-#   https://uniclub.test        → production  (container: uniclub_prod_app)
-#   https://test.uniclub.test   → development (host'ta: bun run dev, :3000)
+#   https://uniclub.test         → production   (frontend kökte, backend /api altında)
+#   https://test.uniclub.test    → development  (host'ta çalışan sunucular)
 #
 # `.test` TLD'si RFC 6761 ile test amaçlı rezerve edilmiştir; kimse satın
 # alamaz, gerçek bir siteyle çakışmaz.
+#
+# ── NEDEN TEK ORIGIN, PATH TABANLI ──────────────────────────────
+# Frontend kökte, backend `/api/*` altında. Bunun üç somut kazancı var:
+#
+#   1. Vite, VITE_API_BASE_URL'i BUILD ANINDA pakete gömer. Adres göreli
+#      (`/api`) olursa aynı imaj her ortamda çalışır; mutlak olsaydı her
+#      ortam için ayrı imaj derlemek gerekirdi.
+#   2. CORS tamamen ortadan kalkar — tarayıcı için tek origin.
+#   3. WebSocket de aynı origin'den bağlanır; ayrı bir ws host'u gerekmez.
+#
+# Backend'in TÜM rotaları zaten `/api/*` altında (bkz. src/index.ts).
 
 {
 	# Sertifikaları Caddy'nin KENDİ yerel CA'sı üretir.
@@ -18,10 +29,28 @@
 
 # ── PRODUCTION ────────────────────────────────────────────────
 uniclub.test {
-	# uniclub_prod_app, uniclub-prod compose ağında. Proxy o ağa bağlı.
-	reverse_proxy uniclub_prod_app:3000 {
-		# Uygulama TRUST_PROXY=true ile bu başlıklara güveniyor.
-		header_up X-Real-IP {remote_host}
+	# API ve health backend'e. WebSocket yükseltmesi reverse_proxy tarafından
+	# otomatik taşınır; ek yapılandırma gerekmez.
+	handle /api/* {
+		reverse_proxy uniclub_prod_app:3000 {
+			# Uygulama TRUST_PROXY=true ile bu başlıklara güveniyor.
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle /health {
+		reverse_proxy uniclub_prod_app:3000
+	}
+
+	# Geri kalan her şey frontend'e (nginx, SPA fallback'i orada).
+	# Container adı: uniclub-frontend repo'sunun prod compose'u bunu yaratır.
+	handle {
+		reverse_proxy uniclub_prod_web:80
+	}
+
+	handle_errors {
+		@frontendDown expression {err.status_code} in [502, 503]
+		respond @frontendDown "Frontend henüz deploy edilmedi. Backend API'si /api altında çalışıyor: https://uniclub.test/api" 503
 	}
 
 	log {
@@ -31,16 +60,28 @@ uniclub.test {
 }
 
 # ── DEVELOPMENT ───────────────────────────────────────────────
-# Dev sunucusu container'da değil, host'ta `bun run dev` ile çalışıyor.
+# Dev sunucuları container'da değil, host'ta çalışır:
+#   backend  → bun run dev    (:3000)
+#   frontend → bun run dev    (:5173, Vite)
 # host.docker.internal, container'dan host'a çıkan adrestir.
 test.uniclub.test {
-	reverse_proxy host.docker.internal:3000 {
-		header_up X-Real-IP {remote_host}
+	handle /api/* {
+		reverse_proxy host.docker.internal:3000 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 
-	# Dev ayakta değilse anlaşılır bir mesaj ver; 502 sayfası kafa karıştırır.
+	handle /health {
+		reverse_proxy host.docker.internal:3000
+	}
+
+	handle {
+		reverse_proxy host.docker.internal:5173
+	}
+
+	# Dev sunucuları ayakta değilse anlaşılır bir mesaj ver; çıplak 502 kafa karıştırır.
 	handle_errors {
-		respond "Development sunucusu çalışmıyor. Proje dizininde `bun run dev` çalıştır. (upstream: {err.status_code})" 503
+		respond "Development sunucusu çalışmıyor. backend için `bun run dev` (:3000), frontend için `bun run dev` (:5173). (upstream: {err.status_code})" 503
 	}
 
 	log {
