@@ -130,25 +130,80 @@ CONFIRM_OVERWRITE=evet TARGET_DB=uniclub bun run db:restore backups/<file>.dump
 
 ## Deploys
 
-[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml):
+Deployment is **pull-based**. GitHub never connects to the production machine;
+the production machine reads GitHub and deploys itself.
 
-1. **Build & smoke-test image** — builds the production image, applies migrations
-   to a clean database, boots the container and waits for `/health`. A build that
-   compiles but cannot start never proceeds.
-2. **Deploy** — `develop` → `development` (automatic), `main` → `production`
-   (**blocks for manual approval** because the `production` environment has a
-   required reviewer).
+```
+  main'e merge ──▶ CI (GitHub) ──▶ release cut by a human
+                                         │
+                    production machine ──┘  (polls, reads only)
+                    scripts/deploy-agent.sh
+                                         │
+                    scripts/deploy-local.sh ──▶ http://localhost:8080
+```
 
-The deploy step itself is not wired to a host yet. When a target is chosen
-(Fly.io, Railway, a VPS), it slots into that step; nothing else changes.
+A self-hosted GitHub Actions runner would be the push-based alternative, but on
+a **public** repository it lets a fork's pull request execute code on the runner
+— GitHub itself advises against it. The pull model has no inbound connection,
+and the only code it ever runs is a published release of this repository.
+
+### Trust chain
+
+1. Code reaches `main` only through a pull request (branch protection).
+2. It cannot merge without a green CI.
+3. A human cuts the release — **this is the deployment gate**.
+4. [`deploy-agent.sh`](../scripts/deploy-agent.sh) deploys only the latest
+   release, and only if that commit has a successful CI run.
+
+### The two scripts
+
+[`deploy-agent.sh`](../scripts/deploy-agent.sh) — polls for a new release,
+checks out a **separate clone** (`~/uniclub-prod`) so nothing from a development
+working copy can leak into production, and hands off to:
+
+[`deploy-local.sh`](../scripts/deploy-local.sh) — backs up the database, builds
+the image tagged with the release, applies migrations from a **separate migrator
+image** (the production image deliberately has no `drizzle-kit`), restarts the
+app and waits for `/health`. If health never turns green it **rolls back to the
+previous image**.
+
+```sh
+./scripts/deploy-agent.sh            # check once
+./scripts/deploy-agent.sh --watch    # poll every 5 minutes
+```
+
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) still builds
+and smoke-tests the image on every push, so a release candidate that compiles
+but cannot start is caught before anyone tags it.
+
+### Two stacks on one machine
+
+Development and production run side by side and share nothing:
+
+| | development | production |
+| --- | --- | --- |
+| Compose | `docker-compose.yml` | `docker-compose.prod.yml` (project `uniclub-prod`) |
+| App | `bun run dev` on `:3000` | container on `:8080` |
+| Database port | `5432`, exposed | **not exposed** |
+| Volume | `universityclub_pgdata` | `uniclub-prod_pgdata` |
+| Data | seeded fixtures | real data, never seeded |
+| Env file | `.env` | `.env.prod` |
+
+Both are gitignored; `.env.prod.example` documents what production needs.
 
 ### Rollback
 
-Prefer rolling forward. When you cannot, redeploy the previous image tag — the
-tag is the short commit SHA, so `git log` tells you what to redeploy. Migrations
-do **not** roll back automatically; if the bad release included a destructive
-migration, you need the backup. This is why destructive changes ship separately
-from the code that stops using the column.
+Prefer rolling forward. `deploy-local.sh` rolls back automatically when the new
+release fails its health check. To roll back deliberately, redeploy the previous
+release tag:
+
+```sh
+IMAGE_TAG=v1.1.0 ./scripts/deploy-local.sh
+```
+
+Migrations do **not** roll back. If the bad release contained a destructive
+migration, you need the backup — which is why destructive changes ship in a
+separate release from the code that stops using the column.
 
 ## Incidents
 

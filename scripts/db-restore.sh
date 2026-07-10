@@ -43,9 +43,16 @@ if [[ "$TARGET_DB" == "$SOURCE_DB" && "$CONFIRM_OVERWRITE" != "evet" ]]; then
   exit 1
 fi
 
+OVERWRITING_LIVE=0
+[[ "$TARGET_DB" == "$SOURCE_DB" ]] && OVERWRITING_LIVE=1
+
 echo "▶ Mod: ${PG_MODE}"
 echo "▶ Yedek: ${DUMP_FILE}"
-echo "▶ Hedef: ${TARGET_DB}  (kaynak '${SOURCE_DB}' değişmeyecek)"
+if [[ "$OVERWRITING_LIVE" -eq 1 ]]; then
+  echo "▶ Hedef: ${TARGET_DB}  ⚠️  ÇALIŞAN VERİTABANI SİLİNİP YENİDEN OLUŞTURULACAK"
+else
+  echo "▶ Hedef: ${TARGET_DB}  (tatbikat — çalışan '${SOURCE_DB}' değişmeyecek)"
+fi
 
 # ── Hedef veritabanını sıfırdan oluştur ───────────────────────
 psql_ "${BASE_URL}/postgres" -v ON_ERROR_STOP=1 -q <<SQL
@@ -76,5 +83,11 @@ UNION ALL SELECT 'clubs',       count(*) FROM clubs;
 SQL
 
 echo
-echo "✓ '${TARGET_DB}' veritabanına geri yüklendi."
-echo "  Çalışan veritabanın ('${SOURCE_DB}') değişmedi."
+if [[ "$OVERWRITING_LIVE" -eq 1 ]]; then
+  echo "✓ ÇALIŞAN veritabanı '${TARGET_DB}' yedekten geri yüklendi."
+  echo "  Yedek sonrası oluşan veriler KALICI OLARAK KAYBOLDU."
+  echo "  Uygulamayı yeniden başlat ve yukarıdaki sayıları beklediğinle karşılaştır."
+else
+  echo "✓ '${TARGET_DB}' tatbikat veritabanına geri yüklendi."
+  echo "  Çalışan veritabanın ('${SOURCE_DB}') değişmedi."
+fi
