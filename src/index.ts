@@ -23,8 +23,12 @@ import { logger } from "./shared/logger/logger";
 
 const log = logger.child({ module: "bootstrap" });
 
-// Ana uygulamaya Variables tipini ekliyoruz
-const app = new Hono<{ Variables: Variables }>();
+// Ana uygulamaya Variables tipini ekliyoruz.
+// `app` export edilir: testler Hono'nun `app.request()` arayüzüyle tüm
+// middleware zincirini gerçek port açmadan koşturur (bkz. tests/). Bir modülü
+// import etmek Bun.serve'i BAŞLATMAZ — sunucu yalnızca bu dosya doğrudan
+// entrypoint olarak çalıştırıldığında (default export) ayağa kalkar.
+export const app = new Hono<{ Variables: Variables }>();
 
 // Global Middlewares
 // requestId EN ÖNDE: her istek bir korelasyon kimliği alır; errorHandler bunu

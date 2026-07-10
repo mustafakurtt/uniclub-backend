@@ -24,9 +24,13 @@ bun run db:seed            # bun run src/db/seed.ts — seeds 3 universities (te
 bun run db:reset           # drop + generate + migrate + seed, in one shot (interactive — drizzle-kit drop prompts)
 
 bun run typecheck          # tsc --noEmit — the check CI runs; must pass before pushing
+
+bun run test:setup         # provision the isolated `uniclub_test` DB (drop + migrate + seed) — run once before `test`
+bun run test               # bun test — integration tests (Hono app.request against real Postgres/Redis)
+bun run test:all           # test:setup + test, in one shot
 ```
 
-`typecheck` is the only quality gate wired up — there is no lint or test script defined in `package.json`, so don't assume `bun test` or `bun run lint` exist.
+Quality gates are `typecheck` **and** `test` (both run in CI — see `.github/workflows/ci.yml`). There is still **no lint script**, so don't assume `bun run lint` exists. The tests are integration-style: they exercise the full middleware chain (auth, RBAC `guard()`, tenant scope) via Hono's `app.request()` against a **separate `uniclub_test` database** and Redis DB index 1, so they never touch dev/CI data. `tests/provision.ts` drops+recreates+seeds that DB each run (deterministic seed → tests key off fixed emails); `tests/setup.ts` is the `bunfig.toml` preload that repoints env **before** `src/config/env.ts` reads it. `app` is exported from `src/index.ts` for this — importing it does not start `Bun.serve` (that only happens when the file is the entrypoint).
 
 **Branching**: `main` is protected (PR + green CI + 1 approval); daily work branches off `develop`. Never commit straight to `main`. See `CONTRIBUTING.md`.
 
