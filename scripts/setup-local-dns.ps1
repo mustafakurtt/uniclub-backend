@@ -45,19 +45,29 @@ $names = @("uniclub.test", "test.uniclub.test")
 
 # ── hosts ────────────────────────────────────────────────────
 # Kendi eklediğimiz satırları marker ile işaretliyoruz ki temiz kaldırabilelim.
-$lines = Get-Content $hostsPath | Where-Object { $_ -notmatch [regex]::Escape($marker) }
+#
+# Satırları elle CRLF ile birleştirip WriteAllText kullanıyoruz. Set-Content'e
+# dizi vermek, dosyanın son satırında newline yoksa girdileri yan yana yapıştırıp
+# "# uniclub127.0.0.1  test.uniclub.test" gibi bozuk bir satır üretebiliyor —
+# ve o isim artık çözümlenmiyor.
+$kept = @(Get-Content $hostsPath -ErrorAction SilentlyContinue |
+  Where-Object { $_ -notmatch [regex]::Escape($marker) })
+
+# Sondaki boş satırları at; kendimiz tek bir newline ile bitireceğiz.
+while ($kept.Count -gt 0 -and [string]::IsNullOrWhiteSpace($kept[-1])) {
+  $kept = $kept[0..($kept.Count - 2)]
+}
 
 if ($Remove) {
-  Set-Content -Path $hostsPath -Value $lines -Encoding ASCII
+  $out = $kept
   Write-Host "hosts girdileri kaldirildi." -ForegroundColor Yellow
 } else {
-  foreach ($n in $names) {
-    $lines += "$IPAddress`t$n`t$marker"
-  }
-  Set-Content -Path $hostsPath -Value $lines -Encoding ASCII
+  $out = $kept + ($names | ForEach-Object { "$IPAddress`t$_`t$marker" })
   Write-Host "hosts guncellendi -> $IPAddress" -ForegroundColor Green
   $names | ForEach-Object { Write-Host "  $_" }
 }
+
+[IO.File]::WriteAllText($hostsPath, (($out -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
 
 ipconfig /flushdns | Out-Null
 

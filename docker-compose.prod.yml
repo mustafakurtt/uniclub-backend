@@ -102,7 +102,8 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
     ports:
-      - "${MAILPIT_UI_PORT:-8026}:8025" # dev'inki 8025'te
+      # dev'inki 8025'te. BIND_ADDR olmadan tüm ağa açılırdı.
+      - "${BIND_ADDR:-127.0.0.1}:${MAILPIT_UI_PORT:-8026}:8025"
     restart: unless-stopped
 
 volumes:
