@@ -584,7 +584,15 @@ async function main() {
   console.log("             Fotoğrafçılık(pending — Antalya'dakiyle aynı slug)");
 }
 
-main().catch((err) => {
-  console.error("❌ Seeding sırasında hata oluştu:", err);
-  process.exit(1);
-});
+// Bağlantı havuzu kapatılmadan süreç sonlanmaz: postgres-js açık soketleri
+// event loop'ta tutar. Yerelde fark edilmez (terminali kaparsın), ama CI'da
+// adım sonsuza kadar asılı kalır.
+main()
+  .then(async () => {
+    await db.$client.end();
+  })
+  .catch(async (err) => {
+    console.error("❌ Seeding sırasında hata oluştu:", err);
+    await db.$client.end().catch(() => {});
+    process.exit(1);
+  });
