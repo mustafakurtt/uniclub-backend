@@ -12,6 +12,7 @@ lives in the [root README](../README.md); this folder holds the deep dives.
 | --- | --- |
 | [architecture.md](architecture.md) | System design: layering, multi-tenancy, RBAC engine, realtime, data flow |
 | [operations.md](operations.md) | Environments, migrations, backups, deploys, incident response |
+| [MAKINE_KURULUMU.md](MAKINE_KURULUMU.md) | Makine kurulumu (dev/prod), ağ ayarları ve frontend notları |
 | [API.md](API.md) | REST endpoint reference |
 | [BILDIRIMLER.md](BILDIRIMLER.md) | Notification system + WebSocket delivery |
 | [DENETIM_VE_HATA.md](DENETIM_VE_HATA.md) | Audit trail + error-handling contract |
