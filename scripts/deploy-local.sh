@@ -80,6 +80,14 @@ IMAGE_TAG="$NEW_TAG" compose up -d --remove-orphans postgres redis mailpit
 echo "▶ Migration uygulanıyor"
 IMAGE_TAG="$NEW_TAG" compose run --rm migrate
 
+# ── 4b. Bootstrap: RBAC kataloğu + ilk super_admin ────────────
+# Idempotent — her deploy'da güvenle çalışır. RBAC kataloğunu koda göre günceller
+# (yeni yetki eklendiğinde otomatik gelir) ve super_admin yoksa oluşturur.
+# super_admin bilgileri .env.prod'daki SUPER_ADMIN_* değişkenlerinden gelir;
+# yoksa RBAC yine kurulur, admin adımı atlanır.
+echo "▶ Bootstrap (RBAC + super_admin)"
+IMAGE_TAG="$NEW_TAG" compose run --rm migrate bun run db:bootstrap
+
 # ── 5. Uygulama ───────────────────────────────────────────────
 echo "▶ Uygulama başlatılıyor"
 IMAGE_TAG="$NEW_TAG" compose up -d app

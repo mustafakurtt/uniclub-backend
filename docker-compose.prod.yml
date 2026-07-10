@@ -20,6 +20,12 @@ services:
     container_name: uniclub_prod_migrate
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:?zorunlu}:${POSTGRES_PASSWORD:?zorunlu}@postgres:5432/${POSTGRES_DB:?zorunlu}
+      # Aynı imaj `db:bootstrap` için de kullanılır (RBAC + ilk super_admin).
+      # Değerler yoksa bootstrap RBAC'ı kurar ama admin oluşturmayı atlar.
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      SUPER_ADMIN_FIRST_NAME: ${SUPER_ADMIN_FIRST_NAME:-}
+      SUPER_ADMIN_LAST_NAME: ${SUPER_ADMIN_LAST_NAME:-}
     depends_on:
       postgres:
         condition: service_healthy
