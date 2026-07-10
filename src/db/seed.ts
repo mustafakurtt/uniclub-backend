@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { db } from "./index";
 import * as schema from "./schema";
 import { hashPassword } from "../shared/utils/password.util";
@@ -90,6 +91,25 @@ async function main() {
   // Bütün işlemleri tek bir Transaction içinde yapıyoruz ki,
   // ortasında hata verirse veritabanı yarım kalmasın, her şeyi geri alsın.
   await db.transaction(async (tx) => {
+    // ═══════════════════════════════════════════════
+    // 0. TEMİZLİK — seed idempotent olmalı
+    // ═══════════════════════════════════════════════
+    // Tablolar elle sayılmıyor: pg_tables'tan okunuyor ki yeni bir tablo
+    // eklendiğinde burayı güncellemek unutulmasın. Migration geçmişi
+    // `drizzle` şemasında durduğu için `public`i temizlemek ona dokunmaz.
+    // TRUNCATE transaction içinde: seed ortada patlarsa silme de geri alınır.
+    console.log("🧹 public şeması temizleniyor (idempotent seed)...");
+    await tx.execute(sql`
+      DO $$
+      DECLARE tbl text;
+      BEGIN
+        FOR tbl IN SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+        LOOP
+          EXECUTE format('TRUNCATE TABLE public.%I RESTART IDENTITY CASCADE', tbl);
+        END LOOP;
+      END $$;
+    `);
+
     // ═══════════════════════════════════════════════
     // 1. GLOBAL ROLLER VE YETKİLER (tek sefer, tenant'tan bağımsız)
     // ═══════════════════════════════════════════════
