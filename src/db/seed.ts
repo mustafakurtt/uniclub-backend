@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import { db } from "./index";
 import * as schema from "./schema";
+import { env } from "../config/env";
 import { hashPassword } from "../shared/utils/password.util";
 import { UniversityPermission, UNIVERSITY_PERMISSION_CATALOG } from "../features/university/university.permissions";
 import { AuthPermission } from "../features/auth/auth.permissions";
@@ -82,14 +84,70 @@ const ROLE_BUNDLES: Record<string, string[]> = {
  * Tüm hesapların şifresi: "Password123!"
  */
 
+/**
+ * Seed artık veritabanını TEMİZLİYOR. Yanlış bir DATABASE_URL ile çalıştırılması
+ * veri kaybı demektir; o yüzden production'da varsayılan olarak reddediyoruz.
+ * Aynı kilit mantığı scripts/db-restore.sh içinde de var.
+ *
+ * NOT: `process.env` doğrudan okunuyor. Uygulama kodunda bu yasak (bkz.
+ * config/env.ts), ama bu bir CLI scripti — drizzle.config.ts ile aynı istisna.
+ * Onay bayrağını app env şemasına eklemek, uygulamayı ilgilendirmeyen bir
+ * değişkeni oraya taşırdı.
+ */
+function assertSafeToSeed() {
+  if (env.NODE_ENV !== "production") return;
+
+  if (process.env.CONFIRM_SEED_PRODUCTION === "evet") {
+    console.warn("⚠️  PRODUCTION'da seed çalıştırılıyor — açık onay verildi.");
+    return;
+  }
+
+  console.error("❌ DURDURULDU: NODE_ENV=production.");
+  console.error("   Seed, veritabanındaki TÜM verileri siler.");
+  console.error("   Gerçekten istiyorsan: CONFIRM_SEED_PRODUCTION=evet bun run db:seed");
+  process.exit(1);
+}
+
 async function main() {
   console.log("🌱 Veritabanı tohumlama (seeding) başlatılıyor...");
+
+  assertSafeToSeed();
 
   const mockPassword = await hashPassword("Password123!");
 
   // Bütün işlemleri tek bir Transaction içinde yapıyoruz ki,
   // ortasında hata verirse veritabanı yarım kalmasın, her şeyi geri alsın.
   await db.transaction(async (tx) => {
+    // ═══════════════════════════════════════════════
+    // 0. TEMİZLİK — seed idempotent olmalı
+    // ═══════════════════════════════════════════════
+    // Tablolar elle sayılmıyor: pg_tables'tan okunuyor ki yeni bir tablo
+    // eklendiğinde burayı güncellemek unutulmasın. Migration geçmişi
+    // `drizzle` şemasında durduğu için `public`i temizlemek ona dokunmaz.
+    // TRUNCATE transaction içinde: seed ortada patlarsa silme de geri alınır.
+    // Ne sildiğimizi önce söyle: "ben ne yaptım?" anında logda dursun.
+    const [existing] = await tx.execute<{ users: number; clubs: number }>(sql`
+      SELECT (SELECT count(*) FROM users) AS users,
+             (SELECT count(*) FROM clubs) AS clubs
+    `);
+    if (existing && (Number(existing.users) > 0 || Number(existing.clubs) > 0)) {
+      console.log(
+        `🧹 Mevcut veri siliniyor: ${existing.users} kullanıcı, ${existing.clubs} kulüp`,
+      );
+    }
+
+    console.log("🧹 public şeması temizleniyor (idempotent seed)...");
+    await tx.execute(sql`
+      DO $$
+      DECLARE tbl text;
+      BEGIN
+        FOR tbl IN SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+        LOOP
+          EXECUTE format('TRUNCATE TABLE public.%I RESTART IDENTITY CASCADE', tbl);
+        END LOOP;
+      END $$;
+    `);
+
     // ═══════════════════════════════════════════════
     // 1. GLOBAL ROLLER VE YETKİLER (tek sefer, tenant'tan bağımsız)
     // ═══════════════════════════════════════════════
