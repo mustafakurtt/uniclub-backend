@@ -1,70 +1,105 @@
-# Production compose — dev'den farkı: uygulama container olarak çalışır,
-# Mailpit yoktur (gerçek SMTP kullanılır), portlar dışarı açılmaz.
+# Production stack. Dev stack'ten TAMAMEN ayrı: kendi container'ları,
+# kendi volume'ları, kendi ağı. İkisi aynı makinede yan yana çalışabilir.
 #
-# Kullanım:
-#   docker compose -f docker-compose.prod.yml up -d --build
+#   ./scripts/deploy-local.sh                   # önerilen yol
+#   docker compose -p uniclub-prod -f docker-compose.prod.yml up -d
 #
-# Tüm secret'lar ortam değişkeninden gelir — bu dosyada ASLA değer yazılmaz.
+# -p uniclub-prod: proje adı. Volume'lar uniclub-prod_pgdata olur; dev'in
+# pgdata'sına dokunmaz. Aynı adı her seferinde kullan, yoksa yeni volume yaratırsın.
+#
+# Tüm secret'lar .env.prod'dan gelir. Bu dosyada ASLA değer yazılmaz.
 
 services:
+  # ── Migration: uygulamadan ÖNCE, bir kez çalışır, biter ────
+  # Prod imajında drizzle-kit yoktur; migration ayrı bir imajdan koşar.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    container_name: uniclub_prod_migrate
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:?zorunlu}:${POSTGRES_PASSWORD:?zorunlu}@postgres:5432/${POSTGRES_DB:?zorunlu}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: uniclub_app
+      target: runner
+    image: uniclub-backend:${IMAGE_TAG:-local}
+    container_name: uniclub_prod_app
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL zorunlu}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL zorunlu}
+      DATABASE_URL: postgres://${POSTGRES_USER:?zorunlu}:${POSTGRES_PASSWORD:?zorunlu}@postgres:5432/${POSTGRES_DB:?zorunlu}
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET zorunlu}
       SMTP_HOST: ${SMTP_HOST:?SMTP_HOST zorunlu}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS}
-      MAIL_FROM: ${MAIL_FROM}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-UniClub <no-reply@uniclub.local>}
       APP_URL: ${APP_URL:?APP_URL zorunlu}
       # Ters proxy (nginx/Cloudflare) arkasındaysan true.
-      TRUST_PROXY: ${TRUST_PROXY:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       RATE_LIMIT_DISABLED: "false"
     ports:
-      - "3000:3000"
+      # Dev 3000'i kullanıyor; prod dışarıya 8080'den çıkar.
+      - "${APP_PORT:-8080}:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
-    container_name: uniclub_postgres
+    container_name: uniclub_prod_postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER zorunlu}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD zorunlu}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB zorunlu}
+      POSTGRES_USER: ${POSTGRES_USER:?zorunlu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?zorunlu}
+      POSTGRES_DB: ${POSTGRES_DB:?zorunlu}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     restart: unless-stopped
-    # Port dışarı AÇILMAZ — sadece compose ağı içinden erişilir.
+    # Port dışarı AÇILMAZ. Yedek almak için: docker exec uniclub_prod_postgres pg_dump ...
 
   redis:
     image: redis:7-alpine
-    container_name: uniclub_redis
+    container_name: uniclub_prod_redis
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    restart: unless-stopped
+
+  # ── Yalnızca YEREL prod simülasyonu için sahte SMTP ────────
+  # Gerçek sunucuda bu servis çalıştırılmaz; SMTP_* gerçek sağlayıcıyı gösterir.
+  #   docker compose --profile localmail ...
+  mailpit:
+    profiles: ["localmail"]
+    image: axllent/mailpit:latest
+    container_name: uniclub_prod_mailpit
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "${MAILPIT_UI_PORT:-8026}:8025" # dev'inki 8025'te
     restart: unless-stopped
 
 volumes:
