@@ -19,7 +19,14 @@ services:
       target: migrator
     container_name: uniclub_prod_migrate
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:?zorunlu}:${POSTGRES_PASSWORD:?zorunlu}@postgres:5432/${POSTGRES_DB:?zorunlu}
+      # bootstrap uygulama kodunu çalıştırır (db → config/env), env.ts ise TÜM
+      # zorunlu değişkenleri valide eder. drizzle-kit migration'ı bunlara ihtiyaç
+      # duymaz ama bootstrap duyar. REDIS_URL yalnızca doğrulama için — bootstrap
+      # Redis'e bağlanmaz, ama env.ts geçerli bir URL bekler.
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET zorunlu}
       # Aynı imaj `db:bootstrap` için de kullanılır (RBAC + ilk super_admin).
       # Değerler yoksa bootstrap RBAC'ı kurar ama admin oluşturmayı atlar.
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
