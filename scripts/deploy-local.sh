@@ -7,11 +7,12 @@
 #
 # Yaptıkları, sırayla:
 #   1. Deploy öncesi yedek (geri dönüş noktası)
-#   2. İmajı commit SHA'sıyla etiketleyerek derle
-#   3. Migration'ları ayrı bir container'da uygula
-#   4. Uygulamayı yeniden başlat
-#   5. /health yeşil yanana kadar bekle
-#   6. Yanmazsa ÖNCEKİ imaja geri dön
+#   2. İmajı release/SHA etiketiyle derle
+#   3. Altyapıyı başlat (postgres, redis, mailpit)
+#   4. Migration'ları ayrı bir container'da uygula
+#   5. Uygulamayı başlat
+#   6. /health yeşil yanana kadar bekle; yanmazsa ÖNCEKİ imaja geri dön
+#   7. Proxy config'ini kesintisiz yeniden yükle
 #
 # Dev stack'e (docker-compose.yml) dokunmaz: ayrı proje, ayrı volume, ayrı ağ.
 
@@ -66,13 +67,24 @@ fi
 echo "▶ İmaj derleniyor: uniclub-backend:${NEW_TAG}"
 IMAGE_TAG="$NEW_TAG" compose build app migrate
 
-# ── 3+4. Migration ve uygulama ────────────────────────────────
-# `up` migrate servisini otomatik bekler: app'in depends_on'ında
-# service_completed_successfully var. Migration patlarsa app hiç başlamaz.
-echo "▶ Migration + uygulama başlatılıyor"
-IMAGE_TAG="$NEW_TAG" compose up -d --remove-orphans
+# ── 3. Altyapı ────────────────────────────────────────────────
+echo "▶ Altyapı (postgres, redis, mailpit)"
+IMAGE_TAG="$NEW_TAG" compose up -d --remove-orphans postgres redis mailpit
 
-# ── 5. Sağlık kontrolü ────────────────────────────────────────
+# ── 4. Migration — ayrı, açık bir adım ────────────────────────
+# `compose run --rm migrate` migration'ları uygulayıp çıkar. `up`'a bırakmıyoruz:
+# kısa ömürlü bir servisi up orkestrasyonuna sokmak, container bitip
+# temizlenirken "No such container" hatası ve yanlış-negatif deploy üretiyor.
+# migrate'in kendi depends_on'ı postgres:healthy bekler; migration patlarsa
+# bu satır non-zero döner ve app hiç başlatılmaz.
+echo "▶ Migration uygulanıyor"
+IMAGE_TAG="$NEW_TAG" compose run --rm migrate
+
+# ── 5. Uygulama ───────────────────────────────────────────────
+echo "▶ Uygulama başlatılıyor"
+IMAGE_TAG="$NEW_TAG" compose up -d app
+
+# ── 6. Sağlık kontrolü ────────────────────────────────────────
 echo "▶ /health bekleniyor (en fazla ${HEALTH_TIMEOUT}s)"
 HEALTHY=0
 for ((i = 1; i <= HEALTH_TIMEOUT; i++)); do
@@ -84,7 +96,7 @@ for ((i = 1; i <= HEALTH_TIMEOUT; i++)); do
   sleep 1
 done
 
-# ── 6. Rollback ───────────────────────────────────────────────
+# ── 7. Rollback ───────────────────────────────────────────────
 if [[ "$HEALTHY" -ne 1 ]]; then
   echo "✗ Sağlık kontrolü BAŞARISIZ. Son loglar:" >&2
   compose logs --tail=30 app >&2 || true
@@ -100,7 +112,7 @@ if [[ "$HEALTHY" -ne 1 ]]; then
   exit 1
 fi
 
-# ── 7. Proxy config'ini tazele ────────────────────────────────
+# ── 8. Proxy config'ini tazele ────────────────────────────────
 # Reverse proxy ayrı ve uzun ömürlü bir compose projesi (uniclub-proxy), ama
 # CONFIG'i (deploy/Caddyfile) bu repo'da ve release'lerle değişebilir. Deploy
 # klonu yeni commit'e alındığında Caddyfile güncellenir; Caddy'ye yeniden
