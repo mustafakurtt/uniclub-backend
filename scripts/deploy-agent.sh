@@ -62,11 +62,16 @@ deployed_version() {
   docker inspect "$APP_CONTAINER" -f '{{.Config.Image}}' 2>/dev/null | sed 's/.*://' || true
 }
 
+# `git clone` boş olmayan bir dizine yazmayı reddeder — ve bu dizin boş olmaz:
+# .env.prod klondan önce oraya konur (secret git'te taşınmaz). Bu yüzden klonlamak
+# yerine dizini bir repo'ya dönüştürüp fetch ediyoruz.
 ensure_clone() {
-  if [[ ! -d "${DEPLOY_DIR}/.git" ]]; then
-    log "Deploy klonu oluşturuluyor: ${DEPLOY_DIR}"
-    git clone --quiet "https://github.com/${REPO}.git" "$DEPLOY_DIR"
-  fi
+  [[ -d "${DEPLOY_DIR}/.git" ]] && return 0
+  log "Deploy repo'su hazırlanıyor: ${DEPLOY_DIR}"
+  mkdir -p "$DEPLOY_DIR"
+  git -C "$DEPLOY_DIR" init --quiet
+  git -C "$DEPLOY_DIR" remote add origin "https://github.com/${REPO}.git" 2>/dev/null || true
+  git -C "$DEPLOY_DIR" fetch --quiet --tags origin
 }
 
 # .env.prod git'te değildir (secret içerir); klona bir kez elle konur.
