@@ -13,6 +13,22 @@
  */
 export type Catalog = Record<string, Record<string, string>>;
 
+/** Bir katalogun tüm dillerindeki anahtarların birleşimi. */
+type CatalogAllKeys<T> = { [L in keyof T]: keyof T[L] }[keyof T];
+
+/**
+ * Katalog PARİTE kilidi. Feature `*.messages.ts` dosyaları katalogunu bununla
+ * sarar; her dilin AYNI anahtar kümesine sahip olmasını DERLEME anında zorlar —
+ * bir dilde olup diğerinde eksik bir anahtar tip hatası verir (aksi halde o dilde
+ * çevirmen sessizce varsayılan dile/anahtara düşerdi). `satisfies Catalog`'un
+ * yerine geçer: hem tip daraltır (literal anahtarlar) hem pariteyi garanti eder.
+ */
+export function defineCatalog<T extends Record<string, Record<string, string>>>(
+  catalog: T & { [L in keyof T]: Record<CatalogAllKeys<T>, string> }
+): T {
+  return catalog;
+}
+
 export type Translate = (
   key: string,
   locale: string,

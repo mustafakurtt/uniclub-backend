@@ -1,10 +1,10 @@
-import type { Catalog } from "../../core/i18n/translator";
+import { defineCatalog } from "../../core/i18n/translator";
 
 /**
  * Çapraz-kesen (feature'a ait olmayan) mesajlar: doğrulama ve altyapı hatası.
  * Feature mesajları ilgili feature'ın `*.messages.ts` dosyasında yaşar.
  */
-export const commonMessages = {
+export const commonMessages = defineCatalog({
   tr: {
     "validation.failed": "Girdi doğrulaması başarısız.",
     "server.unexpected": "Sunucu tarafında beklenmeyen bir hata oluştu.",
@@ -27,7 +27,7 @@ export const commonMessages = {
     "validation.field.invalid_value": "Invalid value.",
     "validation.field.unrecognized_keys": "Unrecognized key(s) sent.",
   },
-} satisfies Catalog;
+});
 
 /** Çapraz-kesen (feature'a ait olmayan) geçerli mesaj anahtarları. */
 export type CommonMessageKey = keyof (typeof commonMessages)["tr"];
