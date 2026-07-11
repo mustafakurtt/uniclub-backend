@@ -17,6 +17,8 @@ import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
 import { Variables } from "./core/auth/auth.middleware";
+import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
+import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
 import { verifyMailConnection } from "./shared/mail/mailer";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
@@ -28,12 +30,15 @@ const log = logger.child({ module: "bootstrap" });
 // middleware zincirini gerçek port açmadan koşturur (bkz. tests/). Bir modülü
 // import etmek Bun.serve'i BAŞLATMAZ — sunucu yalnızca bu dosya doğrudan
 // entrypoint olarak çalıştırıldığında (default export) ayağa kalkar.
-export const app = new Hono<{ Variables: Variables }>();
+export const app = new Hono<{ Variables: Variables & LocaleVariables }>();
 
 // Global Middlewares
 // requestId EN ÖNDE: her istek bir korelasyon kimliği alır; errorHandler bunu
 // istemciye döner + sunucu loguna yazar → "hata aldım" dendiğinde eşleştirilebilir.
 app.use("*", requestId());
+// Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
+// bu dile çevirir (bkz. core/i18n).
+app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
 app.use("*", requestLogger);
 app.use("*", cors());
 

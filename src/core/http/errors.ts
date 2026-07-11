@@ -18,11 +18,16 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
  *
  * `details`: opsiyonel yapılandırılmış ek bilgi (örn. doğrulama hatalarında
  * alan-bazlı issue listesi). Handler bunu cevaba olduğu gibi ekler.
+ *
+ * `params`: `message` bir çeviri anahtarıysa, şablondaki `{param}` yerlerine
+ * konulacak değerler (örn. { domain }). Çeviri handler'da, isteğin diline göre
+ * yapılır; katalog yoksa `message` düz metin gibi aynen döner (geri uyum).
  */
 export interface HttpErrorOptions {
   code?: string;
   expose?: boolean;
   details?: unknown;
+  params?: Record<string, unknown>;
   cause?: unknown;
 }
 
@@ -31,6 +36,7 @@ export class HttpError extends Error {
   readonly code?: string;
   readonly expose: boolean;
   readonly details?: unknown;
+  readonly params?: Record<string, unknown>;
 
   constructor(status: ContentfulStatusCode, message: string, options?: HttpErrorOptions) {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
@@ -40,6 +46,7 @@ export class HttpError extends Error {
     this.code = options?.code;
     this.expose = options?.expose ?? true;
     this.details = options?.details;
+    this.params = options?.params;
   }
 }
 

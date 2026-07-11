@@ -12,7 +12,9 @@ import { createValidator } from "../../core/http/validation";
  */
 export const validate = createValidator({
   formatZodError: (error) => ({
-    message: "Girdi doğrulaması başarısız.",
+    // Üst mesaj bir çeviri anahtarı; error-handler isteğin diline çevirir.
+    // details[].message şimdilik zod'un ham metni (alan-bazlı çeviri sonraki iş).
+    message: "validation.failed",
     details: error.issues.map((issue) => ({
       path: issue.path.join("."),
       code: issue.code,
