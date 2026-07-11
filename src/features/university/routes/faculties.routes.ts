@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
+import { ok, created, done } from "../../../core/http/respond";
 import { UniversityPermission } from "../university.permissions";
 import { createFacultySchema, updateFacultySchema } from "../university.schema";
 import { universityService } from "../university.service";
@@ -20,14 +21,14 @@ export const facultiesRoutes = new Hono<{ Variables: RbacVariables }>();
 facultiesRoutes.get("/:universityId/faculties", async (c) => {
   const { universityId } = c.req.param();
   const faculties = await universityService.listFaculties(universityId);
-  return c.json({ success: true, message: "Fakülteler listelendi.", data: faculties });
+  return ok(c, faculties, "Fakülteler listelendi.");
 });
 
 // 2. TEK BİR FAKÜLTEYİ GETİRME (public)
 facultiesRoutes.get("/:universityId/faculties/:facultyId", async (c) => {
   const { universityId, facultyId } = c.req.param();
   const faculty = await universityService.getFaculty(universityId, facultyId);
-  return c.json({ success: true, message: "Fakülte bulundu.", data: faculty });
+  return ok(c, faculty, "Fakülte bulundu.");
 });
 
 // 3. FAKÜLTE OLUŞTURMA
@@ -39,7 +40,7 @@ facultiesRoutes.post(
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
     const faculty = await universityService.createFaculty(universityId, body);
-    return c.json({ success: true, message: "Fakülte oluşturuldu.", data: faculty }, 201);
+    return created(c, faculty, "Fakülte oluşturuldu.");
   }
 );
 
@@ -52,7 +53,7 @@ facultiesRoutes.patch(
     const { universityId, facultyId } = c.req.param();
     const body = c.req.valid("json");
     const faculty = await universityService.updateFaculty(universityId, facultyId, body);
-    return c.json({ success: true, message: "Fakülte güncellendi.", data: faculty });
+    return ok(c, faculty, "Fakülte güncellendi.");
   }
 );
 
@@ -63,6 +64,6 @@ facultiesRoutes.delete(
   async (c) => {
     const { universityId, facultyId } = c.req.param();
     await universityService.deleteFaculty(universityId, facultyId);
-    return c.json({ success: true, message: "Fakülte silindi." });
+    return done(c, "Fakülte silindi.");
   }
 );

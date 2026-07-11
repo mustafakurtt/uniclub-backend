@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
+import { ok, created, done } from "../../../core/http/respond";
 import { UniversityPermission } from "../university.permissions";
 import {
   listUniversitiesQuerySchema,
@@ -20,7 +21,8 @@ import { universityService } from "../university.service";
  *
  * Not: rotalar bilinçli olarak try/catch İÇERMEZ. Servis katmanı `HttpError`
  * (veya düz iş hatası) fırlatır; bunları `app.onError` (core/http/error-handler)
- * tek noktadan status + gövdeye çevirir. Rotada yalnızca iş akışı görünür.
+ * tek noktadan status + gövdeye çevirir. Başarılı cevaplar da core zarf
+ * yardımcıları (`ok`/`created`/`done`) ile üretilir. Rotada yalnızca iş akışı görünür.
  */
 export const universitiesRoutes = new Hono<{ Variables: RbacVariables }>();
 
@@ -33,7 +35,7 @@ universitiesRoutes.post(
   async (c) => {
     const body = c.req.valid("json");
     const result = await universityService.createUniversity(body);
-    return c.json({ success: true, message: "Üniversite oluşturuldu.", data: result }, 201);
+    return created(c, result, "Üniversite oluşturuldu.");
   }
 );
 
@@ -44,7 +46,7 @@ universitiesRoutes.get(
   async (c) => {
     const { search } = c.req.valid("query");
     const universities = await universityService.listUniversities(search);
-    return c.json({ success: true, message: "Üniversiteler listelendi.", data: universities });
+    return ok(c, universities, "Üniversiteler listelendi.");
   }
 );
 
@@ -52,7 +54,7 @@ universitiesRoutes.get(
 universitiesRoutes.get("/:universityId", async (c) => {
   const { universityId } = c.req.param();
   const university = await universityService.getUniversity(universityId);
-  return c.json({ success: true, message: "Üniversite bulundu.", data: university });
+  return ok(c, university, "Üniversite bulundu.");
 });
 
 // 4. ÜNİVERSİTE BİLGİLERİNİ GÜNCELLEME
@@ -64,7 +66,7 @@ universitiesRoutes.patch(
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
     const university = await universityService.updateUniversity(universityId, body);
-    return c.json({ success: true, message: "Üniversite güncellendi.", data: university });
+    return ok(c, university, "Üniversite güncellendi.");
   }
 );
 
@@ -75,6 +77,6 @@ universitiesRoutes.delete(
   async (c) => {
     const { universityId } = c.req.param();
     await universityService.deleteUniversity(universityId);
-    return c.json({ success: true, message: "Üniversite silindi." });
+    return done(c, "Üniversite silindi.");
   }
 );
