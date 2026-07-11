@@ -17,7 +17,10 @@ import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
 import { Variables, setTokenVerifier } from "./core/auth/auth.middleware";
+import { configureRbac } from "./core/rbac/rbac.middleware";
 import { verifyToken } from "./shared/utils/jwt.util";
+import { getEffectivePermissions } from "./shared/rbac/rbac.cache";
+import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim şekli)
 import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
 import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
 import { verifyMailConnection } from "./shared/mail/mailer";
@@ -46,6 +49,17 @@ app.use("*", cors());
 // core/auth'un token doğrulayıcısını enjekte et (SECRET env'de olduğu için core
 // import edemez — dikiş). authMiddleware bunu kullanır. Bkz. core/auth/auth.middleware.
 setTokenVerifier(verifyToken);
+
+// core/rbac'ın projeye özgü tüm bağımlılıklarını enjekte et: alan erişimleri
+// (core alan adını bilmez), bypass rol adları ve izin kaynağı. Bu enjeksiyonla
+// core/rbac artık shared'a hiç bağlı değildir. Bkz. core/rbac/rbac.middleware.
+configureRbac({
+  getSubjectId: (user) => user.userId,
+  getTenantId: (user) => user.universityId,
+  tenantScopeBypassRoles: ["super_admin", "platform_support"],
+  tenantParamName: "universityId",
+  getEffectivePermissions,
+});
 
 // guard() zincirindeki denetim izi (audit trail) kancasına bu projenin
 // implementasyonunu tak — bkz. features/audit/audit.sink.ts.

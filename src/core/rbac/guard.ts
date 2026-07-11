@@ -6,7 +6,7 @@ import { auditTrail } from "./audit-hook";
 export type GuardOptions = {
   /** true ise zincire enforceTenantScope() eklenir. */
   tenantScoped?: boolean;
-  /** tenantScoped: true iken path parametresinin adını özelleştirmek için (varsayılan: "universityId"). */
+  /** tenantScoped: true iken path parametresinin adını özelleştirmek için (verilmezse config.tenantParamName). */
   tenantParam?: string;
 };
 

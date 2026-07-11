@@ -1,5 +1,5 @@
 import { createJwt } from "../../core/auth/jwt";
-import type { JwtPayload } from "../../core/auth/auth.middleware";
+import type { JwtPayload } from "../auth/claims";
 import { env } from "../../config/env";
 
 export type { JwtPayload };

@@ -1,29 +1,53 @@
 import { Context, Next } from "hono";
-import { Variables } from "../auth/auth.middleware";
-import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
+import { Variables, AuthClaims } from "../auth/auth.middleware";
+import { ForbiddenError } from "../http/errors";
 import { EffectivePermissions } from "./rbac.types";
 
 export type RbacVariables = Variables & {
   authz: EffectivePermissions;
-  scopeUniversityId?: string;
+  scopeTenantId?: string;
 };
 
 /**
- * authMiddleware'den SONRA çalışmalıdır. Kullanıcının etkin rol/izinlerini
- * (Redis cache üzerinden) çözüp context'e ekler.
+ * DİKİŞ: RBAC motoru proje-bağımsız kalsın diye, projeye özgü olan HER ŞEY enjekte
+ * edilir (setGuardAuditSink deseni). Böylece core kaynağı ne alan adı (userId,
+ * universityId) ne de rol adı (super_admin) İSMEN bilir; ayrıca izin kaynağını
+ * (getEffectivePermissions) da enjekte ettiğimiz için core/rbac artık shared'a
+ * HİÇ bağlı değildir.
+ */
+export interface RbacConfig {
+  /** Kullanıcı payload'ından izin araması için özne kimliğini çıkarır. */
+  getSubjectId: (user: AuthClaims) => string;
+  /** Kullanıcı payload'ından tenant kimliğini çıkarır (yoksa null). */
+  getTenantId: (user: AuthClaims) => string | null;
+  /** Tenant sınırını aşabilen (çapraz-tenant) platform seviyesi rol adları. */
+  tenantScopeBypassRoles: string[];
+  /** tenantScoped rotalarda kıyaslanacak varsayılan path parametresinin adı. */
+  tenantParamName: string;
+  /** Bir öznenin etkin rol/izinlerini çözer (proje: Redis cache'li repo). */
+  getEffectivePermissions: (subjectId: string) => Promise<EffectivePermissions>;
+}
+
+let config: RbacConfig | null = null;
+
+export function configureRbac(next: RbacConfig) {
+  config = next;
+}
+
+function cfg(): RbacConfig {
+  if (!config) throw new Error("RBAC yapılandırılmadı: configureRbac çağrılmalı.");
+  return config;
+}
+
+/**
+ * authMiddleware'den SONRA çalışmalıdır. Kullanıcının etkin rol/izinlerini çözüp
+ * context'e ekler. Askıya alınan kullanıcının erişimi ANINDA kesilir.
  */
 export const attachAuthz = async (c: Context<{ Variables: RbacVariables }>, next: Next) => {
-  const user = c.get("user");
-  const authz = await getEffectivePermissions(user.userId);
+  const authz = await cfg().getEffectivePermissions(cfg().getSubjectId(c.get("user")));
 
-  // Askıya alınan kullanıcının erişimi ANINDA kesilir (guard'lı tüm rotalar).
-  // Not: durum değiştiren servis (admin.updateUserStatus) bu kullanıcının
-  // cache'ini invalidate ettiği için askı bir sonraki istekte etkilidir.
   if (authz.status === "suspended") {
-    return c.json({
-      success: false,
-      message: "Hesabınız askıya alınmıştır. Lütfen SKS birimiyle iletişime geçin.",
-    }, 403);
+    throw new ForbiddenError("rbac.accountSuspended");
   }
 
   c.set("authz", authz);
@@ -32,12 +56,8 @@ export const attachAuthz = async (c: Context<{ Variables: RbacVariables }>, next
 
 export const requirePermission = (key: string) => {
   return async (c: Context<{ Variables: RbacVariables }>, next: Next) => {
-    const authz = c.get("authz");
-    if (!authz.permissions.includes(key)) {
-      return c.json({
-        success: false,
-        message: "Bu işlem için yetkiniz bulunmamaktadır.",
-      }, 403);
+    if (!c.get("authz").permissions.includes(key)) {
+      throw new ForbiddenError("rbac.forbidden");
     }
     await next();
   };
@@ -45,63 +65,45 @@ export const requirePermission = (key: string) => {
 
 export const requireRole = (roleName: string) => {
   return async (c: Context<{ Variables: RbacVariables }>, next: Next) => {
-    const authz = c.get("authz");
-    if (!authz.roles.includes(roleName)) {
-      return c.json({
-        success: false,
-        message: "Bu işlem için yetkiniz bulunmamaktadır.",
-      }, 403);
+    if (!c.get("authz").roles.includes(roleName)) {
+      throw new ForbiddenError("rbac.forbidden");
     }
     await next();
   };
 };
 
 /**
- * Path'teki :universityId parametresini, kullanıcının kendi üniversitesiyle kıyaslar.
- * super_admin rolü bu kontrolü bypass eder (herhangi bir üniversiteyi hedefleyebilir).
- *
- * Platform hesapları (user.universityId === null) hiçbir tenant'a ait değildir:
- * bypass rolü taşıyorlarsa her tenant'ı hedefleyebilir, taşımıyorlarsa hiçbir
- * tenant kaynağına erişemezler (null, hiçbir :universityId ile eşleşmez).
- *
- * Taşınabilirlik notu: "super_admin"/"platform_support" rol adları ve
- * "universityId" (user.universityId) bu projenin tenant modeline özgüdür. Bu
- * core/ klasörünü başka bir projeye kopyalarken tenant kimliği/bypass rolleri
- * farklıysa bu fonksiyon parametrik hale getirilmelidir.
- */
-// Tenant scope'u bypass eden platform seviyesi roller (çapraz-tenant erişim).
-// super_admin tam yetkili; platform_support salt-okunur (yalnızca *.view taşır).
-const TENANT_SCOPE_BYPASS_ROLES = ["super_admin", "platform_support"];
-
-/**
- * Aktör tenant sınırlarını aşabiliyor mu (platform seviyesi bir rolü var mı)?
- * enforceTenantScope ile "erişilebilir üniversiteler" hesabı (admin.service)
- * aynı tanımı paylaşsın diye tek noktadan verilir.
+ * Bir öznenin tenant sınırlarını aşabildiği (platform seviyesi rolü olduğu) mı?
+ * Bypass rol adları enjekte edilir (proje verisi). admin.service ile aynı tanımı
+ * paylaşsın diye tek noktadan verilir.
  */
 export const hasTenantScopeBypass = (authz: EffectivePermissions): boolean =>
-  authz.roles.some((role) => TENANT_SCOPE_BYPASS_ROLES.includes(role));
+  authz.roles.some((role) => cfg().tenantScopeBypassRoles.includes(role));
 
-export const enforceTenantScope = (paramName: string = "universityId") => {
+/**
+ * Path'teki tenant parametresini, kullanıcının kendi tenant'ıyla kıyaslar. Bypass
+ * rolü taşıyanlar herhangi bir tenant'ı hedefleyebilir. Param adı verilmezse
+ * `config.tenantParamName`'e düşer; tenant kimliği enjekte edilen `getTenantId`
+ * ile alınır — core ne param adını ne alan adını İSMEN bilir.
+ */
+export const enforceTenantScope = (paramName?: string) => {
   return async (c: Context<{ Variables: RbacVariables }>, next: Next) => {
-    const targetUniversityId = c.req.param(paramName);
-    const user = c.get("user");
+    const targetTenantId = c.req.param(paramName ?? cfg().tenantParamName);
     const authz = c.get("authz");
 
     if (hasTenantScopeBypass(authz)) {
-      c.set("scopeUniversityId", targetUniversityId);
+      c.set("scopeTenantId", targetTenantId);
       return next();
     }
 
-    // user.universityId null ise (bypass'sız platform hesabı) bu karşılaştırma
-    // asla tutmaz — tenant kaynaklarına erişim doğru şekilde reddedilir.
-    if (!user.universityId || targetUniversityId !== user.universityId) {
-      return c.json({
-        success: false,
-        message: "Bu üniversiteye ait kaynaklara erişim yetkiniz bulunmamaktadır.",
-      }, 403);
+    // Tenant kimliği null ise (bypass'sız platform hesabı) karşılaştırma asla
+    // tutmaz — tenant kaynaklarına erişim doğru şekilde reddedilir.
+    const tenantId = cfg().getTenantId(c.get("user"));
+    if (!tenantId || targetTenantId !== tenantId) {
+      throw new ForbiddenError("rbac.tenantForbidden");
     }
 
-    c.set("scopeUniversityId", user.universityId);
+    c.set("scopeTenantId", tenantId);
     await next();
   };
 };
