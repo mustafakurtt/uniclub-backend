@@ -32,7 +32,12 @@ export function respondWithBusinessError(
 ) {
   if (isHttpError(error)) {
     return c.json(
-      { success: false, message: error.message, ...(error.code ? { code: error.code } : {}) },
+      {
+        success: false,
+        message: error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.details !== undefined ? { details: error.details } : {}),
+      },
       error.status
     );
   }

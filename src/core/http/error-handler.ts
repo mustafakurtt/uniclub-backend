@@ -47,7 +47,13 @@ export function createErrorHandler(options: ErrorHandlerOptions) {
 
     if (isHttpError(err) && err.expose) {
       return c.json(
-        { success: false, message: err.message, ...(err.code ? { code: err.code } : {}), requestId },
+        {
+          success: false,
+          message: err.message,
+          ...(err.code ? { code: err.code } : {}),
+          ...(err.details !== undefined ? { details: err.details } : {}),
+          requestId,
+        },
         err.status
       );
     }

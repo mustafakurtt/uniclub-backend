@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { UniversityPermission } from "../university.permissions";
@@ -29,7 +29,7 @@ export const universitiesRoutes = new Hono<{ Variables: RbacVariables }>();
 universitiesRoutes.post(
   "/",
   ...guard(UniversityPermission.CREATE),
-  zValidator("json", createUniversitySchema),
+  validate("json", createUniversitySchema),
   async (c) => {
     const body = c.req.valid("json");
     const result = await universityService.createUniversity(body);
@@ -40,7 +40,7 @@ universitiesRoutes.post(
 // 2. ÜNİVERSİTELERİ LİSTELEME (public)
 universitiesRoutes.get(
   "/",
-  zValidator("query", listUniversitiesQuerySchema),
+  validate("query", listUniversitiesQuerySchema),
   async (c) => {
     const { search } = c.req.valid("query");
     const universities = await universityService.listUniversities(search);
@@ -59,7 +59,7 @@ universitiesRoutes.get("/:universityId", async (c) => {
 universitiesRoutes.patch(
   "/:universityId",
   ...guard(UniversityPermission.UPDATE, { tenantScoped: true }),
-  zValidator("json", updateUniversitySchema),
+  validate("json", updateUniversitySchema),
   async (c) => {
     const { universityId } = c.req.param();
     const body = c.req.valid("json");

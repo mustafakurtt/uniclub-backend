@@ -15,10 +15,14 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
  *
  * `code`: opsiyonel makine-okur kod — frontend'in mesajı string eşleştirmeden
  * ayırt edebilmesi için (örn. "EMAIL_NOT_VERIFIED").
+ *
+ * `details`: opsiyonel yapılandırılmış ek bilgi (örn. doğrulama hatalarında
+ * alan-bazlı issue listesi). Handler bunu cevaba olduğu gibi ekler.
  */
 export interface HttpErrorOptions {
   code?: string;
   expose?: boolean;
+  details?: unknown;
   cause?: unknown;
 }
 
@@ -26,6 +30,7 @@ export class HttpError extends Error {
   readonly status: ContentfulStatusCode;
   readonly code?: string;
   readonly expose: boolean;
+  readonly details?: unknown;
 
   constructor(status: ContentfulStatusCode, message: string, options?: HttpErrorOptions) {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
@@ -34,6 +39,7 @@ export class HttpError extends Error {
     this.status = status;
     this.code = options?.code;
     this.expose = options?.expose ?? true;
+    this.details = options?.details;
   }
 }
 
@@ -64,6 +70,19 @@ export class NotFoundError extends HttpError {
 export class ConflictError extends HttpError {
   constructor(message: string, options?: HttpErrorOptions) {
     super(409, message, options);
+  }
+}
+
+/**
+ * Girdi doğrulama hatası (422 değil, proje konvansiyonu gereği 400). `code`
+ * varsayılan "VALIDATION_ERROR" — frontend string eşleştirmeden ayırt eder;
+ * `details` alan-bazlı issue listesini taşır. Doğrulama katmanı (bkz.
+ * core/http/validation.ts) bunu fırlatır, `app.onError` diğer HttpError'lar
+ * gibi tek noktadan çevirir.
+ */
+export class ValidationError extends HttpError {
+  constructor(message: string, options?: Omit<HttpErrorOptions, "code"> & { code?: string }) {
+    super(400, message, { ...options, code: options?.code ?? "VALIDATION_ERROR" });
   }
 }
 

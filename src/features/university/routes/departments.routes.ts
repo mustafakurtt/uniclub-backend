@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { UniversityPermission } from "../university.permissions";
@@ -37,7 +37,7 @@ departmentsRoutes.get("/:universityId/faculties/:facultyId/departments/:departme
 departmentsRoutes.post(
   "/:universityId/faculties/:facultyId/departments",
   ...guard(UniversityPermission.DEPARTMENT_CREATE, { tenantScoped: true }),
-  zValidator("json", createDepartmentSchema),
+  validate("json", createDepartmentSchema),
   async (c) => {
     const { universityId, facultyId } = c.req.param();
     const body = c.req.valid("json");
@@ -50,7 +50,7 @@ departmentsRoutes.post(
 departmentsRoutes.patch(
   "/:universityId/faculties/:facultyId/departments/:departmentId",
   ...guard(UniversityPermission.DEPARTMENT_UPDATE, { tenantScoped: true }),
-  zValidator("json", updateDepartmentSchema),
+  validate("json", updateDepartmentSchema),
   async (c) => {
     const { universityId, facultyId, departmentId } = c.req.param();
     const body = c.req.valid("json");
