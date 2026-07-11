@@ -8,6 +8,9 @@ export const commonMessages = defineCatalog({
   tr: {
     "validation.failed": "Girdi doğrulaması başarısız.",
     "server.unexpected": "Sunucu tarafında beklenmeyen bir hata oluştu.",
+    // kimlik doğrulama (core/auth/auth.middleware)
+    "auth.tokenMissing": "Bu işlem için giriş yapmalısınız (token eksik).",
+    "auth.tokenInvalid": "Oturum süreniz dolmuş veya token geçersiz. Lütfen tekrar giriş yapın.",
     // alan-bazlı zod issue mesajları (validate.ts, issue.code'undan üretir)
     "validation.field.too_small": "Değer çok küçük (en az {minimum}).",
     "validation.field.too_big": "Değer çok büyük (en fazla {maximum}).",
@@ -19,6 +22,9 @@ export const commonMessages = defineCatalog({
   en: {
     "validation.failed": "Validation failed.",
     "server.unexpected": "An unexpected error occurred on the server.",
+    // authentication (core/auth/auth.middleware)
+    "auth.tokenMissing": "You must be signed in for this action (token missing).",
+    "auth.tokenInvalid": "Your session has expired or the token is invalid. Please sign in again.",
     // field-level zod issue messages (produced by validate.ts from issue.code)
     "validation.field.too_small": "Too small (min {minimum}).",
     "validation.field.too_big": "Too large (max {maximum}).",
