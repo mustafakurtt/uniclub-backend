@@ -31,3 +31,28 @@ export function createTranslator(catalog: Catalog, defaultLocale: string): Trans
     return interpolate(template, params);
   };
 }
+
+/**
+ * Feature-bazlı katalog parçalarını tek bir kataloga birleştirir. Her feature
+ * kendi mesajlarını kendi dosyasında tutar (bkz. `*.messages.ts`); kompozisyon
+ * kökü (`shared/i18n/messages.ts`) bunları burada birleştirir — merkezî dev bir
+ * mesaj dosyası dolmaz.
+ *
+ * Aynı (dil, anahtar) iki parçada tanımlıysa FIRLATIR: sessizce üzerine yazmak
+ * yerine, iki feature'ın anahtar çakışmasını yükleme anında fail-fast yakalar.
+ */
+export function mergeCatalogs(...catalogs: Catalog[]): Catalog {
+  const merged: Catalog = {};
+  for (const catalog of catalogs) {
+    for (const locale of Object.keys(catalog)) {
+      const target = (merged[locale] ??= {});
+      for (const key of Object.keys(catalog[locale])) {
+        if (key in target) {
+          throw new Error(`i18n katalog çakışması: "${key}" anahtarı "${locale}" dilinde birden fazla kez tanımlı.`);
+        }
+        target[key] = catalog[locale][key];
+      }
+    }
+  }
+  return merged;
+}

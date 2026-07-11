@@ -1,28 +1,42 @@
 import type { Context } from "hono";
+import type { Translate } from "../i18n/translator";
 
 /**
- * Başarılı cevap zarfı yardımcıları. core/ tüm API zarfının tek sahibi:
+ * Başarılı cevap zarfı yardımcıları — FABRİKA. core/ tüm API zarfının tek sahibi:
  * hata tarafında `error-handler` `{ success:false, message, ... }` üretiyor;
- * burası onun simetriği olan `{ success:true, message, data? }`'yi üretir.
- * Böylece her rota elle `c.json({ success:true, ... })` yazmaz — şablon sadeleşir
- * ve zarf hiçbir yerde elle "success:false" gibi bir tutarsızlığa kaymaz.
+ * burası simetriği `{ success:true, message, data? }`'yi üretir. Böylece rotalar
+ * elle `c.json({ success:true, ... })` yazmaz ve zarf hiçbir yerde kaymaz.
  *
- * Zarf şekli (success/message/data) bilinçli olarak core'da SABİT; dil değil,
- * yapı burada. Mesajlar (Türkçe) çağrı yerinden gelir — core dil bilmez.
+ * Mesaj bir çeviri ANAHTARIDIR (örn. "university.created"); `translate` verilirse
+ * isteğin diline çevrilir (hata tarafıyla aynı mekanizma). `translate` verilmezse
+ * anahtar aynen mesaj olur → i18n istemeyen proje de bu fabrikayı kullanabilir.
+ * Zarf şekli (success/message/data) core'da SABİT; diller/metinler projede.
  *
- * İsimlendirme notu: mesaj-only mutasyonlar (silme vb.) için `done` kullanılır.
- * Kasıtlı olarak HTTP 204 DEĞİL 200 + mesaj döner: zarfımız kullanıcıya
- * gösterilecek başarı mesajını (ve requestId korelasyonunu) taşımalı, 204'ün
+ * İsimlendirme: mesaj-only mutasyonlar (silme vb.) için `done`. Kasıtlı olarak
+ * HTTP 204 DEĞİL 200 + mesaj döner — zarf başarı mesajını taşımalı, 204'ün
  * gövdesi olamaz.
  */
-export function ok<T>(c: Context, data: T, message: string) {
-  return c.json({ success: true, message, data }, 200);
+export interface ResponderOptions {
+  translate?: Translate;
+  /** İsteğin dilini context'ten okuma yolu. Varsayılan `c.get("locale")`. */
+  getLocale?: (c: Context) => string;
 }
 
-export function created<T>(c: Context, data: T, message: string) {
-  return c.json({ success: true, message, data }, 201);
-}
+export function createResponder(options: ResponderOptions = {}) {
+  const { translate, getLocale = (c) => (c.get("locale") as string | undefined) ?? "" } = options;
 
-export function done(c: Context, message: string) {
-  return c.json({ success: true, message }, 200);
+  const message = (c: Context, key: string, params?: Record<string, unknown>) =>
+    translate ? translate(key, getLocale(c), params) : key;
+
+  return {
+    ok<T>(c: Context, data: T, key: string, params?: Record<string, unknown>) {
+      return c.json({ success: true, message: message(c, key, params), data }, 200);
+    },
+    created<T>(c: Context, data: T, key: string, params?: Record<string, unknown>) {
+      return c.json({ success: true, message: message(c, key, params), data }, 201);
+    },
+    done(c: Context, key: string, params?: Record<string, unknown>) {
+      return c.json({ success: true, message: message(c, key, params) }, 200);
+    },
+  };
 }

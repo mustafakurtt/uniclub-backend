@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
-import { ok, created, done } from "../../../core/http/respond";
+import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
 import { createFacultySchema, updateFacultySchema } from "../university.schema";
 import { universityService } from "../university.service";
@@ -21,14 +21,14 @@ export const facultiesRoutes = new Hono<{ Variables: RbacVariables }>();
 facultiesRoutes.get("/:universityId/faculties", async (c) => {
   const { universityId } = c.req.param();
   const faculties = await universityService.listFaculties(universityId);
-  return ok(c, faculties, "Fakülteler listelendi.");
+  return ok(c, faculties, "faculty.listed");
 });
 
 // 2. TEK BİR FAKÜLTEYİ GETİRME (public)
 facultiesRoutes.get("/:universityId/faculties/:facultyId", async (c) => {
   const { universityId, facultyId } = c.req.param();
   const faculty = await universityService.getFaculty(universityId, facultyId);
-  return ok(c, faculty, "Fakülte bulundu.");
+  return ok(c, faculty, "faculty.found");
 });
 
 // 3. FAKÜLTE OLUŞTURMA
@@ -40,7 +40,7 @@ facultiesRoutes.post(
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
     const faculty = await universityService.createFaculty(universityId, body);
-    return created(c, faculty, "Fakülte oluşturuldu.");
+    return created(c, faculty, "faculty.created");
   }
 );
 
@@ -53,7 +53,7 @@ facultiesRoutes.patch(
     const { universityId, facultyId } = c.req.param();
     const body = c.req.valid("json");
     const faculty = await universityService.updateFaculty(universityId, facultyId, body);
-    return ok(c, faculty, "Fakülte güncellendi.");
+    return ok(c, faculty, "faculty.updated");
   }
 );
 
@@ -64,6 +64,6 @@ facultiesRoutes.delete(
   async (c) => {
     const { universityId, facultyId } = c.req.param();
     await universityService.deleteFaculty(universityId, facultyId);
-    return done(c, "Fakülte silindi.");
+    return done(c, "faculty.deleted");
   }
 );

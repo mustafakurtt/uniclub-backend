@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
-import { ok, created, done } from "../../../core/http/respond";
+import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
 import { createDepartmentSchema, updateDepartmentSchema } from "../university.schema";
 import { universityService } from "../university.service";
@@ -24,14 +24,14 @@ export const departmentsRoutes = new Hono<{ Variables: RbacVariables }>();
 departmentsRoutes.get("/:universityId/faculties/:facultyId/departments", async (c) => {
   const { universityId, facultyId } = c.req.param();
   const departments = await universityService.listDepartments(universityId, facultyId);
-  return ok(c, departments, "Bölümler listelendi.");
+  return ok(c, departments, "department.listed");
 });
 
 // 2. TEK BİR BÖLÜMÜ GETİRME (public)
 departmentsRoutes.get("/:universityId/faculties/:facultyId/departments/:departmentId", async (c) => {
   const { universityId, facultyId, departmentId } = c.req.param();
   const department = await universityService.getDepartment(universityId, facultyId, departmentId);
-  return ok(c, department, "Bölüm bulundu.");
+  return ok(c, department, "department.found");
 });
 
 // 3. BÖLÜM OLUŞTURMA
@@ -43,7 +43,7 @@ departmentsRoutes.post(
     const { universityId, facultyId } = c.req.param();
     const body = c.req.valid("json");
     const department = await universityService.createDepartment(universityId, facultyId, body);
-    return created(c, department, "Bölüm oluşturuldu.");
+    return created(c, department, "department.created");
   }
 );
 
@@ -56,7 +56,7 @@ departmentsRoutes.patch(
     const { universityId, facultyId, departmentId } = c.req.param();
     const body = c.req.valid("json");
     const department = await universityService.updateDepartment(universityId, facultyId, departmentId, body);
-    return ok(c, department, "Bölüm güncellendi.");
+    return ok(c, department, "department.updated");
   }
 );
 
@@ -67,6 +67,6 @@ departmentsRoutes.delete(
   async (c) => {
     const { universityId, facultyId, departmentId } = c.req.param();
     await universityService.deleteDepartment(universityId, facultyId, departmentId);
-    return done(c, "Bölüm silindi.");
+    return done(c, "department.deleted");
   }
 );

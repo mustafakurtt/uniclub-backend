@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
-import { ok, created, done } from "../../../core/http/respond";
+import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
 import {
   listUniversitiesQuerySchema,
@@ -35,7 +35,7 @@ universitiesRoutes.post(
   async (c) => {
     const body = c.req.valid("json");
     const result = await universityService.createUniversity(body);
-    return created(c, result, "Üniversite oluşturuldu.");
+    return created(c, result, "university.created");
   }
 );
 
@@ -46,7 +46,7 @@ universitiesRoutes.get(
   async (c) => {
     const { search } = c.req.valid("query");
     const universities = await universityService.listUniversities(search);
-    return ok(c, universities, "Üniversiteler listelendi.");
+    return ok(c, universities, "university.listed");
   }
 );
 
@@ -54,7 +54,7 @@ universitiesRoutes.get(
 universitiesRoutes.get("/:universityId", async (c) => {
   const { universityId } = c.req.param();
   const university = await universityService.getUniversity(universityId);
-  return ok(c, university, "Üniversite bulundu.");
+  return ok(c, university, "university.found");
 });
 
 // 4. ÜNİVERSİTE BİLGİLERİNİ GÜNCELLEME
@@ -66,7 +66,7 @@ universitiesRoutes.patch(
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
     const university = await universityService.updateUniversity(universityId, body);
-    return ok(c, university, "Üniversite güncellendi.");
+    return ok(c, university, "university.updated");
   }
 );
 
@@ -77,6 +77,6 @@ universitiesRoutes.delete(
   async (c) => {
     const { universityId } = c.req.param();
     await universityService.deleteUniversity(universityId);
-    return done(c, "Üniversite silindi.");
+    return done(c, "university.deleted");
   }
 );
