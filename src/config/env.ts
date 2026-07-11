@@ -1,18 +1,5 @@
 import { z } from "zod";
-
-/**
- * Ortam değişkenleri her zaman STRING'dir. `z.coerce.boolean()` burada
- * KULLANILAMAZ: Boolean("false") === true olduğu için "false" yazan herkes
- * sessizce true alır. Bu yardımcı yalnızca bilinen doğruluk değerlerini kabul eder.
- */
-const envBoolean = (defaultValue: boolean) =>
-  z
-    .string()
-    .optional()
-    .transform((raw) => {
-      if (raw === undefined || raw.trim() === "") return defaultValue;
-      return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
-    });
+import { createEnv, envBoolean } from "../core/config/env";
 
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
@@ -50,6 +37,6 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
 });
 
-// process.env'yi şemadan geçiriyoruz. 
-// Eğer .env içinde hata varsa uygulama burada patlar ve sana nerenin eksik olduğunu söyler.
-export const env = envSchema.parse(process.env);
+// process.env'yi şemadan geçiriyoruz. Eğer .env içinde hata varsa uygulama burada
+// patlar ve HANGİ alanların neden geçersiz olduğunu tek tek listeler (bkz. core/config/env).
+export const env = createEnv(envSchema, { intro: "Ortam değişkenleri geçersiz:" });

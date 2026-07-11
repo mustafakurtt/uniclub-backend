@@ -9,7 +9,7 @@ import type { Catalog } from "../../core/i18n/translator";
  * Anahtarlar `resource.durum` biçiminde. `{param}` yerleri HttpError.params /
  * respond params ile doldurulur. Yeni dil = her dile bir kolon eklemek.
  */
-export const universityMessages: Catalog = {
+export const universityMessages = {
   tr: {
     // university — hata
     "university.notFound": "Üniversite bulunamadı.",
@@ -96,4 +96,7 @@ export const universityMessages: Catalog = {
     "department.updated": "Department updated.",
     "department.deleted": "Department deleted.",
   },
-};
+} satisfies Catalog;
+
+/** Bu feature'ın geçerli mesaj anahtarları — typo'ları derleme anında yakalar. */
+export type UniversityMessageKey = keyof (typeof universityMessages)["tr"];

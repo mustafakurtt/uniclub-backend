@@ -1,6 +1,6 @@
 import { mergeCatalogs } from "../../core/i18n/translator";
-import { commonMessages } from "./common.messages";
-import { universityMessages } from "../../features/university/university.messages";
+import { commonMessages, type CommonMessageKey } from "./common.messages";
+import { universityMessages, type UniversityMessageKey } from "../../features/university/university.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -10,3 +10,11 @@ import { universityMessages } from "../../features/university/university.message
  * yükleme anında yakalar.
  */
 export const messages = mergeCatalogs(commonMessages, universityMessages);
+
+/**
+ * Uygulamadaki tüm geçerli mesaj anahtarları. Tipli hata fabrikaları
+ * (shared/utils/errors.ts) ve responder (shared/utils/respond.ts) bunu kullanır;
+ * böylece yanlış/yazım hatalı anahtar DERLEME hatası olur. Yeni feature = union'a
+ * bir `... | XMessageKey` eklemek (kataloguyla birlikte).
+ */
+export type MessageKey = CommonMessageKey | UniversityMessageKey;

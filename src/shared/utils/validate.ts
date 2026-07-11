@@ -1,24 +1,33 @@
 import { createValidator } from "../../core/http/validation";
+import { translate } from "../i18n/translator";
+import type { MessageKey } from "../i18n/messages";
 
 /**
- * Taşınabilir `createValidator` fabrikasının bu projeye özel kurulumu:
- * ZodError'u Türkçe bir üst mesaj + alan-bazlı detay listesine çevirir.
+ * Taşınabilir `createValidator` fabrikasının bu projeye özel kurulumu.
  *
- * `details[].code`: zod issue kodu (örn. "too_small") — çok dilli hataya
- * geçişte çeviri anahtarı olarak kullanılabilir. `details[].message` şimdilik
- * zod'un ham (İngilizce) metni; i18n adımında koddan üretilecek.
+ * - Üst mesaj: sabit "validation.failed" anahtarı (error-handler isteğin diline çevirir).
+ * - Alan-bazlı detay: her zod issue'su `validation.field.<code>` anahtarına çevrilir;
+ *   issue'nun kendisi param olarak geçer ({minimum}/{maximum}/{expected}...). Katalogda
+ *   olmayan bir code için çevirmen anahtarı aynen döndürür → o alanda zod'un ham
+ *   mesajına DÜŞERİZ (İngilizce olsa da bilgi kaybı olmaz).
  *
  * Kullanım: rotalarda `zValidator(...)` yerine `validate(...)`.
  */
+const FAILED: MessageKey = "validation.failed";
+
 export const validate = createValidator({
-  formatZodError: (error) => ({
-    // Üst mesaj bir çeviri anahtarı; error-handler isteğin diline çevirir.
-    // details[].message şimdilik zod'un ham metni (alan-bazlı çeviri sonraki iş).
-    message: "validation.failed",
-    details: error.issues.map((issue) => ({
-      path: issue.path.join("."),
-      code: issue.code,
-      message: issue.message,
-    })),
+  translate,
+  formatError: (error, t) => ({
+    message: FAILED,
+    details: error.issues.map((issue) => {
+      const key = `validation.field.${issue.code}`;
+      const translated = t(key, issue as unknown as Record<string, unknown>);
+      return {
+        path: issue.path.join("."),
+        code: issue.code,
+        // anahtar bulunamazsa t girdiyi aynen döndürür → zod'un ham mesajına düş
+        message: translated === key ? issue.message : translated,
+      };
+    }),
   }),
 });
