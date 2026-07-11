@@ -5,7 +5,6 @@ import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { UniversityPermission } from "../university.permissions";
 import { createDepartmentSchema, updateDepartmentSchema } from "../university.schema";
 import { universityService } from "../university.service";
-import { respondWithBusinessError } from "../../../shared/utils/error.util";
 
 /**
  * Fakültenin bölümleri (`:universityId/faculties/:facultyId/departments`).
@@ -14,29 +13,24 @@ import { respondWithBusinessError } from "../../../shared/utils/error.util";
  * bu yüzden bölüme her zaman faculty zinciri üzerinden ulaşılır. Listeleme/getirme
  * PUBLIC, yazma işlemleri granüler university.department.* izinleriyle ve
  * tenantScoped korunur.
+ *
+ * try/catch yok — servisin fırlattığı HttpError'ları `app.onError` çevirir
+ * (bkz. universities.routes.ts başındaki not).
  */
 export const departmentsRoutes = new Hono<{ Variables: RbacVariables }>();
 
 // 1. BÖLÜMLERİ LİSTELEME (public)
 departmentsRoutes.get("/:universityId/faculties/:facultyId/departments", async (c) => {
   const { universityId, facultyId } = c.req.param();
-  try {
-    const departments = await universityService.listDepartments(universityId, facultyId);
-    return c.json({ success: true, message: "Bölümler listelendi.", data: departments });
-  } catch (error) {
-    return respondWithBusinessError(c, error);
-  }
+  const departments = await universityService.listDepartments(universityId, facultyId);
+  return c.json({ success: true, message: "Bölümler listelendi.", data: departments });
 });
 
 // 2. TEK BİR BÖLÜMÜ GETİRME (public)
 departmentsRoutes.get("/:universityId/faculties/:facultyId/departments/:departmentId", async (c) => {
   const { universityId, facultyId, departmentId } = c.req.param();
-  try {
-    const department = await universityService.getDepartment(universityId, facultyId, departmentId);
-    return c.json({ success: true, message: "Bölüm bulundu.", data: department });
-  } catch (error) {
-    return respondWithBusinessError(c, error);
-  }
+  const department = await universityService.getDepartment(universityId, facultyId, departmentId);
+  return c.json({ success: true, message: "Bölüm bulundu.", data: department });
 });
 
 // 3. BÖLÜM OLUŞTURMA
@@ -47,12 +41,8 @@ departmentsRoutes.post(
   async (c) => {
     const { universityId, facultyId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const department = await universityService.createDepartment(universityId, facultyId, body);
-      return c.json({ success: true, message: "Bölüm oluşturuldu.", data: department }, 201);
-    } catch (error) {
-      return respondWithBusinessError(c, error);
-    }
+    const department = await universityService.createDepartment(universityId, facultyId, body);
+    return c.json({ success: true, message: "Bölüm oluşturuldu.", data: department }, 201);
   }
 );
 
@@ -64,12 +54,8 @@ departmentsRoutes.patch(
   async (c) => {
     const { universityId, facultyId, departmentId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const department = await universityService.updateDepartment(universityId, facultyId, departmentId, body);
-      return c.json({ success: true, message: "Bölüm güncellendi.", data: department });
-    } catch (error) {
-      return respondWithBusinessError(c, error);
-    }
+    const department = await universityService.updateDepartment(universityId, facultyId, departmentId, body);
+    return c.json({ success: true, message: "Bölüm güncellendi.", data: department });
   }
 );
 
@@ -79,11 +65,7 @@ departmentsRoutes.delete(
   ...guard(UniversityPermission.DEPARTMENT_DELETE, { tenantScoped: true }),
   async (c) => {
     const { universityId, facultyId, departmentId } = c.req.param();
-    try {
-      await universityService.deleteDepartment(universityId, facultyId, departmentId);
-      return c.json({ success: true, message: "Bölüm silindi." });
-    } catch (error) {
-      return respondWithBusinessError(c, error);
-    }
+    await universityService.deleteDepartment(universityId, facultyId, departmentId);
+    return c.json({ success: true, message: "Bölüm silindi." });
   }
 );
