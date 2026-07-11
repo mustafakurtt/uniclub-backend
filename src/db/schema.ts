@@ -1,6 +1,7 @@
 import { pgTable as table, pgEnum } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
+import { softDeleteColumn } from "../core/db/base.entity";
 
 // ═══════════════════════════════════════════════
 // ORTAK KOLONLAR (spread ile her tabloya eklenir)
@@ -18,6 +19,7 @@ export const universities = table("universities", {
   name: t.varchar({ length: 256 }).notNull(),
   slug: t.varchar({ length: 256 }).notNull().unique(), // ileride SaaS subdomain için: xyz-universitesi.uygulaman.com
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 
 export const universityDomains = table("university_domains", {
@@ -26,6 +28,7 @@ export const universityDomains = table("university_domains", {
   domain: t.varchar({ length: 256 }).notNull().unique(), // "ogrenci.xyz.edu.tr", "xyz.edu.tr" gibi birden fazla olabilir
   domainType: t.varchar("domain_type", { length: 50 }).default("student").notNull(),
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 
 // ═══════════════════════════════════════════════
@@ -36,6 +39,7 @@ export const faculties = table("faculties", {
   universityId: t.uuid("university_id").references(() => universities.id).notNull(),
   name: t.varchar({ length: 256 }).notNull(), // "Mühendislik Fakültesi"
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 
 export const departments = table("departments", {
@@ -43,6 +47,7 @@ export const departments = table("departments", {
   facultyId: t.uuid("faculty_id").references(() => faculties.id).notNull(),
   name: t.varchar({ length: 256 }).notNull(), // "Bilgisayar Mühendisliği"
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 // Not: departments.universityId kasıtlı olarak eklenmedi.
 // Bilgiye faculty -> university zinciriyle ulaşılır, tekrar (redundancy) yaratmamak için.
