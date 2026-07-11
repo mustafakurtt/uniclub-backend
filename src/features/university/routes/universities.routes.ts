@@ -9,7 +9,6 @@ import {
   updateUniversitySchema,
 } from "../university.schema";
 import { universityService } from "../university.service";
-import { statusFromError } from "./shared";
 import { respondWithBusinessError } from "../../../shared/utils/error.util";
 
 /**
@@ -34,7 +33,7 @@ universitiesRoutes.post(
       const result = await universityService.createUniversity(body);
       return c.json({ success: true, message: "Üniversite oluşturuldu.", data: result }, 201);
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -57,7 +56,7 @@ universitiesRoutes.get("/:universityId", async (c) => {
     const university = await universityService.getUniversity(universityId);
     return c.json({ success: true, message: "Üniversite bulundu.", data: university });
   } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
+    return respondWithBusinessError(c, error);
   }
 });
 
@@ -73,7 +72,7 @@ universitiesRoutes.patch(
       const university = await universityService.updateUniversity(universityId, body);
       return c.json({ success: true, message: "Üniversite güncellendi.", data: university });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -88,7 +87,7 @@ universitiesRoutes.delete(
       await universityService.deleteUniversity(universityId);
       return c.json({ success: true, message: "Üniversite silindi." });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );

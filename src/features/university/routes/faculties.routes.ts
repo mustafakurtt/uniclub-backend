@@ -5,7 +5,6 @@ import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { UniversityPermission } from "../university.permissions";
 import { createFacultySchema, updateFacultySchema } from "../university.schema";
 import { universityService } from "../university.service";
-import { statusFromError } from "./shared";
 import { respondWithBusinessError } from "../../../shared/utils/error.util";
 
 /**
@@ -22,7 +21,7 @@ facultiesRoutes.get("/:universityId/faculties", async (c) => {
     const faculties = await universityService.listFaculties(universityId);
     return c.json({ success: true, message: "Fakülteler listelendi.", data: faculties });
   } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
+    return respondWithBusinessError(c, error);
   }
 });
 
@@ -33,7 +32,7 @@ facultiesRoutes.get("/:universityId/faculties/:facultyId", async (c) => {
     const faculty = await universityService.getFaculty(universityId, facultyId);
     return c.json({ success: true, message: "Fakülte bulundu.", data: faculty });
   } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
+    return respondWithBusinessError(c, error);
   }
 });
 
@@ -49,7 +48,7 @@ facultiesRoutes.post(
       const faculty = await universityService.createFaculty(universityId, body);
       return c.json({ success: true, message: "Fakülte oluşturuldu.", data: faculty }, 201);
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -66,7 +65,7 @@ facultiesRoutes.patch(
       const faculty = await universityService.updateFaculty(universityId, facultyId, body);
       return c.json({ success: true, message: "Fakülte güncellendi.", data: faculty });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -81,7 +80,7 @@ facultiesRoutes.delete(
       await universityService.deleteFaculty(universityId, facultyId);
       return c.json({ success: true, message: "Fakülte silindi." });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );

@@ -5,7 +5,6 @@ import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { UniversityPermission } from "../university.permissions";
 import { createDepartmentSchema, updateDepartmentSchema } from "../university.schema";
 import { universityService } from "../university.service";
-import { statusFromError } from "./shared";
 import { respondWithBusinessError } from "../../../shared/utils/error.util";
 
 /**
@@ -25,7 +24,7 @@ departmentsRoutes.get("/:universityId/faculties/:facultyId/departments", async (
     const departments = await universityService.listDepartments(universityId, facultyId);
     return c.json({ success: true, message: "Bölümler listelendi.", data: departments });
   } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
+    return respondWithBusinessError(c, error);
   }
 });
 
@@ -36,7 +35,7 @@ departmentsRoutes.get("/:universityId/faculties/:facultyId/departments/:departme
     const department = await universityService.getDepartment(universityId, facultyId, departmentId);
     return c.json({ success: true, message: "Bölüm bulundu.", data: department });
   } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
+    return respondWithBusinessError(c, error);
   }
 });
 
@@ -52,7 +51,7 @@ departmentsRoutes.post(
       const department = await universityService.createDepartment(universityId, facultyId, body);
       return c.json({ success: true, message: "Bölüm oluşturuldu.", data: department }, 201);
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -69,7 +68,7 @@ departmentsRoutes.patch(
       const department = await universityService.updateDepartment(universityId, facultyId, departmentId, body);
       return c.json({ success: true, message: "Bölüm güncellendi.", data: department });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -84,7 +83,7 @@ departmentsRoutes.delete(
       await universityService.deleteDepartment(universityId, facultyId, departmentId);
       return c.json({ success: true, message: "Bölüm silindi." });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );

@@ -5,7 +5,6 @@ import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { UniversityPermission } from "../university.permissions";
 import { addDomainSchema, updateDomainSchema } from "../university.schema";
 import { universityService } from "../university.service";
-import { statusFromError } from "./shared";
 import { respondWithBusinessError } from "../../../shared/utils/error.util";
 
 /**
@@ -22,7 +21,7 @@ domainsRoutes.get("/:universityId/domains", async (c) => {
     const domains = await universityService.listDomains(universityId);
     return c.json({ success: true, message: "Domainler listelendi.", data: domains });
   } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
+    return respondWithBusinessError(c, error);
   }
 });
 
@@ -38,7 +37,7 @@ domainsRoutes.post(
       const domain = await universityService.addDomain(universityId, body);
       return c.json({ success: true, message: "Domain eklendi.", data: domain }, 201);
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -55,7 +54,7 @@ domainsRoutes.patch(
       const domain = await universityService.updateDomain(universityId, domainId, body);
       return c.json({ success: true, message: "Domain güncellendi.", data: domain });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );
@@ -70,7 +69,7 @@ domainsRoutes.delete(
       await universityService.deleteDomain(universityId, domainId);
       return c.json({ success: true, message: "Domain silindi." });
     } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
+      return respondWithBusinessError(c, error);
     }
   }
 );

@@ -1,4 +1,5 @@
 import { universityRepository } from "./university.repository";
+import { NotFoundError, BadRequestError } from "../../core/http/errors";
 import {
   CreateUniversityDTO,
   UpdateUniversityDTO,
@@ -21,7 +22,7 @@ export const universityService = {
   async getUniversity(universityId: string) {
     const university = await universityRepository.findUniversityById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw new NotFoundError("Üniversite bulunamadı.");
     }
     return university;
   },
@@ -36,20 +37,20 @@ export const universityService = {
     // 1
     const existingSlug = await universityRepository.findUniversityBySlug(data.slug);
     if (existingSlug) {
-      throw new Error("Bu slug zaten kullanılıyor.");
+      throw new BadRequestError("Bu slug zaten kullanılıyor.");
     }
 
     // 2
     const seen = new Set<string>();
     for (const d of data.domains) {
       if (seen.has(d.domain)) {
-        throw new Error(`"${d.domain}" domaini istekte birden fazla kez girilmiş.`);
+        throw new BadRequestError(`"${d.domain}" domaini istekte birden fazla kez girilmiş.`);
       }
       seen.add(d.domain);
 
       const existingDomain = await universityRepository.findDomainByDomain(d.domain);
       if (existingDomain) {
-        throw new Error(`"${d.domain}" domaini zaten kayıtlı.`);
+        throw new BadRequestError(`"${d.domain}" domaini zaten kayıtlı.`);
       }
     }
 
@@ -59,13 +60,13 @@ export const universityService = {
   async updateUniversity(universityId: string, data: UpdateUniversityDTO) {
     const university = await universityRepository.findUniversityById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw new NotFoundError("Üniversite bulunamadı.");
     }
 
     if (data.slug) {
       const existingSlug = await universityRepository.findUniversityBySlug(data.slug);
       if (existingSlug && existingSlug.id !== universityId) {
-        throw new Error("Bu slug zaten kullanılıyor.");
+        throw new BadRequestError("Bu slug zaten kullanılıyor.");
       }
     }
 
@@ -83,18 +84,18 @@ export const universityService = {
     // 1
     const university = await universityRepository.findUniversityById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw new NotFoundError("Üniversite bulunamadı.");
     }
 
     // 2
     if (await universityRepository.hasUsers(universityId)) {
-      throw new Error("Bu üniversiteye bağlı kullanıcılar var, silinemez.");
+      throw new BadRequestError("Bu üniversiteye bağlı kullanıcılar var, silinemez.");
     }
     if (await universityRepository.hasClubs(universityId)) {
-      throw new Error("Bu üniversiteye bağlı kulüpler var, silinemez.");
+      throw new BadRequestError("Bu üniversiteye bağlı kulüpler var, silinemez.");
     }
     if (await universityRepository.hasFaculties(universityId)) {
-      throw new Error("Bu üniversitenin fakülteleri var, önce fakülteleri silin.");
+      throw new BadRequestError("Bu üniversitenin fakülteleri var, önce fakülteleri silin.");
     }
 
     await universityRepository.deleteUniversity(universityId);
@@ -107,7 +108,7 @@ export const universityService = {
   async listDomains(universityId: string) {
     const university = await universityRepository.findUniversityById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw new NotFoundError("Üniversite bulunamadı.");
     }
     return await universityRepository.findDomainsByUniversity(universityId);
   },
@@ -115,12 +116,12 @@ export const universityService = {
   async addDomain(universityId: string, data: AddDomainDTO) {
     const university = await universityRepository.findUniversityById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw new NotFoundError("Üniversite bulunamadı.");
     }
 
     const existingDomain = await universityRepository.findDomainByDomain(data.domain);
     if (existingDomain) {
-      throw new Error("Bu domain zaten kayıtlı.");
+      throw new BadRequestError("Bu domain zaten kayıtlı.");
     }
 
     return await universityRepository.addDomainToUniversity(universityId, data.domain, data.domainType);
@@ -129,13 +130,13 @@ export const universityService = {
   async updateDomain(universityId: string, domainId: string, data: UpdateDomainDTO) {
     const domain = await universityRepository.findDomainById(universityId, domainId);
     if (!domain) {
-      throw new Error("Domain bulunamadı.");
+      throw new NotFoundError("Domain bulunamadı.");
     }
 
     if (data.domain) {
       const existingDomain = await universityRepository.findDomainByDomain(data.domain);
       if (existingDomain && existingDomain.id !== domainId) {
-        throw new Error("Bu domain zaten kayıtlı.");
+        throw new BadRequestError("Bu domain zaten kayıtlı.");
       }
     }
 
@@ -153,13 +154,13 @@ export const universityService = {
     // 1
     const domain = await universityRepository.findDomainById(universityId, domainId);
     if (!domain) {
-      throw new Error("Domain bulunamadı.");
+      throw new NotFoundError("Domain bulunamadı.");
     }
 
     // 2
     const domains = await universityRepository.findDomainsByUniversity(universityId);
     if (domains.length <= 1) {
-      throw new Error("Üniversitenin en az bir domaini olmalıdır, son domain silinemez.");
+      throw new BadRequestError("Üniversitenin en az bir domaini olmalıdır, son domain silinemez.");
     }
 
     await universityRepository.deleteDomain(domainId);
@@ -172,7 +173,7 @@ export const universityService = {
   async listFaculties(universityId: string) {
     const university = await universityRepository.findUniversityById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw new NotFoundError("Üniversite bulunamadı.");
     }
     return await universityRepository.findFacultiesByUniversity(universityId);
   },
@@ -180,7 +181,7 @@ export const universityService = {
   async getFaculty(universityId: string, facultyId: string) {
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
     return faculty;
   },
@@ -188,7 +189,7 @@ export const universityService = {
   async createFaculty(universityId: string, data: CreateFacultyDTO) {
     const university = await universityRepository.findUniversityById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw new NotFoundError("Üniversite bulunamadı.");
     }
     return await universityRepository.createFaculty(universityId, data.name);
   },
@@ -196,7 +197,7 @@ export const universityService = {
   async updateFaculty(universityId: string, facultyId: string, data: UpdateFacultyDTO) {
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
     return await universityRepository.updateFaculty(facultyId, data.name);
   },
@@ -210,12 +211,12 @@ export const universityService = {
     // 1
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
 
     // 2
     if (await universityRepository.hasDepartments(facultyId)) {
-      throw new Error("Bu fakültenin bölümleri var, önce bölümleri silin.");
+      throw new BadRequestError("Bu fakültenin bölümleri var, önce bölümleri silin.");
     }
 
     await universityRepository.deleteFaculty(facultyId);
@@ -228,7 +229,7 @@ export const universityService = {
   async listDepartments(universityId: string, facultyId: string) {
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
     return await universityRepository.findDepartmentsByFaculty(facultyId);
   },
@@ -236,11 +237,11 @@ export const universityService = {
   async getDepartment(universityId: string, facultyId: string, departmentId: string) {
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
     const department = await universityRepository.findDepartmentInFaculty(facultyId, departmentId);
     if (!department) {
-      throw new Error("Bölüm bulunamadı.");
+      throw new NotFoundError("Bölüm bulunamadı.");
     }
     return department;
   },
@@ -248,7 +249,7 @@ export const universityService = {
   async createDepartment(universityId: string, facultyId: string, data: CreateDepartmentDTO) {
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
     return await universityRepository.createDepartment(facultyId, data.name);
   },
@@ -256,11 +257,11 @@ export const universityService = {
   async updateDepartment(universityId: string, facultyId: string, departmentId: string, data: UpdateDepartmentDTO) {
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
     const department = await universityRepository.findDepartmentInFaculty(facultyId, departmentId);
     if (!department) {
-      throw new Error("Bölüm bulunamadı.");
+      throw new NotFoundError("Bölüm bulunamadı.");
     }
     return await universityRepository.updateDepartment(departmentId, data.name);
   },
@@ -274,16 +275,16 @@ export const universityService = {
     // 1
     const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw new NotFoundError("Fakülte bulunamadı.");
     }
     const department = await universityRepository.findDepartmentInFaculty(facultyId, departmentId);
     if (!department) {
-      throw new Error("Bölüm bulunamadı.");
+      throw new NotFoundError("Bölüm bulunamadı.");
     }
 
     // 2
     if (await universityRepository.hasUsersInDepartment(departmentId)) {
-      throw new Error("Bu bölüme bağlı kullanıcılar var, silinemez.");
+      throw new BadRequestError("Bu bölüme bağlı kullanıcılar var, silinemez.");
     }
 
     await universityRepository.deleteDepartment(departmentId);
