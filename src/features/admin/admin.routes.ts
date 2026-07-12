@@ -8,7 +8,6 @@ import { ClubPermission } from "../clubs/clubs.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
 import {
-  updateUserStatusSchema,
   updateClubStatusSchema,
   listUsersQuerySchema,
   listClubApplicationsQuerySchema,
@@ -81,23 +80,9 @@ adminRoutes.get(
   }
 );
 
-// 3. KULLANICI DURUMUNU GÜNCELLEME
-adminRoutes.patch(
-  "/universities/:universityId/users/:userId/status",
-  ...guard(AdminPermission.USER_MANAGE, { tenantScoped: true }),
-  zValidator("json", updateUserStatusSchema),
-  async (c) => {
-    const { universityId, userId } = c.req.param();
-    const body = c.req.valid("json");
-    const actor = c.get("user");
-    try {
-      const updated = await adminService.updateUserStatus(universityId, userId, body, actor.userId);
-      return c.json({ success: true, message: "Kullanıcı durumu güncellendi.", data: updated });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
-  }
-);
+// Not: Kullanıcı durumu (ban/unban) yönetimi ARTIK moderation feature'ına aittir
+// (POST /api/moderation/.../users/:userId/ban|unban) — sebep + geçmiş + şifre
+// sıfırlamayla birlikte. Eski PATCH .../status endpoint'i kaldırıldı.
 
 // 3B. KULLANICININ BÖLÜMÜNÜ GÜNCELLEME
 adminRoutes.patch(

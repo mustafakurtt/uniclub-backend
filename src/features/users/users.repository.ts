@@ -25,7 +25,12 @@ export const usersRepository = {
   },
 
   async updatePasswordHash(userId: string, passwordHash: string) {
-    await db.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
+    // Şifre değişince mustChangePassword sıfırlanır: admin sıfırlaması sonrası
+    // kullanıcı kendi şifresini belirleyince "değiştirmeye zorla" bayrağı kalkar.
+    await db
+      .update(schema.users)
+      .set({ passwordHash, mustChangePassword: false })
+      .where(eq(schema.users.id, userId));
   },
 
   async findClubMembershipsByUser(userId: string) {

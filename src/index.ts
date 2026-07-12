@@ -13,6 +13,7 @@ import { usersRoutes } from "./features/users/users.routes";
 import { clubsRoutes } from "./features/clubs/clubs.routes";
 import { notificationsRoutes } from "./features/notifications/notifications.routes";
 import { auditRoutes } from "./features/audit/audit.routes";
+import { moderationRoutes } from "./features/moderation/moderation.routes";
 import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
@@ -117,6 +118,7 @@ app.route("/api/users", usersRoutes);
 app.route("/api/clubs", clubsRoutes);
 app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
+app.route("/api/moderation", moderationRoutes);
 
 export default {
   port: env.PORT,

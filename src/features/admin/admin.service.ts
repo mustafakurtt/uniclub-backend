@@ -1,8 +1,8 @@
 import { adminRepository } from "./admin.repository";
-import { UpdateUserStatusDTO, UpdateClubStatusDTO, UpdateClubDTO, UpdateUserDepartmentDTO } from "./admin.schema";
+import { UpdateClubStatusDTO, UpdateClubDTO, UpdateUserDepartmentDTO } from "./admin.schema";
 import { DecideClubApplicationResult, User } from "./admin.types";
 import { toSafeUser } from "../../shared/utils/user.util";
-import { getEffectivePermissions, invalidateUserPermissions } from "../../shared/rbac/rbac.cache";
+import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 
@@ -81,33 +81,6 @@ export const adminService = {
       throw new Error("Kullanıcı bulunamadı.");
     }
     return await getEffectivePermissions(userId);
-  },
-
-  async updateUserStatus(universityId: string, userId: string, data: UpdateUserStatusDTO, actorUserId?: string) {
-    const user = await adminRepository.findUserInUniversity(universityId, userId);
-    if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
-    }
-    // Yönetici kendi hesabını askıya alıp kendini kilitleyemez (bkz. docs/yonetim/05 #6).
-    if (actorUserId && actorUserId === userId && data.status === "suspended") {
-      throw new Error("Kendi hesabınızı askıya alamazsınız.");
-    }
-    const updated = await adminRepository.updateUserStatus(universityId, userId, data.status);
-    // Durum authz cache'ine gömülü olduğu için değişikliğin ANINDA etkili olması
-    // (askıya alma/geri alma) için cache temizlenir (bkz. docs/yonetim/05 #7).
-    await invalidateUserPermissions(userId);
-
-    if (data.status === "suspended") {
-      // Not: askıya alınan kullanıcının WS bağlantısı bu bildirimi alır, ancak
-      // sonraki HTTP isteklerinde attachAuthz/requireActiveUser onu 403'le keser.
-      await notificationsService.notifySafe(userId, {
-        type: NotificationType.ACCOUNT_SUSPENDED,
-        title: "Hesabınız askıya alındı",
-        body: "Ayrıntılı bilgi için SKS birimiyle iletişime geçin.",
-      });
-    }
-
-    return toSafeUser(updated as User);
   },
 
   /**

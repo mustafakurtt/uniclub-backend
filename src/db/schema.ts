@@ -77,6 +77,9 @@ export const users = table("users", {
   preferredLanguage: t.varchar("preferred_language", { length: 10 }).default("tr").notNull(), // ISO 639-1: "tr", "en"...
 
   status: userStatusEnum().default("pending").notNull(),
+  // Admin şifre sıfırlaması sonrası true; kullanıcı bir sonraki girişte şifresini
+  // değiştirmeye zorlanır (moderation feature'ı set eder, self change-password sıfırlar).
+  mustChangePassword: t.boolean("must_change_password").default(false).notNull(),
   ...baseTimestamps,
 }, (cols) => [
   t.uniqueIndex("email_per_university_idx").on(cols.universityId, cols.email),
@@ -87,6 +90,26 @@ export const users = table("users", {
   t.uniqueIndex("platform_user_email_idx")
     .on(cols.email)
     .where(sql`${cols.universityId} is null`),
+]);
+
+// ═══════════════════════════════════════════════
+// USER MODERATION ACTIONS (kullanıcı moderasyon geçmişi — append-only)
+// ═══════════════════════════════════════════════
+// Her ban/unban/şifre-sıfırlama işlemini kim, ne zaman, hangi sebeple yaptı
+// kaydeder. users.status anlık durumu tutar; bu tablo TARİHÇEyi tutar.
+// Append-only (audit_logs gibi): satır güncellenmez → updatedAt/softDelete YOK.
+// action: pgEnum DEĞİL, varchar + ModerationAction katalog (yeni tip migration istemesin).
+export const userModerationActions = table("user_moderation_actions", {
+  id: t.uuid().primaryKey().defaultRandom(),
+  userId: t.uuid("user_id").references(() => users.id).notNull(),
+  actorId: t.uuid("actor_id").references(() => users.id).notNull(), // işlemi yapan yönetici
+  action: t.varchar({ length: 50 }).notNull(),
+  reason: t.text(),
+  previousStatus: userStatusEnum("previous_status"),
+  newStatus: userStatusEnum("new_status"),
+  createdAt: t.timestamp("created_at").defaultNow().notNull(),
+}, (cols) => [
+  t.index("moderation_user_created_idx").on(cols.userId, cols.createdAt.desc()),
 ]);
 
 // ═══════════════════════════════════════════════

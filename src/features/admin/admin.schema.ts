@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-export const updateUserStatusSchema = z.object({
-  status: z.enum(["pending", "active", "suspended"]),
-});
-export type UpdateUserStatusDTO = z.infer<typeof updateUserStatusSchema>;
-
 export const updateClubStatusSchema = z.object({
   status: z.enum(["pending", "approved", "rejected", "archived"]),
 });

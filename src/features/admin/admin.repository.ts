@@ -78,15 +78,6 @@ export const adminRepository = {
     });
   },
 
-  async updateUserStatus(universityId: string, userId: string, status: User["status"]): Promise<User | undefined> {
-    const [updated] = await db
-      .update(schema.users)
-      .set({ status })
-      .where(and(eq(schema.users.id, userId), eq(schema.users.universityId, universityId)))
-      .returning();
-    return updated;
-  },
-
   async updateUserDepartment(universityId: string, userId: string, departmentId: string | null): Promise<User | undefined> {
     const [updated] = await db
       .update(schema.users)
