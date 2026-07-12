@@ -2,7 +2,7 @@
 
 **Kapsam:** `university` feature'ının (`/api/universities`) tam referansı — public okuma rotaları (kayıt formu akışı) ve sistem yönetim paneli için üniversite / e-posta domaini / fakülte / bölüm yönetimi (CRUD).
 
-> Bu doküman kod tabanından birebir doğrulanmıştır. Backend'in tüm hata mesajları ve `message` alanları **Türkçedir** — UI'da doğrudan gösterilebilir. Özet katalog için `docs/API.md §3`, genel Auth/RBAC yapılanması için `docs/FRONTEND_AUTH_RBAC.md`'ye bakın.
+> Bu doküman kod tabanından birebir doğrulanmıştır. `message` alanları **isteğin diline** göre döner (`Accept-Language: tr|en`, varsayılan `tr`). Hata/doğrulama zarfı için `docs/DENETIM_VE_HATA.md`, özet katalog için `docs/API.md §3`, genel Auth/RBAC için `docs/FRONTEND_AUTH_RBAC.md`.
 
 ---
 
@@ -75,7 +75,8 @@ Eski tek `university.manage` yetkisi kaldırıldı. Yerine **kaynak + aksiyon** 
 - **Response zarfı:** `{ success, message, data }`. Oluşturma (`POST`) → `201`. Silme → `data` içermez.
 - **Auth header (yalnızca yazma rotaları):** `Authorization: Bearer <token>`.
 - **Hata → status:** mesajda "bulunamadı" geçiyorsa `404`, diğer iş kuralı ihlalleri `400`, yetki `401/403`.
-- Zod validasyon hataları `400` ile zod hata formatında döner (`error.issues[].message` Türkçe).
+- Doğrulama hataları `400` ile **birleşik zarfta** döner: `code: "VALIDATION_ERROR"` + `details: [{ path, code, message }]` (ham `ZodError` değil).
+- **Soft delete:** üniversite/fakülte/bölüm silme artık YUMUŞAKTIR — silinen kayıt listelerde/detayda GÖRÜNMEZ (frontend için "silinmiş" gibi davranır). Domainler ise fiziksel silinir. Bu, frontend akışını değiştirmez.
 
 ---
 

@@ -5,8 +5,10 @@ yönetimi, kulüp/başvuru/danışman yönetimi, içerik moderasyonu, rol yönet
 yetki (claim) yönetimi ve kişi bazlı yetki override'ları. Kurumsal **9 rollük**
 RBAC modeline göre yazıldı.
 
-> Kod tabanından birebir doğrulanmış (Temmuz 2026). Tüm mesajlar **Türkçe**,
-> UI'da doğrudan gösterilebilir. Tasarım gerekçeleri için:
+> Kod tabanından birebir doğrulanmış (Temmuz 2026). Mesajlar **isteğin diline**
+> göre döner (`Accept-Language: tr|en`, varsayılan `tr`) ve UI'da doğrudan
+> gösterilebilir; kalıcı mantık için mesaj metnine değil `code`/HTTP status'a
+> bakın (bkz. `docs/DENETIM_VE_HATA.md`). Tasarım gerekçeleri için:
 > [docs/yonetim/](yonetim/) (özellikle `06-rol-mimarisi-yeniden-tasarim.md`).
 > Auth/kayıt/self-service temeli için: [FRONTEND_AUTH_RBAC.md](FRONTEND_AUTH_RBAC.md)
 > (dikkat: o doküman eski 4-rollük modele göre yazıldı; roller/permission'lar için
@@ -197,8 +199,9 @@ tenant'ı hedefler; diğerleri yalnızca kendi tenant'ını.
 | GET | `/universities/:uid/users?status=&role=` | `user.view` | Liste (filtreli). Her satırda `roles` gömülü |
 | GET | `/universities/:uid/users/:userId` | `user.view` | Zenginleştirilmiş detay (aşağıda) |
 | GET | `/universities/:uid/users/:userId/effective-permissions` | `user.view` | `{ roles, permissions, status }` |
-| PATCH | `/universities/:uid/users/:userId/status` | `user.manage` | `{ status: "pending\|active\|suspended" }` |
 | PATCH | `/universities/:uid/users/:userId/department` | `user.manage` | `{ departmentId: "<uuid>" \| null }` |
+
+> ⚠️ **Kullanıcı durumu (ban/unban), şifre sıfırlama ve aktivite artık `/api/moderation` altında** — eski `PATCH .../users/:userId/status` **kaldırıldı**. Sebepli ban, moderasyon geçmişi ve şifre sıfırlama için bkz. `docs/frontend/FRONTEND_MODERASYON.md`.
 
 - **Liste filtreleri:** `?status=` (pending/active/suspended), `?role=` (örn.
   `?role=advisor`). İkisi birlikte kullanılabilir.
@@ -215,9 +218,10 @@ tenant'ı hedefler; diğerleri yalnızca kendi tenant'ını.
 }
 ```
 
-- **Durum kuralları:** `pending`/`active`/`suspended` arası serbest geçiş.
-  `suspended` → hedefin oturumu **anında** kesilir (§1). **Kendini askıya alma
-  engellidir:** `400 "Kendi hesabınızı askıya alamazsınız."`
+- **Durum kuralları (artık moderation'da):** ban/unban `/api/moderation/.../ban|unban`
+  ile yapılır (sebep zorunlu, geçmiş tutulur). `suspended` → hedefin oturumu **anında**
+  kesilir (§1). Kendini banlama engellidir (`400 moderation.cannotModerateSelf`);
+  zaten askıdaysa `400 moderation.alreadyBanned`. Bkz. `FRONTEND_MODERASYON.md`.
 - **Bölüm doğrulaması:** hedef bölüm başka tenant'a aitse
   `400 "Bölüm bu üniversiteye ait değil."` (fakülte→üniversite zinciri).
 - Kullanıcı **silme yoktur** (kasıtlı, FK ağı) → askıya alın.
@@ -416,8 +420,11 @@ const canPromoteSuper = can("role.manage") && hasRole("super_admin");
 
 ### 8.3. Anlık askı / 403 interceptor
 
-Her yanıtın 403'ünde `message === "Hesabınız askıya alınmıştır..."` ise oturumu
-kapat ve `/login`'e yönlendir. Diğer 403'lerde yalnızca `message`'ı toast'la.
+Bir 403 alındığında (mesaj i18n olduğu için **metne göre eşleştirme yapmayın**):
+oturum sahibinin kendisi askıya alınmışsa hemen hemen tüm korunan istekler 403
+döner. Pratik yaklaşım: 403 alınca `GET /api/users/me` (veya `/me/permissions`)
+ile `status`'u teyit et; `status === "suspended"` ise oturumu kapatıp `/login`'e
+yönlendir ve `message`'ı göster. Diğer 403'lerde yalnızca `message`'ı toast'la.
 
 ### 8.4. Cache/state tazeleme
 

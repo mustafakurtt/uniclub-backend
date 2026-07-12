@@ -99,7 +99,9 @@ gerektirmez. Katalog bir **typo güvenliği** katmanıdır, kapalı küme değil
 | `type` | Ne zaman | `data` |
 |---|---|---|
 | `account.verified` | E-posta doğrulandı | — |
-| `account.suspended` | Hesap askıya alındı | — |
+| `account.suspended` | Hesap askıya alındı (ban) | — |
+| `account.unsuspended` | Hesabın askısı kaldırıldı | — |
+| `account.passwordReset` | Yönetici şifreyi sıfırladı → geçici şifreyle girip değiştir | — |
 | `club.application.decided` | Kulüp kurma başvurusu onay/red | `{ applicationId, status, clubId }` |
 | `club.membership.decided` | Katılma isteği onay/red | `{ clubId, status }` |
 | `role.assigned` | Global rol atandı | `{ roleId, roleName }` |

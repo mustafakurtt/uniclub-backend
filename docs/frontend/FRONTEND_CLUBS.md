@@ -2,7 +2,7 @@
 
 **Kapsam:** `clubs` feature'ının (`/api/clubs`) ve ilişkili yüzeylerin tam referansı — kulüp keşfi/üyeliği (öğrenci), kulüp-içi yönetim (officer/başkan), danışman (advisor) yetkileri, kulüp kurma **başvuruları** ve okul yöneticisinin (admin/super_admin) kulüp yönetimi. Alt-kaynaklar (duyurular, galeri) ve `users` self-service'in kulüple ilgili uçları da buradadır.
 
-> Bu doküman kod tabanından birebir doğrulanmıştır (endpoint'ler canlı sunucuda test edildi). Backend'in tüm `message` alanları **Türkçedir** — UI'da doğrudan gösterilebilir. Özet katalog için `docs/API.md §4-7`, tenant/üniversite yönetimi için `docs/FRONTEND_UNIVERSITY.md`, Auth/RBAC için `docs/FRONTEND_AUTH_RBAC.md`'ye bakın.
+> Bu doküman kod tabanından birebir doğrulanmıştır (endpoint'ler canlı sunucuda test edildi). `message` alanları **isteğin diline** göre döner (`Accept-Language: tr|en`, varsayılan `tr`); doğrulama hataları birleşik zarfta `code: "VALIDATION_ERROR"` + `details[]` taşır (bkz. `docs/DENETIM_VE_HATA.md`). Özet katalog için `docs/API.md §4-7`, tenant/üniversite yönetimi için `docs/FRONTEND_UNIVERSITY.md`, Auth/RBAC için `docs/FRONTEND_AUTH_RBAC.md`'ye bakın.
 
 ---
 

@@ -161,6 +161,8 @@ const { items, nextCursor } = res.data;
 |---|---|---|
 | `account.verified` | — | `me`'yi refetch et, banner'ı kaldır |
 | `account.suspended` | — | Oturumu sonlandır |
+| `account.unsuspended` | — | Bilgilendir; kullanıcı yeniden erişebilir |
+| `account.passwordReset` | — | Geçici şifre uyarısı; giriş sonrası zorunlu şifre değiştirme (`mustChangePassword`) |
 | `club.application.decided` | `{ applicationId, status, clubId }` | `status==="approved"` ? kulüp sayfası : başvuru detayı |
 | `club.membership.decided` | `{ clubId, status }` | Kulüp sayfası |
 | `role.assigned` | `{ roleId, roleName }` | `me/permissions` refetch (yeni menüler açılır) |
