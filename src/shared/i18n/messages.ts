@@ -14,6 +14,7 @@ import {
   notificationsMessages,
   type NotificationsMessageKey,
 } from "../../features/notifications/notifications.messages";
+import { authMessages, type AuthMessageKey } from "../../features/auth/auth.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -31,7 +32,8 @@ export const messages = mergeCatalogs(
   announcementsMessages,
   galleryMessages,
   adminMessages,
-  notificationsMessages
+  notificationsMessages,
+  authMessages
 );
 
 /**
@@ -49,4 +51,5 @@ export type MessageKey =
   | AnnouncementsMessageKey
   | GalleryMessageKey
   | AdminMessageKey
-  | NotificationsMessageKey;
+  | NotificationsMessageKey
+  | AuthMessageKey;

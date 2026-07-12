@@ -13,6 +13,7 @@ import { AnnouncementPermission } from "../announcements/announcements.permissio
 import { GalleryPermission } from "../gallery/gallery.permissions";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
+import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
 
 // Kayıt otomatik rolü + promote/demote hedefi. Not: "admin" rolü kurumsal modelde
 // "university_admin" olarak yeniden adlandırıldı (bkz. docs/yonetim/06).
@@ -89,9 +90,7 @@ export type RoleAdminActor = {
 function assertActorOutranksRole(actor: RoleAdminActor, role: { name: string; rank: number }) {
   if (actor.isSuperAdmin) return;
   if (role.rank >= actor.maxRank) {
-    throw new Error(
-      `'${role.name}' rolü sizin yetki seviyenizle aynı ya da daha yüksek; bu rol üzerinde işlem yapamazsınız.`
-    );
+    throw badRequest("auth.roleRankTooHigh", { params: { roleName: role.name } });
   }
 }
 
@@ -105,7 +104,7 @@ async function assertActorOutranksUser(actor: RoleAdminActor, targetUserId: stri
   if (actor.isSuperAdmin) return;
   const target = await getEffectivePermissions(targetUserId);
   if (target.maxRank >= actor.maxRank) {
-    throw new Error("Bu kullanıcı sizinle aynı ya da daha yüksek yetki seviyesinde; üzerinde işlem yapamazsınız.");
+    throw badRequest("auth.userRankTooHigh");
   }
 }
 
@@ -114,7 +113,7 @@ function assertRoleManageable(actor: RoleAdminActor, role: { name: string; rank:
   if (actor.isSuperAdmin) return;
   // Global roller (universityId null) yalnızca super_admin'e aittir.
   if (role.universityId !== actor.universityId) {
-    throw new Error("Bu rol üzerinde işlem yetkiniz yok (yalnızca kendi üniversitenizin rollerini yönetebilirsiniz).");
+    throw badRequest("auth.roleNotManageable");
   }
   assertActorOutranksRole(actor, role);
 }
@@ -129,10 +128,10 @@ function assertRoleManageable(actor: RoleAdminActor, role: { name: string; rank:
 function assertPermissionAttachable(actor: RoleAdminActor, permission: { key: string }) {
   if (actor.isSuperAdmin) return;
   if (PLATFORM_PERMISSION_KEYS.has(permission.key)) {
-    throw new Error("Bu yetki platform seviyesidir; tenant rollerine atanamaz.");
+    throw badRequest("auth.permissionPlatformLevel");
   }
   if (!actor.permissions.includes(permission.key)) {
-    throw new Error("Kendinizde bulunmayan bir yetkiyi bir role atayamazsınız.");
+    throw badRequest("auth.permissionNotOwned");
   }
 }
 
@@ -140,10 +139,10 @@ function assertPermissionAttachable(actor: RoleAdminActor, permission: { key: st
 function assertRoleAssignable(actor: RoleAdminActor, role: { name: string; universityId: string | null }) {
   if (actor.isSuperAdmin) return;
   if (role.universityId === null && PLATFORM_ROLE_NAMES.has(role.name)) {
-    throw new Error("Bu rol yalnızca sistem yöneticisi tarafından atanabilir.");
+    throw badRequest("auth.rolePlatformOnly");
   }
   if (role.universityId !== null && role.universityId !== actor.universityId) {
-    throw new Error("Bu rol bu üniversiteye ait değil.");
+    throw badRequest("auth.roleNotInUniversity");
   }
 }
 
@@ -154,7 +153,7 @@ function assertRoleAssignable(actor: RoleAdminActor, role: { name: string; unive
 function assertUserInTenant(actor: RoleAdminActor, user: { universityId: string | null }) {
   if (actor.isSuperAdmin) return;
   if (user.universityId !== actor.universityId) {
-    throw new Error("Bu kullanıcı üzerinde işlem yetkiniz yok.");
+    throw badRequest("auth.userNotManageable");
   }
 }
 
@@ -166,7 +165,7 @@ function assertUserInTenant(actor: RoleAdminActor, user: { universityId: string 
  */
 function assertNotSelfRoleRemoval(actor: RoleAdminActor, targetUserId: string) {
   if (actor.userId === targetUserId) {
-    throw new Error("Kendi rolünüzü kaldıramazsınız; bu işlemi sizden yetkili bir yönetici yapmalıdır.");
+    throw badRequest("auth.cannotRemoveOwnRole");
   }
 }
 
@@ -189,7 +188,7 @@ async function assertNotLastAdminOfScope(
   if (role.name === SUPER_ADMIN_ROLE_NAME) {
     const count = await authRepository.countUsersByRoleName(SUPER_ADMIN_ROLE_NAME);
     if (count <= 1) {
-      throw new Error("Sistemdeki son sistem yöneticisi görevden alınamaz.");
+      throw badRequest("auth.lastSuperAdmin");
     }
     return;
   }
@@ -197,7 +196,7 @@ async function assertNotLastAdminOfScope(
   if (role.name === ADMIN_ROLE_NAME && targetUser.universityId) {
     const count = await authRepository.countUsersByRoleNameInTenant(ADMIN_ROLE_NAME, targetUser.universityId);
     if (count <= 1) {
-      throw new Error("Bu üniversitenin son yöneticisi görevden alınamaz.");
+      throw badRequest("auth.lastUniversityAdmin");
     }
   }
 }
@@ -235,13 +234,13 @@ async function issueVerificationEmail(user: { id: string; email: string; firstNa
 async function assignGlobalRole(actor: RoleAdminActor, userId: string, roleName: string) {
   const user = await authRepository.findUserById(userId);
   if (!user) {
-    throw new Error("Kullanıcı bulunamadı.");
+    throw notFound("auth.userNotFound");
   }
   assertUserInTenant(actor, user);
 
   const role = await authRepository.findRoleByName(roleName, null);
   if (!role) {
-    throw new Error(`Global '${roleName}' rolü bulunamadı.`);
+    throw notFound("auth.globalRoleNotFound", { params: { roleName } });
   }
   // Platform rolleri (super_admin) yalnızca super_admin tarafından atanabilir;
   // aksi halde university_admin (role.manage taşır) kendine super_admin mintleyebilirdi.
@@ -255,7 +254,7 @@ async function assignGlobalRole(actor: RoleAdminActor, userId: string, roleName:
 
   const alreadyHasRole = await authRepository.userHasRole(userId, role.id);
   if (alreadyHasRole) {
-    throw new Error("Bu kullanıcı zaten bu role sahip.");
+    throw badRequest("auth.userAlreadyHasRole");
   }
 
   await authRepository.assignRoleToUser(userId, role.id);
@@ -265,7 +264,7 @@ async function assignGlobalRole(actor: RoleAdminActor, userId: string, roleName:
 async function removeGlobalRole(actor: RoleAdminActor, userId: string, roleName: string) {
   const user = await authRepository.findUserById(userId);
   if (!user) {
-    throw new Error("Kullanıcı bulunamadı.");
+    throw notFound("auth.userNotFound");
   }
   // Kendi rolünü sökme, super_admin için de yasaktır (dört göz ilkesi).
   assertNotSelfRoleRemoval(actor, userId);
@@ -273,7 +272,7 @@ async function removeGlobalRole(actor: RoleAdminActor, userId: string, roleName:
 
   const role = await authRepository.findRoleByName(roleName, null);
   if (!role) {
-    throw new Error(`Global '${roleName}' rolü bulunamadı.`);
+    throw notFound("auth.globalRoleNotFound", { params: { roleName } });
   }
   assertRoleAssignable(actor, role);
   assertActorOutranksRole(actor, role);
@@ -293,24 +292,24 @@ export const authService = {
     // 1. İş Kuralı: E-postadan domain'i ayıkla
     const emailParts = data.email.split("@");
     if (emailParts.length !== 2) {
-      throw new Error("Geçersiz e-posta formatı.");
+      throw badRequest("auth.invalidEmailFormat");
     }
     const domain = emailParts[1];
 
     // 2. İş Kuralı: Domain kayıtlı mı?
     const universityDomain = await authRepository.findUniversityByDomain(domain);
     if (!universityDomain) {
-      throw new Error("Bu e-posta adresi sistemimizde kayıtlı bir üniversiteye ait değil.");
+      throw badRequest("auth.emailDomainNotRegistered");
     }
 
     // 3. İş Kuralı: E-posta müsait mi?
     const existingUser = await authRepository.findUserByEmailAndTenant(
-      data.email, 
+      data.email,
       universityDomain.universityId
     );
-    
+
     if (existingUser) {
-      throw new Error("Bu e-posta adresi zaten kullanılıyor.");
+      throw badRequest("auth.emailAlreadyInUse");
     }
 
     // 4. İş Kuralı: Şifreyi güvenlikten geçir
@@ -350,18 +349,18 @@ export const authService = {
     // Güvenlik Kuralı: "E-posta bulunamadı" veya "Şifre yanlış" diye detay vermiyoruz ki
     // kötü niyetli kişiler sistemde hangi e-postaların kayıtlı olduğunu tahmin edemesin.
     if (!user) {
-      throw new Error("E-posta adresi veya şifre hatalı.");
+      throw unauthorized("auth.invalidCredentials");
     }
 
     // 2. Şifreyi doğrula (Bun.password kullanarak)
     const isPasswordValid = await verifyPassword(data.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new Error("E-posta adresi veya şifre hatalı.");
+      throw unauthorized("auth.invalidCredentials");
     }
 
     // 3. Hesap durumu kontrolü (İsteğe bağlı koruma)
     if (user.status === "suspended") {
-      throw new Error("Hesabınız askıya alınmıştır. Lütfen SKS birimiyle iletişime geçin.");
+      throw unauthorized("auth.loginAccountSuspended");
     }
 
     // Not: user.status === "pending" olanlar (henüz mail onaylamamış olanlar)
@@ -389,17 +388,17 @@ export const authService = {
   async verifyEmail(token: string) {
     const verification = await authRepository.findEmailVerificationByToken(token);
     if (!verification) {
-      throw new Error("Geçersiz doğrulama linki.");
+      throw badRequest("auth.invalidVerificationLink");
     }
 
     if (verification.usedAt) {
-      throw new Error("Bu doğrulama linki zaten kullanılmış.");
+      throw badRequest("auth.verificationLinkUsed");
     }
 
     if (verification.expiresAt < new Date()) {
       // Not: "tekrar kayıt olun" DEMİYORUZ — e-posta zaten kullanımda olduğu için
       // kayıt reddedilir ve kullanıcı çıkmaza girerdi. Doğru çıkış: yeniden gönderim.
-      throw new Error("Doğrulama linkinin süresi dolmuş. Yeni bir doğrulama maili talep edin.");
+      throw badRequest("auth.verificationLinkExpired");
     }
 
     await authRepository.markEmailVerificationUsed(verification.id);
@@ -462,7 +461,7 @@ export const authService = {
   async createPermission(data: CreatePermissionDTO) {
     const existing = await authRepository.findPermissionByKey(data.key);
     if (existing) {
-      throw new Error("Bu yetki anahtarı zaten mevcut.");
+      throw badRequest("auth.permissionKeyExists");
     }
     return await authRepository.createPermission(data);
   },
@@ -478,7 +477,7 @@ export const authService = {
   async updatePermission(permissionId: string, data: UpdatePermissionDTO) {
     const permission = await authRepository.findPermissionById(permissionId);
     if (!permission) {
-      throw new Error("Yetki bulunamadı.");
+      throw notFound("auth.permissionNotFound");
     }
     return await authRepository.updatePermission(permissionId, data);
   },
@@ -491,10 +490,10 @@ export const authService = {
   async deletePermission(permissionId: string) {
     const permission = await authRepository.findPermissionById(permissionId);
     if (!permission) {
-      throw new Error("Yetki bulunamadı.");
+      throw notFound("auth.permissionNotFound");
     }
     if (SEED_PERMISSION_KEYS.has(permission.key)) {
-      throw new Error("Sistem yetkisi silinemez.");
+      throw badRequest("auth.corePermissionCannotDelete");
     }
     const affectedUserIds = await authRepository.deletePermission(permissionId);
     await invalidateUsersPermissions(affectedUserIds);
@@ -504,7 +503,7 @@ export const authService = {
   async listPermissionRoles(permissionId: string) {
     const permission = await authRepository.findPermissionById(permissionId);
     if (!permission) {
-      throw new Error("Yetki bulunamadı.");
+      throw notFound("auth.permissionNotFound");
     }
     return await authRepository.findRolesByPermission(permissionId);
   },
@@ -520,7 +519,7 @@ export const authService = {
   async createRole(actor: RoleAdminActor, data: CreateRoleDTO) {
     const rank = data.rank ?? 0;
     if (!actor.isSuperAdmin && rank >= actor.maxRank) {
-      throw new Error("Yalnızca kendi yetki seviyenizden düşük rütbede bir rol oluşturabilirsiniz.");
+      throw badRequest("auth.roleRankMustBeLower");
     }
     const payload = actor.isSuperAdmin
       ? { ...data, rank }
@@ -541,20 +540,20 @@ export const authService = {
   async updateRole(actor: RoleAdminActor, roleId: string, data: UpdateRoleDTO) {
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
-      throw new Error("Rol bulunamadı.");
+      throw notFound("auth.roleNotFound");
     }
     assertRoleManageable(actor, role);
     // Çekirdek rollerin ADI değiştirilemez (kod ada sabit referans verir).
     if (CORE_ROLE_NAMES.has(role.name) && data.name && data.name !== role.name) {
-      throw new Error("Sistem rolünün adı değiştirilemez.");
+      throw badRequest("auth.coreRoleNameImmutable");
     }
     // Çekirdek rollerin RÜTBESİ de değiştirilemez — hiyerarşinin temelidir.
     if (CORE_ROLE_NAMES.has(role.name) && data.rank !== undefined && data.rank !== role.rank) {
-      throw new Error("Sistem rolünün yetki seviyesi değiştirilemez.");
+      throw badRequest("auth.coreRoleRankImmutable");
     }
     // Rütbe yükseltme, aktörün kendi seviyesinin altında kalmalı.
     if (data.rank !== undefined && !actor.isSuperAdmin && data.rank >= actor.maxRank) {
-      throw new Error("Bir rolü kendi yetki seviyenize eşit ya da üstüne çıkaramazsınız.");
+      throw badRequest("auth.roleRankCannotExceedActor");
     }
     return await authRepository.updateRole(roleId, data);
   },
@@ -566,11 +565,11 @@ export const authService = {
   async deleteRole(actor: RoleAdminActor, roleId: string) {
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
-      throw new Error("Rol bulunamadı.");
+      throw notFound("auth.roleNotFound");
     }
     assertRoleManageable(actor, role);
     if (CORE_ROLE_NAMES.has(role.name)) {
-      throw new Error("Sistem rolü silinemez.");
+      throw badRequest("auth.coreRoleCannotDelete");
     }
     const affectedUserIds = await authRepository.deleteRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
@@ -580,7 +579,7 @@ export const authService = {
   async listRoleUsers(actor: RoleAdminActor, roleId: string) {
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
-      throw new Error("Rol bulunamadı.");
+      throw notFound("auth.roleNotFound");
     }
     assertRoleManageable(actor, role);
     const users = await authRepository.findUsersByRole(roleId);
@@ -593,7 +592,7 @@ export const authService = {
   async listUserRoles(actor: RoleAdminActor, userId: string) {
     const user = await authRepository.findUserById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("auth.userNotFound");
     }
     assertUserInTenant(actor, user);
     return await authRepository.findRolesByUser(userId);
@@ -607,12 +606,12 @@ export const authService = {
   async assignRoleToUser(actor: RoleAdminActor, userId: string, roleId: string) {
     const user = await authRepository.findUserById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("auth.userNotFound");
     }
     assertUserInTenant(actor, user);
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
-      throw new Error("Rol bulunamadı.");
+      throw notFound("auth.roleNotFound");
     }
     assertRoleAssignable(actor, role);
     // Kendinden yüksek/eşit rütbeli rol atanamaz — kendine "student" eklemek serbest,
@@ -623,11 +622,11 @@ export const authService = {
     }
     // Tenant'a özel rol yalnızca aynı üniversitenin kullanıcısına atanabilir.
     if (role.universityId !== null && role.universityId !== user.universityId) {
-      throw new Error("Bu rol bu üniversiteye ait değil.");
+      throw badRequest("auth.roleNotInUniversity");
     }
     const alreadyHasRole = await authRepository.userHasRole(userId, roleId);
     if (alreadyHasRole) {
-      throw new Error("Bu kullanıcı zaten bu role sahip.");
+      throw badRequest("auth.userAlreadyHasRole");
     }
     await authRepository.assignRoleToUser(userId, roleId);
     await invalidateUserPermissions(userId);
@@ -643,13 +642,13 @@ export const authService = {
   async removeRoleFromUser(actor: RoleAdminActor, userId: string, roleId: string) {
     const user = await authRepository.findUserById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("auth.userNotFound");
     }
     assertNotSelfRoleRemoval(actor, userId);
     assertUserInTenant(actor, user);
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
-      throw new Error("Rol bulunamadı.");
+      throw notFound("auth.roleNotFound");
     }
     assertRoleAssignable(actor, role);
     assertActorOutranksRole(actor, role);
@@ -665,7 +664,7 @@ export const authService = {
   async listUserPermissions(userId: string) {
     const user = await authRepository.findUserById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("auth.userNotFound");
     }
     return await authRepository.findUserPermissions(userId);
   },
@@ -677,20 +676,20 @@ export const authService = {
   async setUserPermission(userId: string, data: SetUserPermissionDTO) {
     const user = await authRepository.findUserById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("auth.userNotFound");
     }
 
     let permissionId = data.permissionId;
     if (!permissionId && data.key) {
       const permission = await authRepository.findPermissionByKey(data.key);
       if (!permission) {
-        throw new Error("Yetki bulunamadı.");
+        throw notFound("auth.permissionNotFound");
       }
       permissionId = permission.id;
     } else if (permissionId) {
       const permission = await authRepository.findPermissionById(permissionId);
       if (!permission) {
-        throw new Error("Yetki bulunamadı.");
+        throw notFound("auth.permissionNotFound");
       }
     }
 
@@ -702,11 +701,11 @@ export const authService = {
   async removeUserPermission(userId: string, permissionId: string) {
     const user = await authRepository.findUserById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("auth.userNotFound");
     }
     const existing = await authRepository.findUserPermission(userId, permissionId);
     if (!existing) {
-      throw new Error("Bu kullanıcıya ait böyle bir yetki override'ı bulunamadı.");
+      throw notFound("auth.userPermissionOverrideNotFound");
     }
     await authRepository.deleteUserPermission(userId, permissionId);
     await invalidateUserPermissions(userId);
@@ -719,18 +718,18 @@ export const authService = {
   async attachPermissionToRole(actor: RoleAdminActor, roleId: string, permissionId: string) {
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
-      throw new Error("Rol bulunamadı.");
+      throw notFound("auth.roleNotFound");
     }
     assertRoleManageable(actor, role);
     const permission = await authRepository.findPermissionById(permissionId);
     if (!permission) {
-      throw new Error("Yetki bulunamadı.");
+      throw notFound("auth.permissionNotFound");
     }
     assertPermissionAttachable(actor, permission);
 
     const existing = await authRepository.findRolePermission(roleId, permissionId);
     if (existing) {
-      throw new Error("Bu yetki zaten bu role atanmış.");
+      throw badRequest("auth.permissionAlreadyOnRole");
     }
 
     await authRepository.attachPermissionToRole(roleId, permissionId);
@@ -741,12 +740,12 @@ export const authService = {
   async detachPermissionFromRole(actor: RoleAdminActor, roleId: string, permissionId: string) {
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
-      throw new Error("Rol bulunamadı.");
+      throw notFound("auth.roleNotFound");
     }
     assertRoleManageable(actor, role);
     const permission = await authRepository.findPermissionById(permissionId);
     if (!permission) {
-      throw new Error("Yetki bulunamadı.");
+      throw notFound("auth.permissionNotFound");
     }
 
     await authRepository.detachPermissionFromRole(roleId, permissionId);
