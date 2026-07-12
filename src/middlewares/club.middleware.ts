@@ -1,6 +1,7 @@
 import { Context, Next } from "hono";
 import { db } from "../db";
 import { Variables } from "../core/auth/auth.middleware";
+import { forbidden } from "../shared/utils/errors";
 
 export type ClubMembershipRole = "member" | "officer" | "president";
 
@@ -65,10 +66,7 @@ export const requireClubStaff = async (c: Context<{ Variables: ClubVariables }>,
     return next();
   }
 
-  return c.json({
-    success: false,
-    message: "Bu işlem için kulüp yöneticisi (başkan/officer) veya danışmanı olmalısınız.",
-  }, 403);
+  throw forbidden("club.notStaff");
 };
 
 /**
@@ -81,10 +79,7 @@ export const requireClubOfficer = async (c: Context<{ Variables: ClubVariables }
 
   const membership = await loadApprovedMembership(clubId, user.userId);
   if (!membership || !OFFICER_ROLES.includes(membership.role)) {
-    return c.json({
-      success: false,
-      message: "Bu işlem için kulüp yöneticisi (başkan/officer) olmalısınız.",
-    }, 403);
+    throw forbidden("club.notOfficer");
   }
 
   c.set("clubMembership", membership);
@@ -101,10 +96,7 @@ export const requireClubPresident = async (c: Context<{ Variables: ClubVariables
 
   const membership = await loadApprovedMembership(clubId, user.userId);
   if (!membership || membership.role !== "president") {
-    return c.json({
-      success: false,
-      message: "Bu işlem için kulüp başkanı olmalısınız.",
-    }, 403);
+    throw forbidden("club.notPresident");
   }
 
   c.set("clubMembership", membership);
