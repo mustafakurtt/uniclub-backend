@@ -1,6 +1,7 @@
 import { galleryRepository } from "./gallery.repository";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { CreateGalleryImageDTO } from "./gallery.schema";
+import { notFound } from "../../shared/utils/errors";
 
 export const galleryService = {
   async listByClub(clubId: string) {
@@ -17,7 +18,7 @@ export const galleryService = {
   async removeImage(clubId: string, imageId: string) {
     const existing = await galleryRepository.findById(clubId, imageId);
     if (!existing) {
-      throw new Error("Görsel bulunamadı.");
+      throw notFound("gallery.imageNotFound");
     }
     await galleryRepository.deleteById(clubId, imageId);
   },

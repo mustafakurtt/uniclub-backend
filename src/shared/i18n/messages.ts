@@ -8,6 +8,7 @@ import {
   announcementsMessages,
   type AnnouncementsMessageKey,
 } from "../../features/announcements/announcements.messages";
+import { galleryMessages, type GalleryMessageKey } from "../../features/gallery/gallery.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -22,7 +23,8 @@ export const messages = mergeCatalogs(
   moderationMessages,
   auditMessages,
   usersMessages,
-  announcementsMessages
+  announcementsMessages,
+  galleryMessages
 );
 
 /**
@@ -37,4 +39,5 @@ export type MessageKey =
   | ModerationMessageKey
   | AuditMessageKey
   | UsersMessageKey
-  | AnnouncementsMessageKey;
+  | AnnouncementsMessageKey
+  | GalleryMessageKey;
