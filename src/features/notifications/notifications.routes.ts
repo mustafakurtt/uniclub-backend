@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
 import type { WSContext } from "hono/ws";
 import { authMiddleware, Variables } from "../../core/auth/auth.middleware";
 import { requireActiveUser } from "../../middlewares/active-user.middleware";
 import { upgradeWebSocket } from "../../shared/ws/bun-ws";
+import { validate } from "../../shared/utils/validate";
+import { ok } from "../../shared/utils/respond";
 import { listNotificationsQuerySchema } from "./notifications.schema";
 import { notificationsService } from "./notifications.service";
-import { respondWithBusinessError } from "../../shared/utils/error.util";
 import {
   addConnection,
   consumeWsTicket,
@@ -17,8 +17,6 @@ import {
 } from "./notifications.gateway";
 
 export const notificationsRoutes = new Hono<{ Variables: Variables }>();
-
-const statusFromError = (message: string) => (message.includes("bulunamadı") ? 404 : 400);
 
 /**
  * ⚠️ SIRA ÖNEMLİ: WS rotası, aşağıdaki `use("*", authMiddleware, ...)` zincirinden
@@ -81,43 +79,38 @@ notificationsRoutes.use("*", authMiddleware, requireActiveUser);
 notificationsRoutes.post("/ws-ticket", async (c) => {
   const user = c.get("user");
   const { ticket, expiresIn } = await issueWsTicket(user.userId);
-  return c.json({ success: true, message: "Bağlantı bileti üretildi.", data: { ticket, expiresIn } });
+  return ok(c, { ticket, expiresIn }, "notification.wsTicketIssued");
 });
 
+// Not: rotalar bilinçli olarak try/catch İÇERMEZ — servis katmanı HttpError
+// fırlatır, `app.onError` (core/http/error-handler) tek noktadan çevirir.
+
 // 1. BİLDİRİM AKIŞI (keyset sayfalama)
-notificationsRoutes.get("/", zValidator("query", listNotificationsQuerySchema), async (c) => {
+notificationsRoutes.get("/", validate("query", listNotificationsQuerySchema), async (c) => {
   const user = c.get("user");
   const { limit, cursor } = c.req.valid("query");
-  try {
-    const result = await notificationsService.list(user.userId, limit, cursor);
-    return c.json({ success: true, message: "Bildirimler listelendi.", data: result });
-  } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
-  }
+  const result = await notificationsService.list(user.userId, limit, cursor);
+  return ok(c, result, "notification.listed");
 });
 
 // 2. OKUNMAMIŞ SAYISI (zil rozeti)
 notificationsRoutes.get("/unread-count", async (c) => {
   const user = c.get("user");
   const count = await notificationsService.unreadCount(user.userId);
-  return c.json({ success: true, message: "Okunmamış bildirim sayısı.", data: { count } });
+  return ok(c, { count }, "notification.unreadCount");
 });
 
 // 3. TEK BİLDİRİMİ OKUNDU İŞARETLE
 notificationsRoutes.patch("/:notificationId/read", async (c) => {
   const user = c.get("user");
   const { notificationId } = c.req.param();
-  try {
-    const updated = await notificationsService.markRead(user.userId, notificationId);
-    return c.json({ success: true, message: "Bildirim okundu işaretlendi.", data: updated });
-  } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
-  }
+  const updated = await notificationsService.markRead(user.userId, notificationId);
+  return ok(c, updated, "notification.markedRead");
 });
 
 // 4. HEPSİNİ OKUNDU İŞARETLE
 notificationsRoutes.patch("/read-all", async (c) => {
   const user = c.get("user");
   const result = await notificationsService.markAllRead(user.userId);
-  return c.json({ success: true, message: "Tüm bildirimler okundu işaretlendi.", data: result });
+  return ok(c, result, "notification.allMarkedRead");
 });

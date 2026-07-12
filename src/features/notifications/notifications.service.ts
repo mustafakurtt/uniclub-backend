@@ -2,6 +2,7 @@ import { notificationsRepository } from "./notifications.repository";
 import { publish } from "./notifications.gateway";
 import { CreateNotificationPayload, Notification } from "./notifications.types";
 import { logger } from "../../shared/logger/logger";
+import { badRequest, notFound } from "../../shared/utils/errors";
 
 const log = logger.child({ module: "notifications.service" });
 
@@ -37,7 +38,7 @@ export const notificationsService = {
   async list(userId: string, limit: number, cursor?: string) {
     const cursorDate = cursor ? new Date(cursor) : undefined;
     if (cursorDate && Number.isNaN(cursorDate.getTime())) {
-      throw new Error("Geçersiz cursor değeri.");
+      throw badRequest("notification.invalidCursor");
     }
     const items = await notificationsRepository.listByUser(userId, limit, cursorDate);
     // Bir sonraki sayfanın cursor'ı: son satırın createdAt'i. Sayfa dolmadıysa son sayfadayız.
@@ -54,7 +55,7 @@ export const notificationsService = {
     if (!updated) {
       // Başkasının bildirimi ya da hiç yok — ikisini de aynı şekilde cevaplıyoruz
       // ki id tahminiyle başkasının bildiriminin varlığı öğrenilemesin.
-      throw new Error("Bildirim bulunamadı.");
+      throw notFound("notification.notFound");
     }
     return updated;
   },
