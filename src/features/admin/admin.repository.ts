@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "../../db/schema";
 import { slugify } from "../../shared/utils/slug.util";
+import { notFound, badRequest } from "../../shared/utils/errors";
 import {
   User,
   Club,
@@ -128,11 +129,11 @@ export const adminRepository = {
       });
 
       if (!application) {
-        throw new Error("Başvuru bulunamadı.");
+        throw notFound("admin.applicationNotFound");
       }
 
       if (application.status !== "pending") {
-        throw new Error("Bu başvuru zaten değerlendirilmiş.");
+        throw badRequest("admin.applicationAlreadyDecided");
       }
 
       const [updatedApplication] = await tx
@@ -176,7 +177,7 @@ export const adminRepository = {
       }
 
       if (!club) {
-        throw new Error("Kulüp için uygun bir slug bulunamadı, lütfen tekrar deneyin.");
+        throw badRequest("admin.slugGenerationFailed");
       }
 
       await tx.insert(schema.clubMembers).values({

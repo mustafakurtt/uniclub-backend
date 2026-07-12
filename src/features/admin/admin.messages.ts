@@ -16,6 +16,9 @@ export const adminMessages = defineCatalog({
     "admin.userNotFound": "Kullanıcı bulunamadı.",
     "admin.departmentNotInUniversity": "Bölüm bu üniversiteye ait değil.",
     "admin.clubNotFound": "Kulüp bulunamadı.",
+    "admin.applicationNotFound": "Başvuru bulunamadı.",
+    "admin.applicationAlreadyDecided": "Bu başvuru zaten değerlendirilmiş.",
+    "admin.slugGenerationFailed": "Kulüp için uygun bir slug bulunamadı, lütfen tekrar deneyin.",
     "admin.clubNotArchivedOrRejected":
       "Yalnızca arşivlenmiş veya reddedilmiş kulüpler silinebilir. Önce kulübü arşivleyin.",
     "admin.advisorNotEligible": "Danışman olarak yalnızca 'advisor' rolündeki personel atanabilir.",
@@ -50,6 +53,9 @@ export const adminMessages = defineCatalog({
     "admin.userNotFound": "User not found.",
     "admin.departmentNotInUniversity": "This department does not belong to this university.",
     "admin.clubNotFound": "Club not found.",
+    "admin.applicationNotFound": "Application not found.",
+    "admin.applicationAlreadyDecided": "This application has already been decided.",
+    "admin.slugGenerationFailed": "Could not find a suitable slug for the club, please try again.",
     "admin.clubNotArchivedOrRejected":
       "Only archived or rejected clubs can be deleted. Archive the club first.",
     "admin.advisorNotEligible": "Only staff with the 'advisor' role can be assigned as advisors.",

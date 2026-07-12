@@ -8,6 +8,8 @@ export const commonMessages = defineCatalog({
   tr: {
     "validation.failed": "Girdi doğrulaması başarısız.",
     "server.unexpected": "Sunucu tarafında beklenmeyen bir hata oluştu.",
+    // tenant (shared/utils/tenant.util) — platform hesaplarının tenant'lı akışlara girişi
+    "tenant.required": "Bu işlem bir üniversiteye bağlı hesap gerektirir.",
     // kimlik doğrulama (core/auth/auth.middleware)
     "auth.tokenMissing": "Bu işlem için giriş yapmalısınız (token eksik).",
     "auth.tokenInvalid": "Oturum süreniz dolmuş veya token geçersiz. Lütfen tekrar giriş yapın.",
@@ -26,6 +28,8 @@ export const commonMessages = defineCatalog({
   en: {
     "validation.failed": "Validation failed.",
     "server.unexpected": "An unexpected error occurred on the server.",
+    // tenant (shared/utils/tenant.util) — platform accounts entering tenant-scoped flows
+    "tenant.required": "This action requires an account tied to a university.",
     // authentication (core/auth/auth.middleware)
     "auth.tokenMissing": "You must be signed in for this action (token missing).",
     "auth.tokenInvalid": "Your session has expired or the token is invalid. Please sign in again.",
