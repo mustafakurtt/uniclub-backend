@@ -4,6 +4,10 @@ import { universityMessages, type UniversityMessageKey } from "../../features/un
 import { moderationMessages, type ModerationMessageKey } from "../../features/moderation/moderation.messages";
 import { auditMessages, type AuditMessageKey } from "../../features/audit/audit.messages";
 import { usersMessages, type UsersMessageKey } from "../../features/users/users.messages";
+import {
+  announcementsMessages,
+  type AnnouncementsMessageKey,
+} from "../../features/announcements/announcements.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -17,7 +21,8 @@ export const messages = mergeCatalogs(
   universityMessages,
   moderationMessages,
   auditMessages,
-  usersMessages
+  usersMessages,
+  announcementsMessages
 );
 
 /**
@@ -31,4 +36,5 @@ export type MessageKey =
   | UniversityMessageKey
   | ModerationMessageKey
   | AuditMessageKey
-  | UsersMessageKey;
+  | UsersMessageKey
+  | AnnouncementsMessageKey;

@@ -1,6 +1,7 @@
 import { announcementsRepository } from "./announcements.repository";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { CreateAnnouncementDTO } from "./announcements.schema";
+import { notFound } from "../../shared/utils/errors";
 
 export const announcementsService = {
   async listByClub(clubId: string) {
@@ -17,7 +18,7 @@ export const announcementsService = {
   async remove(clubId: string, announcementId: string) {
     const existing = await announcementsRepository.findById(clubId, announcementId);
     if (!existing) {
-      throw new Error("Duyuru bulunamadı.");
+      throw notFound("announcement.notFound");
     }
     await announcementsRepository.deleteById(clubId, announcementId);
   },
