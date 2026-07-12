@@ -5,6 +5,7 @@ import { toSafeUser } from "../../shared/utils/user.util";
 import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
+import { notFound, badRequest } from "../../shared/utils/errors";
 
 /**
  * Başvuru sahibine kararı bildirir. `notifySafe` kullanılır: bildirim
@@ -61,7 +62,7 @@ export const adminService = {
   async getUser(universityId: string, userId: string) {
     const user = await adminRepository.findUserInUniversityDetailed(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
     const { roles, clubMemberships, userPermissions, ...rest } = user;
     const effective = await getEffectivePermissions(userId);
@@ -78,7 +79,7 @@ export const adminService = {
   async getUserEffectivePermissions(universityId: string, userId: string) {
     const user = await adminRepository.findUserInUniversity(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
     return await getEffectivePermissions(userId);
   },
@@ -90,13 +91,13 @@ export const adminService = {
   async updateUserDepartment(universityId: string, userId: string, data: UpdateUserDepartmentDTO) {
     const user = await adminRepository.findUserInUniversity(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
 
     if (data.departmentId !== null) {
       const department = await adminRepository.findDepartmentWithUniversity(data.departmentId);
       if (!department || !department.faculty || department.faculty.universityId !== universityId) {
-        throw new Error("Bölüm bu üniversiteye ait değil.");
+        throw badRequest("admin.departmentNotInUniversity");
       }
     }
 
@@ -135,7 +136,7 @@ export const adminService = {
   async updateClubStatus(universityId: string, clubId: string, data: UpdateClubStatusDTO) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const updated = await adminRepository.updateClubStatus(universityId, clubId, data.status);
     return updated;
@@ -144,7 +145,7 @@ export const adminService = {
   async updateClub(universityId: string, clubId: string, data: UpdateClubDTO) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     return await adminRepository.updateClub(universityId, clubId, data);
   },
@@ -159,10 +160,10 @@ export const adminService = {
   async deleteClub(universityId: string, clubId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     if (club.status !== "archived" && club.status !== "rejected") {
-      throw new Error("Yalnızca arşivlenmiş veya reddedilmiş kulüpler silinebilir. Önce kulübü arşivleyin.");
+      throw badRequest("admin.clubNotArchivedOrRejected");
     }
     await adminRepository.deleteClub(universityId, clubId);
     return { id: clubId };
@@ -171,7 +172,7 @@ export const adminService = {
   async listAdvisors(universityId: string, clubId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const advisors = await adminRepository.findAdvisorsByClub(clubId);
     return advisors
@@ -186,21 +187,21 @@ export const adminService = {
   async addAdvisor(universityId: string, clubId: string, userId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const user = await adminRepository.findUserInUniversity(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
     // Danışman, öğrenci değil personel olmalı: sistemdeki "advisor" rolüne sahip
     // olması şartı (staff maili ile kaydolanlara bu rol otomatik atanır).
     const isAdvisorEligible = await adminRepository.userHasRole(userId, "advisor");
     if (!isAdvisorEligible) {
-      throw new Error("Danışman olarak yalnızca 'advisor' rolündeki personel atanabilir.");
+      throw badRequest("admin.advisorNotEligible");
     }
     const existing = await adminRepository.findAdvisor(clubId, userId);
     if (existing) {
-      throw new Error("Bu kullanıcı zaten kulübün danışmanı.");
+      throw badRequest("admin.advisorAlreadyAssigned");
     }
     return await adminRepository.addAdvisor(clubId, userId);
   },
@@ -208,11 +209,11 @@ export const adminService = {
   async removeAdvisor(universityId: string, clubId: string, userId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const existing = await adminRepository.findAdvisor(clubId, userId);
     if (!existing) {
-      throw new Error("Bu kullanıcı kulübün danışmanı değil.");
+      throw badRequest("admin.advisorNotAssigned");
     }
     await adminRepository.removeAdvisor(clubId, userId);
   },
@@ -225,7 +226,7 @@ export const adminService = {
   async listClubMembers(universityId: string, clubId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const members = await adminRepository.findMembersByClub(clubId);
     return members
@@ -236,11 +237,11 @@ export const adminService = {
   async removeClubMember(universityId: string, clubId: string, userId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const membership = await adminRepository.findClubMember(clubId, userId);
     if (!membership) {
-      throw new Error("Bu kullanıcı kulübün üyesi değil.");
+      throw badRequest("admin.memberNotFound");
     }
     await adminRepository.removeClubMember(clubId, userId);
   },
@@ -248,11 +249,11 @@ export const adminService = {
   async moderateRemoveAnnouncement(universityId: string, clubId: string, announcementId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const announcement = await adminRepository.findAnnouncementInClub(clubId, announcementId);
     if (!announcement) {
-      throw new Error("Duyuru bulunamadı.");
+      throw notFound("admin.announcementNotFound");
     }
     await adminRepository.deleteAnnouncement(announcementId);
   },
@@ -260,11 +261,11 @@ export const adminService = {
   async moderateRemoveGalleryImage(universityId: string, clubId: string, imageId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const image = await adminRepository.findGalleryImageInClub(clubId, imageId);
     if (!image) {
-      throw new Error("Görsel bulunamadı.");
+      throw notFound("admin.galleryImageNotFound");
     }
     await adminRepository.deleteGalleryImage(imageId);
   },
