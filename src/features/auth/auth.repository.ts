@@ -1,7 +1,19 @@
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "../../db/schema";
+import { BaseRepository } from "../../core/db";
 import { CreateUserPayload, UniversityDomain, User } from "./auth.types";
+
+/**
+ * auth/RBAC aggregate'i tek bir sahip tabloya oturmaz (users + roles + permissions
+ * + bağ tabloları). `id` taşıyan tablolara (users/roles/permissions) düz CRUD, core
+ * BaseRepository örnekleriyle sadeleştirilir. Bağ tabloları (userRoles/rolePermissions/
+ * userPermissions) BİLEŞİK anahtarlı olduğu için (id yok) upsert/silmeleri ham Drizzle
+ * ile kalır; çok-adımlı FK temizlikleri transaction'da korunur.
+ */
+const usersRepo = new BaseRepository(db, schema.users);
+const rolesRepo = new BaseRepository(db, schema.roles);
+const permissionsRepo = new BaseRepository(db, schema.permissions);
 
 export const authRepository = {
   /**
@@ -100,24 +112,20 @@ export const authRepository = {
   },
 
   async activateUser(userId: string): Promise<void> {
-    await db.update(schema.users).set({ status: "active" }).where(eq(schema.users.id, userId));
+    await usersRepo.updateById(userId, { status: "active" });
   },
 
   async findUserById(userId: string) {
-    return await db.query.users.findFirst({ where: { id: userId } });
+    return await usersRepo.findById(userId);
   },
 
   async findRoleByName(name: string, universityId: string | null) {
-    return await db.query.roles.findFirst({
-      where: {
-        name,
-        universityId: universityId === null ? { isNull: true } : universityId,
-      },
-    });
+    // buildWhere: universityId null → IS NULL, dolu → eşitlik.
+    return await rolesRepo.findOne({ name, universityId });
   },
 
   async findRoleById(roleId: string) {
-    return await db.query.roles.findFirst({ where: { id: roleId } });
+    return await rolesRepo.findById(roleId);
   },
 
   async userHasRole(userId: string, roleId: string) {
@@ -138,16 +146,15 @@ export const authRepository = {
   },
 
   async findPermissionByKey(key: string) {
-    return await db.query.permissions.findFirst({ where: { key } });
+    return await permissionsRepo.findOne({ key });
   },
 
   async findPermissionById(permissionId: string) {
-    return await db.query.permissions.findFirst({ where: { id: permissionId } });
+    return await permissionsRepo.findById(permissionId);
   },
 
   async createPermission(data: { key: string; description?: string }) {
-    const [inserted] = await db.insert(schema.permissions).values(data).returning();
-    return inserted;
+    return await permissionsRepo.create(data);
   },
 
   async findAllPermissions() {
@@ -155,26 +162,15 @@ export const authRepository = {
   },
 
   async updatePermission(permissionId: string, data: { description?: string }) {
-    const [updated] = await db
-      .update(schema.permissions)
-      .set(data)
-      .where(eq(schema.permissions.id, permissionId))
-      .returning();
-    return updated;
+    return await permissionsRepo.updateById(permissionId, data);
   },
 
   async createRole(data: { name: string; description?: string; universityId?: string | null; rank?: number }) {
-    const [inserted] = await db.insert(schema.roles).values(data).returning();
-    return inserted;
+    return await rolesRepo.create(data);
   },
 
   async updateRole(roleId: string, data: { name?: string; description?: string; rank?: number }) {
-    const [updated] = await db
-      .update(schema.roles)
-      .set(data)
-      .where(eq(schema.roles.id, roleId))
-      .returning();
-    return updated;
+    return await rolesRepo.updateById(roleId, data);
   },
 
   async findAllRolesWithPermissions() {

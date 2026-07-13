@@ -9,7 +9,7 @@ export const auditService = {
    * denetim kaydı yüzünden asla başarısız olmaz, bkz. core/rbac/audit-hook.ts).
    */
   async record(payload: CreateAuditLogPayload): Promise<AuditLog> {
-    return await auditRepository.create(payload);
+    return await auditRepository.record(payload);
   },
 
   async list(universityId: string, limit: number, cursor?: string, filter?: ListAuditLogsFilter) {

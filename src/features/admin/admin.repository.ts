@@ -1,6 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "../../db/schema";
+import { BaseRepository } from "../../core/db";
 import { slugify } from "../../shared/utils/slug.util";
 import { notFound, badRequest } from "../../shared/utils/errors";
 import {
@@ -12,6 +13,17 @@ import {
 } from "./admin.types";
 
 const MAX_SLUG_ATTEMPTS = 5;
+
+/**
+ * admin cross-tenant moderasyon aggregate'i tek bir sahip tabloya oturmaz. Ama
+ * `id` taşıyan tablolara tenant-kapsamlı okuma/yazma (`{ id, universityId }`)
+ * tekrar eden bir boilerplate'tir — bunları core composite-where helper'larıyla
+ * sadeleştirmek için tablo başına hafif BaseRepository örnekleri tutulur.
+ * (clubMembers/clubAdvisors BİLEŞİK anahtarlı olduğu için kapsam dışı → ham Drizzle.)
+ */
+const usersRepo = new BaseRepository(db, schema.users);
+const clubsRepo = new BaseRepository(db, schema.clubs);
+const applicationsRepo = new BaseRepository(db, schema.clubApplications);
 
 export const adminRepository = {
   /** Tüm üniversiteler — yalnızca platform seviyesi aktörler için (bkz. listAccessibleUniversities). */
@@ -59,9 +71,7 @@ export const adminRepository = {
   },
 
   async findUserInUniversity(universityId: string, userId: string): Promise<User | undefined> {
-    return await db.query.users.findFirst({
-      where: { id: userId, universityId },
-    });
+    return await usersRepo.findOne({ id: userId, universityId });
   },
 
   /**
@@ -80,11 +90,7 @@ export const adminRepository = {
   },
 
   async updateUserDepartment(universityId: string, userId: string, departmentId: string | null): Promise<User | undefined> {
-    const [updated] = await db
-      .update(schema.users)
-      .set({ departmentId })
-      .where(and(eq(schema.users.id, userId), eq(schema.users.universityId, universityId)))
-      .returning();
+    const [updated] = await usersRepo.updateWhere({ id: userId, universityId }, { departmentId });
     return updated;
   },
 
@@ -108,9 +114,7 @@ export const adminRepository = {
   },
 
   async findClubApplicationInUniversity(universityId: string, applicationId: string) {
-    return await db.query.clubApplications.findFirst({
-      where: { id: applicationId, universityId },
-    });
+    return await applicationsRepo.findOne({ id: applicationId, universityId });
   },
 
   /**
@@ -198,26 +202,16 @@ export const adminRepository = {
   },
 
   async findClubInUniversity(universityId: string, clubId: string) {
-    return await db.query.clubs.findFirst({
-      where: { id: clubId, universityId },
-    });
+    return await clubsRepo.findOne({ id: clubId, universityId });
   },
 
   async updateClubStatus(universityId: string, clubId: string, status: Club["status"]): Promise<Club | undefined> {
-    const [updated] = await db
-      .update(schema.clubs)
-      .set({ status })
-      .where(and(eq(schema.clubs.id, clubId), eq(schema.clubs.universityId, universityId)))
-      .returning();
+    const [updated] = await clubsRepo.updateWhere({ id: clubId, universityId }, { status });
     return updated;
   },
 
   async updateClub(universityId: string, clubId: string, data: UpdateClubPayload): Promise<Club | undefined> {
-    const [updated] = await db
-      .update(schema.clubs)
-      .set(data)
-      .where(and(eq(schema.clubs.id, clubId), eq(schema.clubs.universityId, universityId)))
-      .returning();
+    const [updated] = await clubsRepo.updateWhere({ id: clubId, universityId }, data);
     return updated;
   },
 

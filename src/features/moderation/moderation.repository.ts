@@ -1,16 +1,19 @@
 import { and, desc, eq, lt } from "drizzle-orm";
 import { db } from "../../db";
 import { users, userModerationActions } from "../../db/schema";
-import { BaseRepository } from "../../core/db/base.repository";
+import { BaseRepository } from "../../core/db";
 import type { ModerationHistoryItem } from "./moderation.types";
 
 /**
  * Kullanıcı moderasyonu veri erişimi. Feature durumu/banı SAHİPLENDİĞİ için hem
  * append-only moderasyon LOG'unu (BaseRepository — userModerationActions) hem de
- * users tablosundaki durum/şifre mutasyonlarını burada toplar.
+ * users tablosundaki durum/şifre mutasyonlarını burada toplar. users mutasyonları
+ * için hafif bir BaseRepository örneği kullanılır (admin/auth ile aynı kalıp).
  *
  * Log tablosu append-only: soft-delete/relational gerekmez → builder tabanlı.
  */
+const usersRepo = new BaseRepository(db, users);
+
 class ModerationRepository extends BaseRepository<typeof userModerationActions> {
   constructor() {
     super(db, userModerationActions); // create() = bir moderasyon işlemi kaydeder
@@ -18,26 +21,16 @@ class ModerationRepository extends BaseRepository<typeof userModerationActions> 
 
   /** Hedef kullanıcı bu tenant'a ait mi? (tenant-scope + varlık kontrolü tek sorguda) */
   findUserInTenant(universityId: string, userId: string) {
-    return db.query.users.findFirst({ where: { id: userId, universityId } });
+    return usersRepo.findOne({ id: userId, universityId });
   }
 
-  async setStatus(userId: string, status: "pending" | "active" | "suspended") {
-    const [updated] = await db
-      .update(users)
-      .set({ status })
-      .where(eq(users.id, userId))
-      .returning();
-    return updated;
+  setStatus(userId: string, status: "pending" | "active" | "suspended") {
+    return usersRepo.updateById(userId, { status });
   }
 
   /** Yeni şifre hash'ini yazar ve kullanıcıyı sonraki girişte değişime zorlar. */
-  async setPassword(userId: string, passwordHash: string) {
-    const [updated] = await db
-      .update(users)
-      .set({ passwordHash, mustChangePassword: true })
-      .where(eq(users.id, userId))
-      .returning();
-    return updated;
+  setPassword(userId: string, passwordHash: string) {
+    return usersRepo.updateById(userId, { passwordHash, mustChangePassword: true });
   }
 
   /** Kullanıcının moderasyon geçmişi (en yeniden), işlemi yapan yöneticiyle. Keyset sayfalama. */

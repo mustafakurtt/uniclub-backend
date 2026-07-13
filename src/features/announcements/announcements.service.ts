@@ -12,14 +12,14 @@ export const announcementsService = {
   },
 
   async create(universityId: string, clubId: string, authorId: string, data: CreateAnnouncementDTO) {
-    return await announcementsRepository.create(universityId, clubId, authorId, data);
+    return await announcementsRepository.add(universityId, clubId, authorId, data);
   },
 
   async remove(clubId: string, announcementId: string) {
-    const existing = await announcementsRepository.findById(clubId, announcementId);
+    const existing = await announcementsRepository.findInClub(clubId, announcementId);
     if (!existing) {
       throw notFound("announcement.notFound");
     }
-    await announcementsRepository.deleteById(clubId, announcementId);
+    await announcementsRepository.removeFromClub(clubId, announcementId);
   },
 };

@@ -1,7 +1,9 @@
-import { eq, sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { departments, users } from "../../../db/schema";
-import { BaseRepository } from "../../../core/db/base.repository";
+import { BaseRepository } from "../../../core/db";
+
+// Bölüm silme guard'ı users tablosuna bakar → hafif BaseRepository örneği.
+const usersRepo = new BaseRepository(db, users);
 
 /**
  * Bölüm veri erişimi. Silme YUMUŞAKTIR (deletedAt); okuma metodları silinmişi
@@ -30,13 +32,8 @@ class DepartmentRepository extends BaseRepository<typeof departments, typeof db.
   }
 
   /** Bu bölüme atanmış kullanıcı var mı? (bölüm silme guard'ı — users soft-delete taşımaz) */
-  async hasUsers(departmentId: string): Promise<boolean> {
-    const rows = await db
-      .select({ one: sql<number>`1` })
-      .from(users)
-      .where(eq(users.departmentId, departmentId))
-      .limit(1);
-    return rows.length > 0;
+  hasUsers(departmentId: string): Promise<boolean> {
+    return usersRepo.existsWhere({ departmentId });
   }
 }
 

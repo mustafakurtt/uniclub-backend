@@ -1,8 +1,15 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../../../db";
 import { universities, universityDomains, faculties, users, clubs } from "../../../db/schema";
-import { BaseRepository } from "../../../core/db/base.repository";
+import { BaseRepository } from "../../../core/db";
 import type { CreateUniversityPayload } from "../university.types";
+
+// Silme öncesi ağır-bağımlılık kontrolleri, başka tablolara bakar → tablo başına
+// hafif BaseRepository örnekleri. facultiesRepo softDelete=true: existsWhere yalnızca
+// CANLI fakülteleri sayar (deleted_at IS NULL otomatik uygulanır).
+const facultiesRepo = new BaseRepository(db, faculties, { softDelete: true });
+const usersRepo = new BaseRepository(db, users);
+const clubsRepo = new BaseRepository(db, clubs);
 
 /**
  * Üniversite (tenant) veri erişimi. BaseRepository'den mekanik CRUD'u miras alır
@@ -75,32 +82,17 @@ class UniversityRepository extends BaseRepository<typeof universities, typeof db
   }
 
   // ── Silme öncesi ağır-bağımlılık kontrolleri (varlık yeterli) ────────────
-  async hasFaculties(universityId: string): Promise<boolean> {
-    // Yalnızca CANLI fakülteler engeller (soft-delete edilmiş fakülte saymaz).
-    const rows = await db
-      .select({ one: sql<number>`1` })
-      .from(faculties)
-      .where(and(eq(faculties.universityId, universityId), isNull(faculties.deletedAt)))
-      .limit(1);
-    return rows.length > 0;
+  /** Bu üniversitenin CANLI fakültesi var mı? (facultiesRepo softDelete → deleted_at IS NULL) */
+  hasFaculties(universityId: string): Promise<boolean> {
+    return facultiesRepo.existsWhere({ universityId });
   }
 
-  async hasUsers(universityId: string): Promise<boolean> {
-    const rows = await db
-      .select({ one: sql<number>`1` })
-      .from(users)
-      .where(eq(users.universityId, universityId))
-      .limit(1);
-    return rows.length > 0;
+  hasUsers(universityId: string): Promise<boolean> {
+    return usersRepo.existsWhere({ universityId });
   }
 
-  async hasClubs(universityId: string): Promise<boolean> {
-    const rows = await db
-      .select({ one: sql<number>`1` })
-      .from(clubs)
-      .where(eq(clubs.universityId, universityId))
-      .limit(1);
-    return rows.length > 0;
+  hasClubs(universityId: string): Promise<boolean> {
+    return clubsRepo.existsWhere({ universityId });
   }
 }
 

@@ -12,14 +12,14 @@ export const galleryService = {
   },
 
   async addImage(clubId: string, uploadedBy: string, data: CreateGalleryImageDTO) {
-    return await galleryRepository.create(clubId, uploadedBy, data);
+    return await galleryRepository.add(clubId, uploadedBy, data);
   },
 
   async removeImage(clubId: string, imageId: string) {
-    const existing = await galleryRepository.findById(clubId, imageId);
+    const existing = await galleryRepository.findInClub(clubId, imageId);
     if (!existing) {
       throw notFound("gallery.imageNotFound");
     }
-    await galleryRepository.deleteById(clubId, imageId);
+    await galleryRepository.removeFromClub(clubId, imageId);
   },
 };

@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { universityDomains } from "../../../db/schema";
-import { BaseRepository } from "../../../core/db/base.repository";
+import { BaseRepository } from "../../../core/db";
 import type { DomainType, UpdateDomainPayload } from "../university.types";
 
 /**

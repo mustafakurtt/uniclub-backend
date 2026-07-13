@@ -14,7 +14,7 @@ export const notificationsService = {
    */
   async notify(userId: string, payload: CreateNotificationPayload): Promise<Notification> {
     // 1. Önce DB (kalıcılık): çevrimdışı cihaz sonra bağlanınca geçmişi görsün.
-    const notification = await notificationsRepository.create(userId, payload);
+    const notification = await notificationsRepository.add(userId, payload);
     // 2. Sonra fanout: her instance kendi soketlerine teslim eder.
     await publish(userId, notification);
     return notification;

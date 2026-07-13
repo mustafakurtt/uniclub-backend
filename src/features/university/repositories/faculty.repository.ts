@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { faculties } from "../../../db/schema";
-import { BaseRepository } from "../../../core/db/base.repository";
+import { BaseRepository } from "../../../core/db";
 
 /**
  * Fakülte veri erişimi. Silme YUMUŞAKTIR (deletedAt); okuma metodları silinmişi
