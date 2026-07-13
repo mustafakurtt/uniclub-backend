@@ -35,6 +35,17 @@ const envSchema = z.object({
   // ── LOGLAMA ───────────────────────────────────────────────────────────
   /** Verilmezse shared/logger.ts, NODE_ENV'e göre karar verir (prod: info, aksi: debug). */
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
+
+  // ── CACHE ─────────────────────────────────────────────────────────────
+  /**
+   * Cache depolama sürücüsü (bkz. shared/cache/cache.client.ts):
+   *  - redis  : paylaşımlı/çok-instance varsayılan (mevcut Redis bağlantısını kullanır).
+   *  - memory : süreç-içi (test/tek-instance; instance'lar arası paylaşılmaz).
+   *  - null   : cache kapalı (no-op) — hata ayıklama/geçici devre dışı.
+   */
+  CACHE_DRIVER: z.enum(["redis", "memory", "null"]).default("redis"),
+  /** TTL verilmeyen yazımların varsayılan ömrü (saniye). */
+  CACHE_DEFAULT_TTL: z.coerce.number().default(300),
 });
 
 // process.env'yi şemadan geçiriyoruz. Eğer .env içinde hata varsa uygulama burada
