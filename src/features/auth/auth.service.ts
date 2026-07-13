@@ -3,7 +3,7 @@ import { authRepository } from "./auth.repository";
 import { hashPassword, verifyPassword } from "../../shared/utils/password.util"; // verifyPassword eklendi
 import { generateToken } from "../../shared/utils/jwt.util"; // JWT üreteci eklendi
 import { emailQueue } from "./auth.queue";
-import { getEffectivePermissions, invalidateUserPermissions, invalidateUsersPermissions } from "../../shared/rbac/rbac.cache";
+import { resolveAuthz, invalidateUserPermissions, invalidateUsersPermissions } from "../../shared/rbac/rbac.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { AuthPermission } from "./auth.permissions";
 import { AdminPermission } from "../admin/admin.permissions";
@@ -103,7 +103,7 @@ function assertActorOutranksRole(actor: RoleAdminActor, role: { name: string; ra
  */
 async function assertActorOutranksUser(actor: RoleAdminActor, targetUserId: string) {
   if (actor.isSuperAdmin) return;
-  const target = await getEffectivePermissions(targetUserId);
+  const target = await resolveAuthz(targetUserId);
   if (target.maxRank >= actor.maxRank) {
     throw badRequest("auth.userRankTooHigh");
   }
@@ -405,7 +405,7 @@ export const authService = {
     await authRepository.markEmailVerificationUsed(verification.id);
     await authRepository.activateUser(verification.userId);
 
-    // KRİTİK: hesap durumu (status) authz cache'ine gömülüdür (EffectivePermissions.status,
+    // KRİTİK: hesap durumu (status) authz cache'ine gömülüdür (AuthzContext.status,
     // 300s TTL). Cache düşürülmezse kullanıcı doğruladıktan sonra 5 dakika daha
     // "pending" görünür — pending kısıtları uygulanmaya, arayüzdeki uyarı görünmeye
     // devam eder. (admin.updateUserStatus da aynı kalıbı uygular.)

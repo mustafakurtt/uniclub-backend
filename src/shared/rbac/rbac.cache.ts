@@ -1,6 +1,7 @@
 import { cache } from "../cache/cache.client";
 import { rbacRepository } from "./rbac.repository";
-import { EffectivePermissions } from "../../core/rbac/rbac.types";
+import { AuthzContext } from "../../core/rbac/rbac.types";
+import "./authz"; // AuthzContext'e status/maxRank ekleyen declaration merging
 
 /**
  * Kullanıcı-başına EFFECTIVE (etkin) rol/izin cache'i — core/cache facade'ının
@@ -19,7 +20,7 @@ const TTL_SECONDS = 300;
  * değişikliklerinde ilgili kullanıcı(lar) invalidate edilmelidir.
  * (getEffectiveRolesAndPermissions daima non-null obje döner → getOrSet cache'ler.)
  */
-export const getEffectivePermissions = (userId: string): Promise<EffectivePermissions> =>
+export const resolveAuthz = (userId: string): Promise<AuthzContext> =>
   c.getOrSet(userId, () => rbacRepository.getEffectiveRolesAndPermissions(userId), {
     ttlSeconds: TTL_SECONDS,
   });

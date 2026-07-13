@@ -2,7 +2,7 @@ import { adminRepository } from "./admin.repository";
 import { UpdateClubStatusDTO, UpdateClubDTO, UpdateUserDepartmentDTO } from "./admin.schema";
 import { DecideClubApplicationResult, User } from "./admin.types";
 import { toSafeUser } from "../../shared/utils/user.util";
-import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
+import { resolveAuthz } from "../../shared/rbac/rbac.cache";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest } from "../../shared/utils/errors";
@@ -68,7 +68,7 @@ export const adminService = {
       throw notFound("admin.userNotFound");
     }
     const { roles, clubMemberships, userPermissions, ...rest } = user;
-    const effective = await getEffectivePermissions(userId);
+    const effective = await resolveAuthz(userId);
     return {
       ...toSafeUser(rest as unknown as User),
       roles,
@@ -84,7 +84,7 @@ export const adminService = {
     if (!user) {
       throw notFound("admin.userNotFound");
     }
-    return await getEffectivePermissions(userId);
+    return await resolveAuthz(userId);
   },
 
   /**

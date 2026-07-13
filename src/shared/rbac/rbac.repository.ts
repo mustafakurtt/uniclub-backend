@@ -1,5 +1,6 @@
 import { db } from "../../db";
-import { EffectivePermissions } from "../../core/rbac/rbac.types";
+import { AuthzContext } from "../../core/rbac/rbac.types";
+import "./authz"; // AuthzContext'e status/maxRank ekleyen declaration merging
 
 /**
  * Bir kullanıcının rol tabanlı ve doğrudan (userPermissions) yetkilerini birleştirip
@@ -8,7 +9,7 @@ import { EffectivePermissions } from "../../core/rbac/rbac.types";
  * ilişkisi, junction tablosundaki `granted` (iptal/override) kolonunu dışarı vermez.
  */
 export const rbacRepository = {
-  async getEffectiveRolesAndPermissions(userId: string): Promise<EffectivePermissions> {
+  async getEffectiveRolesAndPermissions(userId: string): Promise<AuthzContext> {
     const user = await db.query.users.findFirst({
       where: { id: userId },
       with: {

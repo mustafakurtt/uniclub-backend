@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../core/auth/auth.middleware";
 import { guard } from "../../core/rbac/guard";
-import { attachAuthz, hasTenantScopeBypass, RbacVariables } from "../../core/rbac/rbac.middleware";
+import { attachAuthz, RbacVariables } from "../../core/rbac/rbac.middleware";
+import { hasTenantScopeBypass } from "../../core/rbac/tenant-scope";
 import { validate } from "../../shared/utils/validate";
 import { ok, created, done } from "../../shared/utils/respond";
 import { AdminPermission } from "./admin.permissions";

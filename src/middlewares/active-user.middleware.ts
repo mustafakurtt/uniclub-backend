@@ -1,6 +1,6 @@
 import { Context, Next } from "hono";
 import { Variables } from "../core/auth/auth.middleware";
-import { getEffectivePermissions } from "../shared/rbac/rbac.cache";
+import { resolveAuthz } from "../shared/rbac/rbac.cache";
 
 /**
  * authMiddleware'den SONRA çalışır. Askıya alınan (suspended) kullanıcının
@@ -8,13 +8,12 @@ import { getEffectivePermissions } from "../shared/rbac/rbac.cache";
  * self-service / kulüp rotalarında kullanılır — guard'lı rotalar aynı kontrolü
  * attachAuthz içinde yapar.
  *
- * Durum, RBAC cache'inden (getEffectivePermissions) okunur; hesap durumu
- * değiştiğinde ilgili servis cache'i invalidate ettiği için ekstra DB sorgusu
- * çoğu istekte yapılmaz.
+ * Durum, RBAC cache'inden (resolveAuthz) okunur; hesap durumu değiştiğinde ilgili
+ * servis cache'i invalidate ettiği için ekstra DB sorgusu çoğu istekte yapılmaz.
  */
 export const requireActiveUser = async (c: Context<{ Variables: Variables }>, next: Next) => {
   const user = c.get("user");
-  const authz = await getEffectivePermissions(user.userId);
+  const authz = await resolveAuthz(user.userId);
 
   if (authz.status === "suspended") {
     return c.json({
