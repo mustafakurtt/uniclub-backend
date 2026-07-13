@@ -13,25 +13,54 @@ import { usersRoutes } from "./features/users/users.routes";
 import { clubsRoutes } from "./features/clubs/clubs.routes";
 import { notificationsRoutes } from "./features/notifications/notifications.routes";
 import { auditRoutes } from "./features/audit/audit.routes";
+import { moderationRoutes } from "./features/moderation/moderation.routes";
 import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
-import { Variables } from "./core/auth/auth.middleware";
+import { Variables, setTokenVerifier } from "./core/auth/auth.middleware";
+import { configureRbac } from "./core/rbac/rbac.middleware";
+import { verifyToken } from "./shared/utils/jwt.util";
+import { getEffectivePermissions } from "./shared/rbac/rbac.cache";
+import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim şekli)
+import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
+import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
 import { verifyMailConnection } from "./shared/mail/mailer";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
 
 const log = logger.child({ module: "bootstrap" });
 
-// Ana uygulamaya Variables tipini ekliyoruz
-const app = new Hono<{ Variables: Variables }>();
+// Ana uygulamaya Variables tipini ekliyoruz.
+// `app` export edilir: testler Hono'nun `app.request()` arayüzüyle tüm
+// middleware zincirini gerçek port açmadan koşturur (bkz. tests/). Bir modülü
+// import etmek Bun.serve'i BAŞLATMAZ — sunucu yalnızca bu dosya doğrudan
+// entrypoint olarak çalıştırıldığında (default export) ayağa kalkar.
+export const app = new Hono<{ Variables: Variables & LocaleVariables }>();
 
 // Global Middlewares
 // requestId EN ÖNDE: her istek bir korelasyon kimliği alır; errorHandler bunu
 // istemciye döner + sunucu loguna yazar → "hata aldım" dendiğinde eşleştirilebilir.
 app.use("*", requestId());
+// Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
+// bu dile çevirir (bkz. core/i18n).
+app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
 app.use("*", requestLogger);
 app.use("*", cors());
+
+// core/auth'un token doğrulayıcısını enjekte et (SECRET env'de olduğu için core
+// import edemez — dikiş). authMiddleware bunu kullanır. Bkz. core/auth/auth.middleware.
+setTokenVerifier(verifyToken);
+
+// core/rbac'ın projeye özgü tüm bağımlılıklarını enjekte et: alan erişimleri
+// (core alan adını bilmez), bypass rol adları ve izin kaynağı. Bu enjeksiyonla
+// core/rbac artık shared'a hiç bağlı değildir. Bkz. core/rbac/rbac.middleware.
+configureRbac({
+  getSubjectId: (user) => user.userId,
+  getTenantId: (user) => user.universityId,
+  tenantScopeBypassRoles: ["super_admin", "platform_support"],
+  tenantParamName: "universityId",
+  getEffectivePermissions,
+});
 
 // guard() zincirindeki denetim izi (audit trail) kancasına bu projenin
 // implementasyonunu tak — bkz. features/audit/audit.sink.ts.
@@ -89,6 +118,7 @@ app.route("/api/users", usersRoutes);
 app.route("/api/clubs", clubsRoutes);
 app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
+app.route("/api/moderation", moderationRoutes);
 
 export default {
   port: env.PORT,

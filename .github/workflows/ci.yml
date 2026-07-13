@@ -113,3 +113,68 @@ jobs:
           echo "✗ Uygulama 30 sn içinde /health döndürmedi"
           kill $APP_PID 2>/dev/null || true
           exit 1
+
+  # ── Entegrasyon testleri: gerçek Postgres + Redis'e karşı bun test ────
+  # Hono app.request() ile tüm middleware zinciri (auth, RBAC guard, tenant
+  # scope, multi-tenant izolasyon) izole bir `uniclub_test` veritabanında
+  # uçtan uca doğrulanır. provision.ts test DB'sini sıfırdan kurar.
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uniclub
+          POSTGRES_PASSWORD: uniclub_ci
+          POSTGRES_DB: uniclub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uniclub -d uniclub"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PORT: 3000
+      NODE_ENV: development
+      DATABASE_URL: postgres://uniclub:uniclub_ci@localhost:5432/uniclub
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-secret-not-used-anywhere-else
+      APP_URL: http://localhost:3000
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      MAIL_FROM: UniClub CI <ci@uniclub.local>
+      RATE_LIMIT_DISABLED: "true"
+      TRUST_PROXY: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # İzole `uniclub_test` veritabanını sıfırla, migrate + seed'le.
+      - name: Provision test database
+        run: bun run tests/provision.ts
+
+      - name: Run tests
+        run: bun test

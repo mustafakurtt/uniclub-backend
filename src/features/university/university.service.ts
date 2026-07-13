@@ -1,4 +1,11 @@
-import { universityRepository } from "./university.repository";
+import {
+  universityRepository,
+  domainRepository,
+  facultyRepository,
+  departmentRepository,
+} from "./repositories";
+import { notFound, badRequest } from "../../shared/utils/errors";
+import { universityCache } from "./university.cache";
 import {
   CreateUniversityDTO,
   UpdateUniversityDTO,
@@ -10,94 +17,111 @@ import {
   UpdateDepartmentDTO,
 } from "./university.schema";
 
+/**
+ * university iş kuralları. Veri erişimi kaynak-başına repository'lere dağıtılmıştır
+ * (repositories/), hepsi core BaseRepository'yi extend eder. Silme YUMUŞAKTIR
+ * (universities/faculties/departments); domainler UNIQUE + kayıt akışı gereği
+ * FİZİKSEL silinir. Benzersizlik guard'ları silinmiş satırları da hesaba katar.
+ */
 export const universityService = {
   // ═══════════════════════════════════════════════
   // ÜNİVERSİTELER
   // ═══════════════════════════════════════════════
   async listUniversities(search?: string) {
-    return await universityRepository.findAllUniversities(search);
+    // Arama sonuçları cache'lenmez (çok anahtar, düşük değer); yalnızca aramasız
+    // public liste read-through cache'ten servis edilir.
+    if (search) {
+      return await universityRepository.list(search);
+    }
+    return await universityCache.list(() => universityRepository.list());
   },
 
   async getUniversity(universityId: string) {
-    const university = await universityRepository.findUniversityById(universityId);
+    // Repo undefined dönerse cache'lenmez (getOrSet null/undefined'ı yazmaz);
+    // notFound guard'ı her çağrıda çalışır.
+    const university = await universityCache.byId(universityId, () =>
+      universityRepository.findByIdWithDomains(universityId)
+    );
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw notFound("university.notFound");
     }
     return university;
   },
 
   /**
    * Yeni üniversite oluşturur.
-   * 1. slug sistemde benzersiz olmalı.
-   * 2. Verilen domainlerin hiçbiri (kendi içinde ve DB'de) daha önce kayıtlı olmamalı
-   *    — domain tablosunda "unique" olduğu için, çakışmayı DB hatasından önce yakalıyoruz.
+   * 1. slug sistemde benzersiz olmalı (silinmiş kayıtlar DAHİL — unique kısıt hepsini kapsar).
+   * 2. Verilen domainlerin hiçbiri (istekte ve DB'de) daha önce kayıtlı olmamalı.
    */
   async createUniversity(data: CreateUniversityDTO) {
     // 1
-    const existingSlug = await universityRepository.findUniversityBySlug(data.slug);
+    const existingSlug = await universityRepository.findBySlugIncludingDeleted(data.slug);
     if (existingSlug) {
-      throw new Error("Bu slug zaten kullanılıyor.");
+      throw badRequest("university.slugTaken");
     }
 
     // 2
     const seen = new Set<string>();
     for (const d of data.domains) {
       if (seen.has(d.domain)) {
-        throw new Error(`"${d.domain}" domaini istekte birden fazla kez girilmiş.`);
+        throw badRequest("university.domainDuplicateInRequest", { params: { domain: d.domain } });
       }
       seen.add(d.domain);
 
-      const existingDomain = await universityRepository.findDomainByDomain(d.domain);
+      const existingDomain = await domainRepository.findByDomain(d.domain);
       if (existingDomain) {
-        throw new Error(`"${d.domain}" domaini zaten kayıtlı.`);
+        throw badRequest("university.domainAlreadyRegistered", { params: { domain: d.domain } });
       }
     }
 
-    return await universityRepository.createUniversityWithDomains(data);
+    const result = await universityRepository.createWithDomains(data);
+    await universityCache.invalidateList();
+    return result;
   },
 
   async updateUniversity(universityId: string, data: UpdateUniversityDTO) {
-    const university = await universityRepository.findUniversityById(universityId);
+    const university = await universityRepository.findById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw notFound("university.notFound");
     }
 
     if (data.slug) {
-      const existingSlug = await universityRepository.findUniversityBySlug(data.slug);
+      const existingSlug = await universityRepository.findBySlugIncludingDeleted(data.slug);
       if (existingSlug && existingSlug.id !== universityId) {
-        throw new Error("Bu slug zaten kullanılıyor.");
+        throw badRequest("university.slugTaken");
       }
     }
 
-    return await universityRepository.updateUniversity(universityId, data);
+    const result = await universityRepository.updateById(universityId, data);
+    await universityCache.invalidateUniversity(universityId);
+    return result;
   },
 
   /**
-   * Üniversiteyi siler.
-   * 1. Üniversite var olmalı.
-   * 2. Bağlı ağır kayıt (fakülte / kullanıcı / kulüp) varsa silme reddedilir —
-   *    aksi halde foreign key ihlali oluşur ve veri sessizce yetim kalabilir.
-   *    Sadece domainler üniversiteyle birlikte otomatik temizlenir.
+   * Üniversiteyi siler (YUMUŞAK; domainleri fiziksel).
+   * 1. Üniversite var (ve silinmemiş) olmalı.
+   * 2. Bağlı ağır kayıt (fakülte / kullanıcı / kulüp) varsa silme reddedilir.
    */
   async deleteUniversity(universityId: string) {
     // 1
-    const university = await universityRepository.findUniversityById(universityId);
+    const university = await universityRepository.findById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw notFound("university.notFound");
     }
 
     // 2
     if (await universityRepository.hasUsers(universityId)) {
-      throw new Error("Bu üniversiteye bağlı kullanıcılar var, silinemez.");
+      throw badRequest("university.hasUsers");
     }
     if (await universityRepository.hasClubs(universityId)) {
-      throw new Error("Bu üniversiteye bağlı kulüpler var, silinemez.");
+      throw badRequest("university.hasClubs");
     }
     if (await universityRepository.hasFaculties(universityId)) {
-      throw new Error("Bu üniversitenin fakülteleri var, önce fakülteleri silin.");
+      throw badRequest("university.hasFaculties");
     }
 
-    await universityRepository.deleteUniversity(universityId);
+    await universityRepository.softDeleteWithDomains(universityId);
+    await universityCache.invalidateUniversityDeep(universityId);
     return { id: universityId };
   },
 
@@ -105,64 +129,67 @@ export const universityService = {
   // DOMAINLER
   // ═══════════════════════════════════════════════
   async listDomains(universityId: string) {
-    const university = await universityRepository.findUniversityById(universityId);
+    const university = await universityRepository.findById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw notFound("university.notFound");
     }
-    return await universityRepository.findDomainsByUniversity(universityId);
+    return await domainRepository.listByUniversity(universityId);
   },
 
   async addDomain(universityId: string, data: AddDomainDTO) {
-    const university = await universityRepository.findUniversityById(universityId);
+    const university = await universityRepository.findById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw notFound("university.notFound");
     }
 
-    const existingDomain = await universityRepository.findDomainByDomain(data.domain);
+    const existingDomain = await domainRepository.findByDomain(data.domain);
     if (existingDomain) {
-      throw new Error("Bu domain zaten kayıtlı.");
+      throw badRequest("domain.alreadyRegistered");
     }
 
-    return await universityRepository.addDomainToUniversity(universityId, data.domain, data.domainType);
+    const result = await domainRepository.add(universityId, data.domain, data.domainType);
+    await universityCache.invalidateUniversityDomains(universityId);
+    return result;
   },
 
   async updateDomain(universityId: string, domainId: string, data: UpdateDomainDTO) {
-    const domain = await universityRepository.findDomainById(universityId, domainId);
+    const domain = await domainRepository.findInUniversity(universityId, domainId);
     if (!domain) {
-      throw new Error("Domain bulunamadı.");
+      throw notFound("domain.notFound");
     }
 
     if (data.domain) {
-      const existingDomain = await universityRepository.findDomainByDomain(data.domain);
+      const existingDomain = await domainRepository.findByDomain(data.domain);
       if (existingDomain && existingDomain.id !== domainId) {
-        throw new Error("Bu domain zaten kayıtlı.");
+        throw badRequest("domain.alreadyRegistered");
       }
     }
 
-    return await universityRepository.updateDomain(domainId, data);
+    const result = await domainRepository.update(domainId, data);
+    await universityCache.invalidateUniversityDomains(universityId);
+    return result;
   },
 
   /**
-   * Domain siler.
+   * Domain siler (FİZİKSEL — bkz. DomainRepository).
    * 1. Domain bu üniversiteye ait olmalı.
-   * 2. Üniversitenin SON domaini silinemez — kayıt (register) akışı tenant'ı
-   *    e-posta domaininden çözdüğü için, domainsiz bir üniversiteye kimse
-   *    kayıt olamaz hâle gelir.
+   * 2. Üniversitenin SON domaini silinemez (kayıt akışı tenant'ı domainden çözer).
    */
   async deleteDomain(universityId: string, domainId: string) {
     // 1
-    const domain = await universityRepository.findDomainById(universityId, domainId);
+    const domain = await domainRepository.findInUniversity(universityId, domainId);
     if (!domain) {
-      throw new Error("Domain bulunamadı.");
+      throw notFound("domain.notFound");
     }
 
     // 2
-    const domains = await universityRepository.findDomainsByUniversity(universityId);
+    const domains = await domainRepository.listByUniversity(universityId);
     if (domains.length <= 1) {
-      throw new Error("Üniversitenin en az bir domaini olmalıdır, son domain silinemez.");
+      throw badRequest("domain.lastCannotDelete");
     }
 
-    await universityRepository.deleteDomain(domainId);
+    await domainRepository.deleteById(domainId);
+    await universityCache.invalidateUniversityDomains(universityId);
     return { id: domainId };
   },
 
@@ -170,55 +197,63 @@ export const universityService = {
   // FAKÜLTELER
   // ═══════════════════════════════════════════════
   async listFaculties(universityId: string) {
-    const university = await universityRepository.findUniversityById(universityId);
+    const university = await universityRepository.findById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw notFound("university.notFound");
     }
-    return await universityRepository.findFacultiesByUniversity(universityId);
+    // Varlık/tenant guard'ı cache DIŞINDA; yalnızca liste read-through cache'lenir.
+    return await universityCache.faculties(universityId, () =>
+      facultyRepository.listByUniversity(universityId)
+    );
   },
 
   async getFaculty(universityId: string, facultyId: string) {
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
     return faculty;
   },
 
   async createFaculty(universityId: string, data: CreateFacultyDTO) {
-    const university = await universityRepository.findUniversityById(universityId);
+    const university = await universityRepository.findById(universityId);
     if (!university) {
-      throw new Error("Üniversite bulunamadı.");
+      throw notFound("university.notFound");
     }
-    return await universityRepository.createFaculty(universityId, data.name);
+    const result = await facultyRepository.create({ universityId, name: data.name });
+    await universityCache.invalidateFaculties(universityId);
+    return result;
   },
 
   async updateFaculty(universityId: string, facultyId: string, data: UpdateFacultyDTO) {
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
-    return await universityRepository.updateFaculty(facultyId, data.name);
+    const result = await facultyRepository.updateById(facultyId, { name: data.name });
+    await universityCache.invalidateFaculties(universityId);
+    return result;
   },
 
   /**
-   * Fakülteyi siler.
+   * Fakülteyi siler (YUMUŞAK).
    * 1. Fakülte bu üniversiteye ait olmalı.
-   * 2. Bölümü olan fakülte silinemez (önce bölümler silinmeli) — FK ihlalini önler.
+   * 2. Canlı bölümü olan fakülte silinemez (önce bölümler silinmeli).
    */
   async deleteFaculty(universityId: string, facultyId: string) {
     // 1
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
 
     // 2
-    if (await universityRepository.hasDepartments(facultyId)) {
-      throw new Error("Bu fakültenin bölümleri var, önce bölümleri silin.");
+    if (await departmentRepository.existsByFaculty(facultyId)) {
+      throw badRequest("faculty.hasDepartments");
     }
 
-    await universityRepository.deleteFaculty(facultyId);
+    await facultyRepository.deleteById(facultyId);
+    await universityCache.invalidateFacultyDeep(universityId, facultyId);
     return { id: facultyId };
   },
 
@@ -226,67 +261,80 @@ export const universityService = {
   // BÖLÜMLER
   // ═══════════════════════════════════════════════
   async listDepartments(universityId: string, facultyId: string) {
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
-    return await universityRepository.findDepartmentsByFaculty(facultyId);
+    // Faculty guard'ı cache DIŞINDA; yalnızca bölüm listesi read-through cache'lenir.
+    return await universityCache.departments(facultyId, () =>
+      departmentRepository.listByFaculty(facultyId)
+    );
   },
 
   async getDepartment(universityId: string, facultyId: string, departmentId: string) {
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
-    const department = await universityRepository.findDepartmentInFaculty(facultyId, departmentId);
+    const department = await departmentRepository.findInFaculty(facultyId, departmentId);
     if (!department) {
-      throw new Error("Bölüm bulunamadı.");
+      throw notFound("department.notFound");
     }
     return department;
   },
 
   async createDepartment(universityId: string, facultyId: string, data: CreateDepartmentDTO) {
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
-    return await universityRepository.createDepartment(facultyId, data.name);
+    const result = await departmentRepository.create({ facultyId, name: data.name });
+    await universityCache.invalidateDepartments(facultyId);
+    return result;
   },
 
-  async updateDepartment(universityId: string, facultyId: string, departmentId: string, data: UpdateDepartmentDTO) {
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+  async updateDepartment(
+    universityId: string,
+    facultyId: string,
+    departmentId: string,
+    data: UpdateDepartmentDTO
+  ) {
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
-    const department = await universityRepository.findDepartmentInFaculty(facultyId, departmentId);
+    const department = await departmentRepository.findInFaculty(facultyId, departmentId);
     if (!department) {
-      throw new Error("Bölüm bulunamadı.");
+      throw notFound("department.notFound");
     }
-    return await universityRepository.updateDepartment(departmentId, data.name);
+    const result = await departmentRepository.updateById(departmentId, { name: data.name });
+    await universityCache.invalidateDepartments(facultyId);
+    return result;
   },
 
   /**
-   * Bölümü siler.
+   * Bölümü siler (YUMUŞAK).
    * 1. Bölüm, bu üniversitenin bu fakültesine ait olmalı.
    * 2. Bu bölüme atanmış kullanıcı varsa silme reddedilir (users.departmentId FK).
    */
   async deleteDepartment(universityId: string, facultyId: string, departmentId: string) {
     // 1
-    const faculty = await universityRepository.findFacultyInUniversity(universityId, facultyId);
+    const faculty = await facultyRepository.findInUniversity(universityId, facultyId);
     if (!faculty) {
-      throw new Error("Fakülte bulunamadı.");
+      throw notFound("faculty.notFound");
     }
-    const department = await universityRepository.findDepartmentInFaculty(facultyId, departmentId);
+    const department = await departmentRepository.findInFaculty(facultyId, departmentId);
     if (!department) {
-      throw new Error("Bölüm bulunamadı.");
+      throw notFound("department.notFound");
     }
 
     // 2
-    if (await universityRepository.hasUsersInDepartment(departmentId)) {
-      throw new Error("Bu bölüme bağlı kullanıcılar var, silinemez.");
+    if (await departmentRepository.hasUsers(departmentId)) {
+      throw badRequest("department.hasUsers");
     }
 
-    await universityRepository.deleteDepartment(departmentId);
+    await departmentRepository.deleteById(departmentId);
+    await universityCache.invalidateDepartments(facultyId);
     return { id: departmentId };
   },
 };

@@ -1,29 +1,16 @@
-import { sign, verify } from "hono/jwt";
+import { createJwt } from "../../core/auth/jwt";
+import type { JwtPayload } from "../auth/claims";
 import { env } from "../../config/env";
 
-export interface JwtPayload {
-  userId: string;
-  /** NULL = platform hesabı (hiçbir üniversiteye bağlı değil). Bkz. schema.users. */
-  universityId: string | null;
-  exp: number;
-}
+export type { JwtPayload };
 
-// Endüstri standardı olan HMAC SHA-256 algoritmasını sabitliyoruz
-const ALGORITHM = "HS256";
+/** Bu projenin JWT örneği: secret env'den, ömür 7 gün. Mekanizma core'da. */
+const jwt = createJwt<Omit<JwtPayload, "exp">>({
+  secret: env.JWT_SECRET,
+  expiresInSeconds: 60 * 60 * 24 * 7,
+});
 
-export const generateToken = async (payload: Omit<JwtPayload, "exp">): Promise<string> => {
-  const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
-  
-  // 3. parametre olarak algoritmayı (HS256) ekledik
-  return await sign({ ...payload, exp }, env.JWT_SECRET, ALGORITHM);
-};
+export const generateToken = (payload: Omit<JwtPayload, "exp">): Promise<string> =>
+  jwt.sign(payload);
 
-export const verifyToken = async (token: string): Promise<JwtPayload | null> => {
-  try {
-    // Hono'nun güvenlik kuralı gereği algoritmayı açıkça belirtiyoruz
-    const payload = await verify(token, env.JWT_SECRET, ALGORITHM);
-    return payload as unknown as JwtPayload;
-  } catch (error) {
-    return null; 
-  }
-};
+export const verifyToken = (token: string): Promise<JwtPayload | null> => jwt.verify(token);

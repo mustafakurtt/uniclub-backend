@@ -8,16 +8,26 @@ import {
   CreateContactLinkDTO,
   UpdateOwnClubDTO,
 } from "./clubs.schema";
+import { notFound, badRequest } from "../../shared/utils/errors";
+import { clubsCache } from "./clubs.cache";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
-    return await clubsRepository.findApprovedClubsByUniversity(universityId, search);
+    // Arama sonuçları cache'lenmez (çok anahtar); yalnızca aramasız public liste.
+    if (search) {
+      return await clubsRepository.findApprovedClubsByUniversity(universityId, search);
+    }
+    return await clubsCache.list(universityId, () =>
+      clubsRepository.findApprovedClubsByUniversity(universityId)
+    );
   },
 
   async getClubDetail(universityId: string, clubId: string) {
-    const club = await clubsRepository.findClubDetail(universityId, clubId);
-    if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+    // clubId global benzersiz → cache clubId ile anahtarlanır; loader tenant-filtresiz
+    // yükler, tenant doğrulaması cache DIŞINDA yapılır (yanlış tenant cache hit'te sızmasın).
+    const club = await clubsCache.detail(clubId, () => clubsRepository.findClubDetailById(clubId));
+    if (!club || club.universityId !== universityId) {
+      throw notFound("club.notFound");
     }
     return {
       ...club,
@@ -32,9 +42,12 @@ export const clubsService = {
   async listMembers(universityId: string, clubId: string) {
     const club = await clubsRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("club.notFound");
     }
-    const members = await clubsRepository.findApprovedMembers(clubId);
+    // Tenant guard (yukarıda) cache DIŞINDA; üye listesi clubId ile cache'lenir.
+    const members = await clubsCache.members(clubId, () =>
+      clubsRepository.findApprovedMembers(clubId)
+    );
     return members
       .filter((m) => m.user)
       .map((m) => ({ ...m, user: toSafeUser(m.user!) }));
@@ -46,7 +59,7 @@ export const clubsService = {
   async createApplication(universityId: string, applicantId: string, data: CreateApplicationDTO) {
     const existingPending = await clubsRepository.findPendingApplicationByApplicant(universityId, applicantId);
     if (existingPending) {
-      throw new Error("Zaten bekleyen bir kulüp başvurunuz var.");
+      throw badRequest("club.pendingApplicationExists");
     }
     return await clubsRepository.createApplication(universityId, applicantId, data);
   },
@@ -55,7 +68,7 @@ export const clubsService = {
   async getMyApplication(applicantId: string, applicationId: string) {
     const application = await clubsRepository.findApplicationByApplicant(applicantId, applicationId);
     if (!application) {
-      throw new Error("Başvuru bulunamadı.");
+      throw notFound("club.applicationNotFound");
     }
     return {
       ...application,
@@ -75,10 +88,10 @@ export const clubsService = {
   async withdrawApplication(applicantId: string, applicationId: string) {
     const application = await clubsRepository.findApplicationByApplicant(applicantId, applicationId);
     if (!application) {
-      throw new Error("Başvuru bulunamadı.");
+      throw notFound("club.applicationNotFound");
     }
     if (application.status !== "pending") {
-      throw new Error("Yalnızca bekleyen bir başvuru geri çekilebilir.");
+      throw badRequest("club.applicationNotWithdrawable");
     }
     await clubsRepository.deleteApplication(applicationId);
     return { id: applicationId };
@@ -93,37 +106,45 @@ export const clubsService = {
   async joinClub(universityId: string, clubId: string, userId: string) {
     const club = await clubsRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("club.notFound");
     }
     if (club.status !== "approved") {
-      throw new Error("Bu kulüp şu anda üyeliğe kapalı.");
+      throw badRequest("club.notOpenForMembership");
     }
 
     const existingMembership = await clubsRepository.findMembership(clubId, userId);
     if (existingMembership) {
-      throw new Error("Bu kulübe zaten üyesiniz veya üyelik isteğiniz beklemede.");
+      throw badRequest("club.alreadyMemberOrPending");
     }
 
     const status = club.joinPolicy === "open" ? "approved" : "pending";
-    return await clubsRepository.addMembership(clubId, userId, status);
+    const membership = await clubsRepository.addMembership(clubId, userId, status);
+    // Yalnızca "approved" (open policy) üye listesini/profili değiştirir; pending değil.
+    if (status === "approved") {
+      await clubsCache.invalidateMembership(clubId);
+    }
+    return membership;
   },
 
   async leaveClub(universityId: string, clubId: string, userId: string) {
     const club = await clubsRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("club.notFound");
     }
 
     const membership = await clubsRepository.findMembership(clubId, userId);
     if (!membership) {
-      throw new Error("Bu kulübün üyesi değilsiniz.");
+      throw badRequest("club.notAMember");
     }
 
     if (membership.role === "president") {
-      throw new Error("Başkan, başkanlığı devretmeden kulüpten ayrılamaz.");
+      throw badRequest("club.presidentCannotLeave");
     }
 
     await clubsRepository.removeMembership(clubId, userId);
+    // Ayrılan üye onaylıysa listeyi/profili etkiler; pending istekte membership
+    // zaten listede değildi ama invalidasyon ucuz + güvenli.
+    await clubsCache.invalidateMembership(clubId);
   },
 
   /**
@@ -133,15 +154,17 @@ export const clubsService = {
   async updateOwnClub(universityId: string, clubId: string, data: UpdateOwnClubDTO) {
     const club = await clubsRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("club.notFound");
     }
-    return await clubsRepository.updateOwnClub(clubId, data);
+    const updated = await clubsRepository.updateOwnClub(clubId, data);
+    await clubsCache.invalidateProfile(universityId, clubId); // isim/logo listede de görünür
+    return updated;
   },
 
   async listJoinRequests(universityId: string, clubId: string) {
     const club = await clubsRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("club.notFound");
     }
     const requests = await clubsRepository.findPendingJoinRequests(clubId);
     return requests
@@ -152,9 +175,13 @@ export const clubsService = {
   async decideJoinRequest(clubId: string, targetUserId: string, decision: "approved" | "rejected") {
     const membership = await clubsRepository.findMembership(clubId, targetUserId);
     if (!membership || membership.status !== "pending") {
-      throw new Error("Bekleyen bir üyelik isteği bulunamadı.");
+      throw notFound("club.pendingJoinRequestNotFound");
     }
     const updated = await clubsRepository.updateMembershipStatus(clubId, targetUserId, decision);
+    // Onaylanan istek üye listesine girer; reddedilen zaten listede değildi.
+    if (decision === "approved") {
+      await clubsCache.invalidateMembership(clubId);
+    }
 
     const club = await clubsRepository.findClubById(clubId);
     const approved = decision === "approved";
@@ -173,12 +200,13 @@ export const clubsService = {
   async removeMember(clubId: string, targetUserId: string) {
     const membership = await clubsRepository.findMembership(clubId, targetUserId);
     if (!membership) {
-      throw new Error("Üye bulunamadı.");
+      throw notFound("club.memberNotFound");
     }
     if (membership.role === "president") {
-      throw new Error("Başkan bu şekilde kulüpten çıkarılamaz.");
+      throw badRequest("club.presidentCannotBeRemoved");
     }
     await clubsRepository.removeMembership(clubId, targetUserId);
+    await clubsCache.invalidateMembership(clubId);
   },
 
   /**
@@ -188,12 +216,14 @@ export const clubsService = {
   async updateMemberRole(clubId: string, targetUserId: string, data: UpdateMemberRoleDTO) {
     const membership = await clubsRepository.findMembership(clubId, targetUserId);
     if (!membership || membership.status !== "approved") {
-      throw new Error("Üye bulunamadı.");
+      throw notFound("club.memberNotFound");
     }
     if (membership.role === "president") {
-      throw new Error("Başkanın rolü bu şekilde değiştirilemez.");
+      throw badRequest("club.presidentRoleCannotChange");
     }
-    return await clubsRepository.updateMembershipRole(clubId, targetUserId, data.role);
+    const updated = await clubsRepository.updateMembershipRole(clubId, targetUserId, data.role);
+    await clubsCache.invalidateMembership(clubId); // rol üye listesinde görünür
+    return updated;
   },
 
   /**
@@ -204,38 +234,45 @@ export const clubsService = {
    */
   async transferPresidency(clubId: string, currentPresidentId: string, newPresidentId: string) {
     if (currentPresidentId === newPresidentId) {
-      throw new Error("Başkanlığı kendinize devredemezsiniz.");
+      throw badRequest("club.cannotTransferToSelf");
     }
 
     const target = await clubsRepository.findMembership(clubId, newPresidentId);
     if (!target || target.status !== "approved") {
-      throw new Error("Yeni başkan, kulübün onaylı bir üyesi olmalıdır.");
+      throw badRequest("club.newPresidentMustBeApprovedMember");
     }
 
-    return await clubsRepository.transferPresidency(clubId, currentPresidentId, newPresidentId);
+    const result = await clubsRepository.transferPresidency(clubId, currentPresidentId, newPresidentId);
+    await clubsCache.invalidateMembership(clubId); // roller üye listesinde görünür
+    return result;
   },
 
   async addContactLink(clubId: string, data: CreateContactLinkDTO) {
     const existing = await clubsRepository.findContactLinkByPlatform(clubId, data.platform);
     if (existing) {
-      throw new Error("Bu platform için zaten bir bağlantı eklenmiş.");
+      throw badRequest("club.contactLinkPlatformExists");
     }
-    return await clubsRepository.createContactLink(clubId, data);
+    const result = await clubsRepository.createContactLink(clubId, data);
+    await clubsCache.invalidateDetail(clubId); // iletişim linkleri profile gömülü
+    return result;
   },
 
   async updateContactLink(clubId: string, linkId: string, url: string) {
     const existing = await clubsRepository.findContactLink(clubId, linkId);
     if (!existing) {
-      throw new Error("Bağlantı bulunamadı.");
+      throw notFound("club.contactLinkNotFound");
     }
-    return await clubsRepository.updateContactLink(clubId, linkId, url);
+    const result = await clubsRepository.updateContactLink(clubId, linkId, url);
+    await clubsCache.invalidateDetail(clubId);
+    return result;
   },
 
   async removeContactLink(clubId: string, linkId: string) {
     const existing = await clubsRepository.findContactLink(clubId, linkId);
     if (!existing) {
-      throw new Error("Bağlantı bulunamadı.");
+      throw notFound("club.contactLinkNotFound");
     }
     await clubsRepository.deleteContactLink(clubId, linkId);
+    await clubsCache.invalidateDetail(clubId);
   },
 };

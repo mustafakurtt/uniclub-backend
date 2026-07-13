@@ -1,8 +1,6 @@
-import Redis from "ioredis";
+import { createRedisClient } from "../../core/redis/redis";
 import { env } from "../../config/env";
 import { logger } from "../logger/logger";
-
-const log = logger.child({ module: "redis.subscriber" });
 
 /**
  * Pub/Sub aboneliği için AYRI bir Redis bağlantısı.
@@ -15,8 +13,7 @@ const log = logger.child({ module: "redis.subscriber" });
  * Yayınlama (publish) için paylaşılan `redis` client'ı kullanılabilir — publish
  * bağlantıyı subscriber moduna sokmaz.
  */
-export const redisSubscriber = new Redis(env.REDIS_URL);
-
-redisSubscriber.on("error", (err) => {
-  log.error({ err }, "redis (subscriber) bağlantı hatası");
+export const redisSubscriber = createRedisClient({
+  url: env.REDIS_URL,
+  logger: logger.child({ module: "redis.subscriber" }),
 });

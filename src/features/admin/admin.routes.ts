@@ -1,14 +1,14 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
 import { authMiddleware } from "../../core/auth/auth.middleware";
 import { guard } from "../../core/rbac/guard";
 import { attachAuthz, hasTenantScopeBypass, RbacVariables } from "../../core/rbac/rbac.middleware";
+import { validate } from "../../shared/utils/validate";
+import { ok, created, done } from "../../shared/utils/respond";
 import { AdminPermission } from "./admin.permissions";
 import { ClubPermission } from "../clubs/clubs.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
 import {
-  updateUserStatusSchema,
   updateClubStatusSchema,
   listUsersQuerySchema,
   listClubApplicationsQuerySchema,
@@ -18,11 +18,11 @@ import {
   updateUserDepartmentSchema,
 } from "./admin.schema";
 import { adminService } from "./admin.service";
-import { respondWithBusinessError } from "../../shared/utils/error.util";
 
 export const adminRoutes = new Hono<{ Variables: RbacVariables }>();
 
-const statusFromError = (message: string) => (message.includes("bulunamadı") ? 404 : 400);
+// Not: rotalar bilinçli olarak try/catch İÇERMEZ — servis katmanı HttpError
+// fırlatır, `app.onError` (core/http/error-handler) tek noktadan çevirir.
 
 // 0. KAPSAMIM: yönetim bağlamında erişebildiğim üniversiteler.
 // Bilinçli olarak permission guard'ı YOK — bu bir "kapsamım ne?" sorgusudur ve
@@ -35,19 +35,19 @@ adminRoutes.get("/universities", authMiddleware, attachAuthz, async (c) => {
     universityId: user.universityId,
     isPlatformScoped: hasTenantScopeBypass(authz),
   });
-  return c.json({ success: true, message: "Erişilebilir üniversiteler listelendi.", data: universities });
+  return ok(c, universities, "admin.accessibleUniversitiesListed");
 });
 
 // 1. ÜNİVERSİTEDEKİ KULLANICILARI LİSTELEME (salt-okunur → user.view)
 adminRoutes.get(
   "/universities/:universityId/users",
   ...guard(AdminPermission.USER_VIEW, { tenantScoped: true }),
-  zValidator("query", listUsersQuerySchema),
+  validate("query", listUsersQuerySchema),
   async (c) => {
     const { universityId } = c.req.param();
     const { status, role } = c.req.valid("query");
     const users = await adminService.listUsers(universityId, status, role);
-    return c.json({ success: true, message: "Kullanıcılar listelendi.", data: users });
+    return ok(c, users, "admin.usersListed");
   }
 );
 
@@ -57,12 +57,8 @@ adminRoutes.get(
   ...guard(AdminPermission.USER_VIEW, { tenantScoped: true }),
   async (c) => {
     const { universityId, userId } = c.req.param();
-    try {
-      const user = await adminService.getUser(universityId, userId);
-      return c.json({ success: true, message: "Kullanıcı bulundu.", data: user });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const user = await adminService.getUser(universityId, userId);
+    return ok(c, user, "admin.userFound");
   }
 );
 
@@ -72,47 +68,25 @@ adminRoutes.get(
   ...guard(AdminPermission.USER_VIEW, { tenantScoped: true }),
   async (c) => {
     const { universityId, userId } = c.req.param();
-    try {
-      const data = await adminService.getUserEffectivePermissions(universityId, userId);
-      return c.json({ success: true, message: "Etkin yetkiler listelendi.", data });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const data = await adminService.getUserEffectivePermissions(universityId, userId);
+    return ok(c, data, "admin.userEffectivePermissionsListed");
   }
 );
 
-// 3. KULLANICI DURUMUNU GÜNCELLEME
-adminRoutes.patch(
-  "/universities/:universityId/users/:userId/status",
-  ...guard(AdminPermission.USER_MANAGE, { tenantScoped: true }),
-  zValidator("json", updateUserStatusSchema),
-  async (c) => {
-    const { universityId, userId } = c.req.param();
-    const body = c.req.valid("json");
-    const actor = c.get("user");
-    try {
-      const updated = await adminService.updateUserStatus(universityId, userId, body, actor.userId);
-      return c.json({ success: true, message: "Kullanıcı durumu güncellendi.", data: updated });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
-  }
-);
+// Not: Kullanıcı durumu (ban/unban) yönetimi ARTIK moderation feature'ına aittir
+// (POST /api/moderation/.../users/:userId/ban|unban) — sebep + geçmiş + şifre
+// sıfırlamayla birlikte. Eski PATCH .../status endpoint'i kaldırıldı.
 
 // 3B. KULLANICININ BÖLÜMÜNÜ GÜNCELLEME
 adminRoutes.patch(
   "/universities/:universityId/users/:userId/department",
   ...guard(AdminPermission.USER_MANAGE, { tenantScoped: true }),
-  zValidator("json", updateUserDepartmentSchema),
+  validate("json", updateUserDepartmentSchema),
   async (c) => {
     const { universityId, userId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const updated = await adminService.updateUserDepartment(universityId, userId, body);
-      return c.json({ success: true, message: "Kullanıcının bölümü güncellendi.", data: updated });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const updated = await adminService.updateUserDepartment(universityId, userId, body);
+    return ok(c, updated, "admin.userDepartmentUpdated");
   }
 );
 
@@ -120,12 +94,12 @@ adminRoutes.patch(
 adminRoutes.get(
   "/universities/:universityId/club-applications",
   ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
-  zValidator("query", listClubApplicationsQuerySchema),
+  validate("query", listClubApplicationsQuerySchema),
   async (c) => {
     const { universityId } = c.req.param();
     const { status } = c.req.valid("query");
     const applications = await adminService.listClubApplications(universityId, status);
-    return c.json({ success: true, message: "Başvurular listelendi.", data: applications });
+    return ok(c, applications, "admin.applicationsListed");
   }
 );
 
@@ -136,12 +110,8 @@ adminRoutes.patch(
   async (c) => {
     const { universityId, applicationId } = c.req.param();
     const actor = c.get("user");
-    try {
-      const result = await adminService.approveClubApplication(universityId, applicationId, actor.userId);
-      return c.json({ success: true, message: "Başvuru onaylandı ve kulüp oluşturuldu.", data: result });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const result = await adminService.approveClubApplication(universityId, applicationId, actor.userId);
+    return ok(c, result, "admin.applicationApproved");
   }
 );
 
@@ -152,12 +122,8 @@ adminRoutes.patch(
   async (c) => {
     const { universityId, applicationId } = c.req.param();
     const actor = c.get("user");
-    try {
-      const result = await adminService.rejectClubApplication(universityId, applicationId, actor.userId);
-      return c.json({ success: true, message: "Başvuru reddedildi.", data: result });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const result = await adminService.rejectClubApplication(universityId, applicationId, actor.userId);
+    return ok(c, result, "admin.applicationRejected");
   }
 );
 
@@ -165,12 +131,12 @@ adminRoutes.patch(
 adminRoutes.get(
   "/universities/:universityId/clubs",
   ...guard(ClubPermission.VIEW, { tenantScoped: true }),
-  zValidator("query", listClubsQuerySchema),
+  validate("query", listClubsQuerySchema),
   async (c) => {
     const { universityId } = c.req.param();
     const { status } = c.req.valid("query");
     const clubs = await adminService.listClubs(universityId, status);
-    return c.json({ success: true, message: "Kulüpler listelendi.", data: clubs });
+    return ok(c, clubs, "admin.clubsListed");
   }
 );
 
@@ -178,16 +144,12 @@ adminRoutes.get(
 adminRoutes.patch(
   "/universities/:universityId/clubs/:clubId/status",
   ...guard(ClubPermission.UPDATE, { tenantScoped: true }),
-  zValidator("json", updateClubStatusSchema),
+  validate("json", updateClubStatusSchema),
   async (c) => {
     const { universityId, clubId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const updated = await adminService.updateClubStatus(universityId, clubId, body);
-      return c.json({ success: true, message: "Kulüp durumu güncellendi.", data: updated });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const updated = await adminService.updateClubStatus(universityId, clubId, body);
+    return ok(c, updated, "admin.clubStatusUpdated");
   }
 );
 
@@ -195,16 +157,12 @@ adminRoutes.patch(
 adminRoutes.patch(
   "/universities/:universityId/clubs/:clubId",
   ...guard(ClubPermission.UPDATE, { tenantScoped: true }),
-  zValidator("json", updateClubSchema),
+  validate("json", updateClubSchema),
   async (c) => {
     const { universityId, clubId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const updated = await adminService.updateClub(universityId, clubId, body);
-      return c.json({ success: true, message: "Kulüp bilgileri güncellendi.", data: updated });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const updated = await adminService.updateClub(universityId, clubId, body);
+    return ok(c, updated, "admin.clubUpdated");
   }
 );
 
@@ -214,12 +172,8 @@ adminRoutes.get(
   ...guard(ClubPermission.VIEW, { tenantScoped: true }),
   async (c) => {
     const { universityId, clubId } = c.req.param();
-    try {
-      const advisors = await adminService.listAdvisors(universityId, clubId);
-      return c.json({ success: true, message: "Danışmanlar listelendi.", data: advisors });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const advisors = await adminService.listAdvisors(universityId, clubId);
+    return ok(c, advisors, "admin.advisorsListed");
   }
 );
 
@@ -227,16 +181,12 @@ adminRoutes.get(
 adminRoutes.post(
   "/universities/:universityId/clubs/:clubId/advisors",
   ...guard(ClubPermission.ADVISOR_MANAGE, { tenantScoped: true }),
-  zValidator("json", addAdvisorSchema),
+  validate("json", addAdvisorSchema),
   async (c) => {
     const { universityId, clubId } = c.req.param();
     const { userId } = c.req.valid("json");
-    try {
-      const advisor = await adminService.addAdvisor(universityId, clubId, userId);
-      return c.json({ success: true, message: "Danışman atandı.", data: advisor }, 201);
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const advisor = await adminService.addAdvisor(universityId, clubId, userId);
+    return created(c, advisor, "admin.advisorAssigned");
   }
 );
 
@@ -246,12 +196,8 @@ adminRoutes.delete(
   ...guard(ClubPermission.ADVISOR_MANAGE, { tenantScoped: true }),
   async (c) => {
     const { universityId, clubId, userId } = c.req.param();
-    try {
-      await adminService.removeAdvisor(universityId, clubId, userId);
-      return c.json({ success: true, message: "Danışman kaldırıldı." });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    await adminService.removeAdvisor(universityId, clubId, userId);
+    return done(c, "admin.advisorRemoved");
   }
 );
 
@@ -264,12 +210,8 @@ adminRoutes.delete(
   ...guard(ClubPermission.DELETE, { tenantScoped: true }),
   async (c) => {
     const { universityId, clubId } = c.req.param();
-    try {
-      await adminService.deleteClub(universityId, clubId);
-      return c.json({ success: true, message: "Kulüp silindi." });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    await adminService.deleteClub(universityId, clubId);
+    return done(c, "admin.clubDeleted");
   }
 );
 
@@ -285,12 +227,8 @@ adminRoutes.get(
   ...guard(ClubPermission.VIEW, { tenantScoped: true }),
   async (c) => {
     const { universityId, clubId } = c.req.param();
-    try {
-      const members = await adminService.listClubMembers(universityId, clubId);
-      return c.json({ success: true, message: "Üyeler listelendi.", data: members });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const members = await adminService.listClubMembers(universityId, clubId);
+    return ok(c, members, "admin.membersListed");
   }
 );
 
@@ -300,12 +238,8 @@ adminRoutes.delete(
   ...guard(ClubPermission.MEMBER_MANAGE, { tenantScoped: true }),
   async (c) => {
     const { universityId, clubId, userId } = c.req.param();
-    try {
-      await adminService.removeClubMember(universityId, clubId, userId);
-      return c.json({ success: true, message: "Üye kulüpten çıkarıldı." });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    await adminService.removeClubMember(universityId, clubId, userId);
+    return done(c, "admin.memberRemoved");
   }
 );
 
@@ -315,12 +249,8 @@ adminRoutes.delete(
   ...guard(AnnouncementPermission.MODERATE, { tenantScoped: true }),
   async (c) => {
     const { universityId, clubId, announcementId } = c.req.param();
-    try {
-      await adminService.moderateRemoveAnnouncement(universityId, clubId, announcementId);
-      return c.json({ success: true, message: "Duyuru kaldırıldı." });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    await adminService.moderateRemoveAnnouncement(universityId, clubId, announcementId);
+    return done(c, "admin.announcementRemoved");
   }
 );
 
@@ -330,11 +260,7 @@ adminRoutes.delete(
   ...guard(GalleryPermission.MODERATE, { tenantScoped: true }),
   async (c) => {
     const { universityId, clubId, imageId } = c.req.param();
-    try {
-      await adminService.moderateRemoveGalleryImage(universityId, clubId, imageId);
-      return c.json({ success: true, message: "Görsel kaldırıldı." });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    await adminService.moderateRemoveGalleryImage(universityId, clubId, imageId);
+    return done(c, "admin.galleryImageRemoved");
   }
 );

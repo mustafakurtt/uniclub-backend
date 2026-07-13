@@ -1,36 +1,43 @@
-import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
-import * as schema from "../../db/schema";
+import { clubGallery } from "../../db/schema";
+import { BaseRepository } from "../../core/db";
 import { CreateGalleryImagePayload } from "./gallery.types";
 
-export const galleryRepository = {
-  async findByClub(clubId: string) {
-    return await db.query.clubGallery.findMany({
+/**
+ * Kulüp galerisi veri erişimi. Kulübe bağlı bir alt kaynak (hard-delete).
+ * BaseRepository'den mekanik CRUD + composite-where helper'larını miras alır;
+ * yükleyen ilişkili liste `this.query`, kulüp-kapsamlı tek kayıt `findOne` ile.
+ */
+class GalleryRepository extends BaseRepository<typeof clubGallery, typeof db.query.clubGallery> {
+  constructor() {
+    super(db, clubGallery, { query: db.query.clubGallery });
+  }
+
+  findByClub(clubId: string) {
+    return this.query!.findMany({
       where: { clubId },
       orderBy: { createdAt: "desc" },
       with: { uploader: true },
     });
-  },
+  }
 
-  async findById(clubId: string, imageId: string) {
-    return await db.query.clubGallery.findFirst({
-      where: { id: imageId, clubId },
-    });
-  },
+  /** Görseli kulüp kapsamında getirir (sahiplik/varlık kontrolü). */
+  findInClub(clubId: string, imageId: string) {
+    return this.findOne({ id: imageId, clubId });
+  }
 
-  async create(clubId: string, uploadedBy: string, data: CreateGalleryImagePayload) {
-    const [inserted] = await db.insert(schema.clubGallery).values({
+  add(clubId: string, uploadedBy: string, data: CreateGalleryImagePayload) {
+    return this.create({
       clubId,
       uploadedBy,
       imageUrl: data.imageUrl,
       caption: data.caption,
-    }).returning();
-    return inserted;
-  },
+    });
+  }
 
-  async deleteById(clubId: string, imageId: string) {
-    await db.delete(schema.clubGallery).where(
-      and(eq(schema.clubGallery.id, imageId), eq(schema.clubGallery.clubId, clubId))
-    );
-  },
-};
+  removeFromClub(clubId: string, imageId: string) {
+    return this.deleteWhere({ id: imageId, clubId });
+  }
+}
+
+export const galleryRepository = new GalleryRepository();

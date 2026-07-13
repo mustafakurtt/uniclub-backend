@@ -1,37 +1,44 @@
-import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
-import * as schema from "../../db/schema";
+import { announcements } from "../../db/schema";
+import { BaseRepository } from "../../core/db";
 import { CreateAnnouncementPayload } from "./announcements.types";
 
-export const announcementsRepository = {
-  async findByClub(clubId: string) {
-    return await db.query.announcements.findMany({
+/**
+ * Duyuru veri erişimi. Kulübe bağlı bir alt kaynak (hard-delete). BaseRepository'den
+ * mekanik CRUD + composite-where helper'larını miras alır; kulüp-kapsamlı sorgular
+ * `findOne`/`deleteWhere`, yazar ilişkili liste ise `this.query` ile.
+ */
+class AnnouncementsRepository extends BaseRepository<typeof announcements, typeof db.query.announcements> {
+  constructor() {
+    super(db, announcements, { query: db.query.announcements });
+  }
+
+  findByClub(clubId: string) {
+    return this.query!.findMany({
       where: { clubId },
       orderBy: { createdAt: "desc" },
       with: { author: true },
     });
-  },
+  }
 
-  async findById(clubId: string, announcementId: string) {
-    return await db.query.announcements.findFirst({
-      where: { id: announcementId, clubId },
-    });
-  },
+  /** Duyuruyu kulüp kapsamında getirir (sahiplik/varlık kontrolü). */
+  findInClub(clubId: string, announcementId: string) {
+    return this.findOne({ id: announcementId, clubId });
+  }
 
-  async create(universityId: string, clubId: string, authorId: string, data: CreateAnnouncementPayload) {
-    const [inserted] = await db.insert(schema.announcements).values({
+  add(universityId: string, clubId: string, authorId: string, data: CreateAnnouncementPayload) {
+    return this.create({
       universityId,
       clubId,
       authorId,
       title: data.title,
       content: data.content,
-    }).returning();
-    return inserted;
-  },
+    });
+  }
 
-  async deleteById(clubId: string, announcementId: string) {
-    await db.delete(schema.announcements).where(
-      and(eq(schema.announcements.id, announcementId), eq(schema.announcements.clubId, clubId))
-    );
-  },
-};
+  removeFromClub(clubId: string, announcementId: string) {
+    return this.deleteWhere({ id: announcementId, clubId });
+  }
+}
+
+export const announcementsRepository = new AnnouncementsRepository();

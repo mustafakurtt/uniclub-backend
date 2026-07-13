@@ -1,18 +1,5 @@
 import { z } from "zod";
-
-/**
- * Ortam değişkenleri her zaman STRING'dir. `z.coerce.boolean()` burada
- * KULLANILAMAZ: Boolean("false") === true olduğu için "false" yazan herkes
- * sessizce true alır. Bu yardımcı yalnızca bilinen doğruluk değerlerini kabul eder.
- */
-const envBoolean = (defaultValue: boolean) =>
-  z
-    .string()
-    .optional()
-    .transform((raw) => {
-      if (raw === undefined || raw.trim() === "") return defaultValue;
-      return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
-    });
+import { createEnv, envBoolean } from "../core/config/env";
 
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
@@ -48,8 +35,19 @@ const envSchema = z.object({
   // ── LOGLAMA ───────────────────────────────────────────────────────────
   /** Verilmezse shared/logger.ts, NODE_ENV'e göre karar verir (prod: info, aksi: debug). */
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
+
+  // ── CACHE ─────────────────────────────────────────────────────────────
+  /**
+   * Cache depolama sürücüsü (bkz. shared/cache/cache.client.ts):
+   *  - redis  : paylaşımlı/çok-instance varsayılan (mevcut Redis bağlantısını kullanır).
+   *  - memory : süreç-içi (test/tek-instance; instance'lar arası paylaşılmaz).
+   *  - null   : cache kapalı (no-op) — hata ayıklama/geçici devre dışı.
+   */
+  CACHE_DRIVER: z.enum(["redis", "memory", "null"]).default("redis"),
+  /** TTL verilmeyen yazımların varsayılan ömrü (saniye). */
+  CACHE_DEFAULT_TTL: z.coerce.number().default(300),
 });
 
-// process.env'yi şemadan geçiriyoruz. 
-// Eğer .env içinde hata varsa uygulama burada patlar ve sana nerenin eksik olduğunu söyler.
-export const env = envSchema.parse(process.env);
+// process.env'yi şemadan geçiriyoruz. Eğer .env içinde hata varsa uygulama burada
+// patlar ve HANGİ alanların neden geçersiz olduğunu tek tek listeler (bkz. core/config/env).
+export const env = createEnv(envSchema, { intro: "Ortam değişkenleri geçersiz:" });

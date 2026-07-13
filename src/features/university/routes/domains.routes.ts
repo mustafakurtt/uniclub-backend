@@ -1,45 +1,39 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
+import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
 import { addDomainSchema, updateDomainSchema } from "../university.schema";
 import { universityService } from "../university.service";
-import { statusFromError } from "./shared";
-import { respondWithBusinessError } from "../../../shared/utils/error.util";
 
 /**
  * Üniversitenin e-posta domainleri (`:universityId/domains`). Kayıt akışı
  * tenant'ı bu domainlerden çözdüğü için, listeleme PUBLIC; yazma işlemleri
  * granüler university.domain.* izinleriyle ve tenantScoped korunur.
+ *
+ * try/catch yok — servisin fırlattığı HttpError'ları `app.onError` çevirir
+ * (bkz. universities.routes.ts başındaki not).
  */
 export const domainsRoutes = new Hono<{ Variables: RbacVariables }>();
 
 // 1. DOMAINLERİ LİSTELEME (public)
 domainsRoutes.get("/:universityId/domains", async (c) => {
   const { universityId } = c.req.param();
-  try {
-    const domains = await universityService.listDomains(universityId);
-    return c.json({ success: true, message: "Domainler listelendi.", data: domains });
-  } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
-  }
+  const domains = await universityService.listDomains(universityId);
+  return ok(c, domains, "domain.listed");
 });
 
 // 2. DOMAIN EKLEME
 domainsRoutes.post(
   "/:universityId/domains",
   ...guard(UniversityPermission.DOMAIN_CREATE, { tenantScoped: true }),
-  zValidator("json", addDomainSchema),
+  validate("json", addDomainSchema),
   async (c) => {
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const domain = await universityService.addDomain(universityId, body);
-      return c.json({ success: true, message: "Domain eklendi.", data: domain }, 201);
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const domain = await universityService.addDomain(universityId, body);
+    return created(c, domain, "domain.created");
   }
 );
 
@@ -47,16 +41,12 @@ domainsRoutes.post(
 domainsRoutes.patch(
   "/:universityId/domains/:domainId",
   ...guard(UniversityPermission.DOMAIN_UPDATE, { tenantScoped: true }),
-  zValidator("json", updateDomainSchema),
+  validate("json", updateDomainSchema),
   async (c) => {
     const { universityId, domainId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const domain = await universityService.updateDomain(universityId, domainId, body);
-      return c.json({ success: true, message: "Domain güncellendi.", data: domain });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const domain = await universityService.updateDomain(universityId, domainId, body);
+    return ok(c, domain, "domain.updated");
   }
 );
 
@@ -66,11 +56,7 @@ domainsRoutes.delete(
   ...guard(UniversityPermission.DOMAIN_DELETE, { tenantScoped: true }),
   async (c) => {
     const { universityId, domainId } = c.req.param();
-    try {
-      await universityService.deleteDomain(universityId, domainId);
-      return c.json({ success: true, message: "Domain silindi." });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    await universityService.deleteDomain(universityId, domainId);
+    return done(c, "domain.deleted");
   }
 );

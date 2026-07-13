@@ -1,3 +1,5 @@
+import { badRequest } from "./errors";
+
 /**
  * Bir üniversiteye bağlı (tenant'lı) akışların girişinde kullanılır.
  *
@@ -7,12 +9,12 @@
  * duyuru oluşturma) işi yoktur: tenant'ları olmadığı için hangi okulun
  * kulüplerini görecekleri tanımsızdır.
  *
- * Hata, feature'ların yerleşik kalıbına uygun olarak düz bir `Error`'dur;
- * route'lardaki try/catch (ya da app.onError) bunu 400'e çevirir.
+ * Çapraz-kesen (feature'a özel olmayan) bir yardımcı olduğu için mesaj anahtarı
+ * `common.messages.ts`'te yaşar (aynı validation/rbac anahtarları gibi).
  */
 export function requireTenant(universityId: string | null): string {
   if (!universityId) {
-    throw new Error("Bu işlem bir üniversiteye bağlı hesap gerektirir.");
+    throw badRequest("tenant.required");
   }
   return universityId;
 }

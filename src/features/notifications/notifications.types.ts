@@ -16,6 +16,10 @@ export const NotificationType = {
   ACCOUNT_VERIFIED: "account.verified",
   /** Hesap askıya alındı. */
   ACCOUNT_SUSPENDED: "account.suspended",
+  /** Hesabın askısı kaldırıldı. */
+  ACCOUNT_UNSUSPENDED: "account.unsuspended",
+  /** Yönetici şifreyi sıfırladı → kullanıcı geçici şifreyle girip değiştirmeli. */
+  ACCOUNT_PASSWORD_RESET: "account.passwordReset",
   /** Kulüp kurma başvurusu karara bağlandı (onay/red). data: { applicationId, status, clubId? } */
   CLUB_APPLICATION_DECIDED: "club.application.decided",
   /** Kulübe katılma isteği karara bağlandı. data: { clubId, status } */

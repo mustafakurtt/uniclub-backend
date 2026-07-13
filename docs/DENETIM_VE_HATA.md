@@ -63,45 +63,84 @@ bun run db:migrate            # audit_logs tablosu
 bun run db:sync-permissions   # audit.view yetkisi + rol atamaları (veri sıfırlamadan)
 ```
 
-## 2. Hata Yönetimi
+## 2. Hata Yönetimi (frontend sözleşmesi)
 
-### Sözleşme
+Tüm hatalar **tek bir merkezi yakalayıcıdan** (`app.onError`) geçer ve **tek tip
+zarfla** döner. Frontend hiçbir zaman ham SQL/stack görmez.
 
-Servisler kullanıcıya gösterilecek iş kuralı hatalarını **düz** `new Error("Türkçe mesaj")`
-olarak fırlatır. Altyapı hataları ise her zaman Error'ın alt sınıflarıdır
-(pg → `DatabaseError`, drizzle → `DrizzleQueryError`, runtime → `TypeError`).
-Ayrım bu farka dayanır: `err.constructor === Error` → iş kuralı hatası.
+### Hata zarfı
 
-| Hata türü | İstemciye dönen | Sunucuda |
-|---|---|---|
-| İş kuralı (`new Error("...")`) | 400/404 + Türkçe mesaj | log yok (normal akış) |
-| `HTTPException` | kendi status'u + mesajı | log yok |
-| Altyapı / beklenmeyen | **500 + jenerik mesaj + `requestId`** | `console.error` + stack + requestId |
-
-Eskiden `duplicate key value violates unique constraint "..."` ya da
-`Failed query: select ...` gibi mesajlar istemciye sızıyordu — artık sızmaz.
-
-### requestId
-
-Her istek `hono/request-id` ile bir korelasyon kimliği alır. Hata yanıtlarında
-`requestId` alanı döner; kullanıcı "hata aldım" dediğinde bu kimlikle sunucu
-logundaki stack'e ulaşılır.
-
-### Rota catch blokları
-
-Rotalardaki `catch` blokları `error.message`'ı KÖRLEMESİNE dönmez; ortak
-yardımcıyı kullanır:
-
-```ts
-import { respondWithBusinessError } from "../../shared/utils/error.util";
-
-try {
-  ...
-} catch (error) {
-  return respondWithBusinessError(c, error, statusFromError);
-  // iş kuralı hatası → 400/404 + mesaj
-  // altyapı hatası  → yeniden fırlatılır → app.onError → 500 + jenerik mesaj
+```jsonc
+{
+  "success": false,
+  "message": "Kullanıcı bulunamadı.",   // isteğin diline çevrilmiş, kullanıcıya gösterilebilir
+  "code": "VALIDATION_ERROR",           // OPSİYONEL, makine-okur (varsa string eşleştirme YERİNE bunu kullanın)
+  "details": [ /* OPSİYONEL, alan-bazlı doğrulama hataları */ ],
+  "requestId": "174a9256-..."           // her yanıtta; destek/log korelasyonu için
 }
 ```
 
-Yeni rota yazarken de bu deseni kullanın.
+Başarı zarfı ise simetriktir: `{ "success": true, "message": "...", "data": ... }`.
+
+### Hata türleri ve status kodları
+
+| Durum | HTTP | Zarf |
+|---|---|---|
+| İş kuralı (bulunamadı) | **404** | `message` |
+| İş kuralı (geçersiz işlem) | **400** | `message` |
+| Doğrulama (girdi) | **400** | `message` + `code: "VALIDATION_ERROR"` + `details[]` |
+| Kimlik yok/geçersiz token | **401** | `message` |
+| Yetki yok / tenant dışı / askılı hesap | **403** | `message` |
+| Altyapı / beklenmeyen | **500** | jenerik `message` (SQL/stack **sızmaz**) + `requestId` (sunucuda loglanır) |
+
+### Doğrulama hataları (`details`)
+
+Girdi doğrulaması başarısızsa artık ham `ZodError` DÖNMEZ; birleşik zarf döner:
+
+```jsonc
+{
+  "success": false,
+  "message": "Girdi doğrulaması başarısız.",
+  "code": "VALIDATION_ERROR",
+  "details": [
+    { "path": "email", "code": "invalid_format", "message": "..." },
+    { "path": "domains.0.domain", "code": "too_small", "message": "..." }
+  ],
+  "requestId": "..."
+}
+```
+
+Frontend `details[].path` ile ilgili form alanının altına hata yazabilir;
+`code` diller arası sabittir (`too_small`, `invalid_type`, `too_big`,
+`invalid_format`, `invalid_value`, `unrecognized_keys`).
+
+### Machine-readable `code` (string eşleştirmeyin!)
+
+Bazı hatalar makine-okur bir `code` taşır — mesaj metnine göre değil, buna göre
+dallanın (mesajlar dile göre değişir):
+
+| `code` | Anlamı |
+|---|---|
+| `VALIDATION_ERROR` | Girdi doğrulaması (bkz. `details`) |
+| `EMAIL_NOT_VERIFIED` | E-posta doğrulanmadan yazma denendi |
+| `RATE_LIMITED` | Hız sınırı aşıldı (`Retry-After` başlığına bakın) |
+
+### Çok dillilik (i18n) — `Accept-Language`
+
+Hem hata hem başarı mesajları isteğin diline göre döner. İstemci
+`Accept-Language` başlığı gönderir; desteklenen diller **`tr` (varsayılan)** ve
+**`en`**. Desteklenmeyen dil varsayılana (`tr`) düşer.
+
+```
+GET /api/universities/<yok>                       → "Üniversite bulunamadı."
+GET /api/universities/<yok>   Accept-Language: en → "University not found."
+```
+
+> `message` kullanıcıya gösterilebilir ama **dile bağlıdır**; kalıcı mantık için
+> `code`/`details`/HTTP status kullanın.
+
+### requestId
+
+Her istek bir korelasyon kimliği alır ve **her** hata yanıtında `requestId`
+döner. Kullanıcı "hata aldım" dediğinde bu kimlikle sunucu logundaki stack'e
+ulaşılır. Destek akışında bu kimliği kullanıcıdan isteyin.

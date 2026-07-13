@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
+import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
 import {
   listUniversitiesQuerySchema,
@@ -9,8 +10,6 @@ import {
   updateUniversitySchema,
 } from "../university.schema";
 import { universityService } from "../university.service";
-import { statusFromError } from "./shared";
-import { respondWithBusinessError } from "../../../shared/utils/error.util";
 
 /**
  * Üniversite (tenant) kaynağının kendisine ait rotalar.
@@ -19,6 +18,11 @@ import { respondWithBusinessError } from "../../../shared/utils/error.util";
  * rotaları granüler university.* izinleriyle korunur. Oluşturma dışındaki
  * yazma rotaları `:universityId` taşıdığı için tenantScoped'tır — super_admin
  * bu kontrolü bypass eder, diğer roller yalnızca kendi üniversitelerini hedefler.
+ *
+ * Not: rotalar bilinçli olarak try/catch İÇERMEZ. Servis katmanı `HttpError`
+ * (veya düz iş hatası) fırlatır; bunları `app.onError` (core/http/error-handler)
+ * tek noktadan status + gövdeye çevirir. Başarılı cevaplar da core zarf
+ * yardımcıları (`ok`/`created`/`done`) ile üretilir. Rotada yalnızca iş akışı görünür.
  */
 export const universitiesRoutes = new Hono<{ Variables: RbacVariables }>();
 
@@ -27,54 +31,42 @@ export const universitiesRoutes = new Hono<{ Variables: RbacVariables }>();
 universitiesRoutes.post(
   "/",
   ...guard(UniversityPermission.CREATE),
-  zValidator("json", createUniversitySchema),
+  validate("json", createUniversitySchema),
   async (c) => {
     const body = c.req.valid("json");
-    try {
-      const result = await universityService.createUniversity(body);
-      return c.json({ success: true, message: "Üniversite oluşturuldu.", data: result }, 201);
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const result = await universityService.createUniversity(body);
+    return created(c, result, "university.created");
   }
 );
 
 // 2. ÜNİVERSİTELERİ LİSTELEME (public)
 universitiesRoutes.get(
   "/",
-  zValidator("query", listUniversitiesQuerySchema),
+  validate("query", listUniversitiesQuerySchema),
   async (c) => {
     const { search } = c.req.valid("query");
     const universities = await universityService.listUniversities(search);
-    return c.json({ success: true, message: "Üniversiteler listelendi.", data: universities });
+    return ok(c, universities, "university.listed");
   }
 );
 
 // 3. TEK BİR ÜNİVERSİTEYİ GETİRME (domainleriyle birlikte, public)
 universitiesRoutes.get("/:universityId", async (c) => {
   const { universityId } = c.req.param();
-  try {
-    const university = await universityService.getUniversity(universityId);
-    return c.json({ success: true, message: "Üniversite bulundu.", data: university });
-  } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
-  }
+  const university = await universityService.getUniversity(universityId);
+  return ok(c, university, "university.found");
 });
 
 // 4. ÜNİVERSİTE BİLGİLERİNİ GÜNCELLEME
 universitiesRoutes.patch(
   "/:universityId",
   ...guard(UniversityPermission.UPDATE, { tenantScoped: true }),
-  zValidator("json", updateUniversitySchema),
+  validate("json", updateUniversitySchema),
   async (c) => {
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const university = await universityService.updateUniversity(universityId, body);
-      return c.json({ success: true, message: "Üniversite güncellendi.", data: university });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const university = await universityService.updateUniversity(universityId, body);
+    return ok(c, university, "university.updated");
   }
 );
 
@@ -84,11 +76,7 @@ universitiesRoutes.delete(
   ...guard(UniversityPermission.DELETE, { tenantScoped: true }),
   async (c) => {
     const { universityId } = c.req.param();
-    try {
-      await universityService.deleteUniversity(universityId);
-      return c.json({ success: true, message: "Üniversite silindi." });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    await universityService.deleteUniversity(universityId);
+    return done(c, "university.deleted");
   }
 );

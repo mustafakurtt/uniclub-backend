@@ -1,10 +1,14 @@
 import { adminRepository } from "./admin.repository";
-import { UpdateUserStatusDTO, UpdateClubStatusDTO, UpdateClubDTO, UpdateUserDepartmentDTO } from "./admin.schema";
+import { UpdateClubStatusDTO, UpdateClubDTO, UpdateUserDepartmentDTO } from "./admin.schema";
 import { DecideClubApplicationResult, User } from "./admin.types";
 import { toSafeUser } from "../../shared/utils/user.util";
-import { getEffectivePermissions, invalidateUserPermissions } from "../../shared/rbac/rbac.cache";
+import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
+import { notFound, badRequest } from "../../shared/utils/errors";
+import { clubsCache } from "../clubs/clubs.cache";
+import { announcementsCache } from "../announcements/announcements.cache";
+import { galleryCache } from "../gallery/gallery.cache";
 
 /**
  * Başvuru sahibine kararı bildirir. `notifySafe` kullanılır: bildirim
@@ -61,7 +65,7 @@ export const adminService = {
   async getUser(universityId: string, userId: string) {
     const user = await adminRepository.findUserInUniversityDetailed(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
     const { roles, clubMemberships, userPermissions, ...rest } = user;
     const effective = await getEffectivePermissions(userId);
@@ -78,36 +82,9 @@ export const adminService = {
   async getUserEffectivePermissions(universityId: string, userId: string) {
     const user = await adminRepository.findUserInUniversity(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
     return await getEffectivePermissions(userId);
-  },
-
-  async updateUserStatus(universityId: string, userId: string, data: UpdateUserStatusDTO, actorUserId?: string) {
-    const user = await adminRepository.findUserInUniversity(universityId, userId);
-    if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
-    }
-    // Yönetici kendi hesabını askıya alıp kendini kilitleyemez (bkz. docs/yonetim/05 #6).
-    if (actorUserId && actorUserId === userId && data.status === "suspended") {
-      throw new Error("Kendi hesabınızı askıya alamazsınız.");
-    }
-    const updated = await adminRepository.updateUserStatus(universityId, userId, data.status);
-    // Durum authz cache'ine gömülü olduğu için değişikliğin ANINDA etkili olması
-    // (askıya alma/geri alma) için cache temizlenir (bkz. docs/yonetim/05 #7).
-    await invalidateUserPermissions(userId);
-
-    if (data.status === "suspended") {
-      // Not: askıya alınan kullanıcının WS bağlantısı bu bildirimi alır, ancak
-      // sonraki HTTP isteklerinde attachAuthz/requireActiveUser onu 403'le keser.
-      await notificationsService.notifySafe(userId, {
-        type: NotificationType.ACCOUNT_SUSPENDED,
-        title: "Hesabınız askıya alındı",
-        body: "Ayrıntılı bilgi için SKS birimiyle iletişime geçin.",
-      });
-    }
-
-    return toSafeUser(updated as User);
   },
 
   /**
@@ -117,13 +94,13 @@ export const adminService = {
   async updateUserDepartment(universityId: string, userId: string, data: UpdateUserDepartmentDTO) {
     const user = await adminRepository.findUserInUniversity(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
 
     if (data.departmentId !== null) {
       const department = await adminRepository.findDepartmentWithUniversity(data.departmentId);
       if (!department || !department.faculty || department.faculty.universityId !== universityId) {
-        throw new Error("Bölüm bu üniversiteye ait değil.");
+        throw badRequest("admin.departmentNotInUniversity");
       }
     }
 
@@ -146,6 +123,8 @@ export const adminService = {
   async approveClubApplication(universityId: string, applicationId: string, actorUserId: string) {
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved");
     await notifyApplicationDecision(result, "approved");
+    // Yeni onaylı kulüp public listeye girer.
+    await clubsCache.invalidateList(universityId);
     return result;
   },
 
@@ -162,18 +141,22 @@ export const adminService = {
   async updateClubStatus(universityId: string, clubId: string, data: UpdateClubStatusDTO) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const updated = await adminRepository.updateClubStatus(universityId, clubId, data.status);
+    // Durum onaylı<->diğer geçişi public listeye giriş/çıkışı belirler.
+    await clubsCache.invalidateClubFull(universityId, clubId);
     return updated;
   },
 
   async updateClub(universityId: string, clubId: string, data: UpdateClubDTO) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
-    return await adminRepository.updateClub(universityId, clubId, data);
+    const updated = await adminRepository.updateClub(universityId, clubId, data);
+    await clubsCache.invalidateProfile(universityId, clubId); // isim/logo listede + profilde
+    return updated;
   },
 
   /**
@@ -186,19 +169,23 @@ export const adminService = {
   async deleteClub(universityId: string, clubId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     if (club.status !== "archived" && club.status !== "rejected") {
-      throw new Error("Yalnızca arşivlenmiş veya reddedilmiş kulüpler silinebilir. Önce kulübü arşivleyin.");
+      throw badRequest("admin.clubNotArchivedOrRejected");
     }
     await adminRepository.deleteClub(universityId, clubId);
+    await clubsCache.invalidateClubFull(universityId, clubId);
+    // Silinen kulübün duyuru/galeri listeleri de düşsün (repo bunları da temizler).
+    await announcementsCache.invalidate(clubId);
+    await galleryCache.invalidate(clubId);
     return { id: clubId };
   },
 
   async listAdvisors(universityId: string, clubId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const advisors = await adminRepository.findAdvisorsByClub(clubId);
     return advisors
@@ -213,35 +200,38 @@ export const adminService = {
   async addAdvisor(universityId: string, clubId: string, userId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const user = await adminRepository.findUserInUniversity(universityId, userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("admin.userNotFound");
     }
     // Danışman, öğrenci değil personel olmalı: sistemdeki "advisor" rolüne sahip
     // olması şartı (staff maili ile kaydolanlara bu rol otomatik atanır).
     const isAdvisorEligible = await adminRepository.userHasRole(userId, "advisor");
     if (!isAdvisorEligible) {
-      throw new Error("Danışman olarak yalnızca 'advisor' rolündeki personel atanabilir.");
+      throw badRequest("admin.advisorNotEligible");
     }
     const existing = await adminRepository.findAdvisor(clubId, userId);
     if (existing) {
-      throw new Error("Bu kullanıcı zaten kulübün danışmanı.");
+      throw badRequest("admin.advisorAlreadyAssigned");
     }
-    return await adminRepository.addAdvisor(clubId, userId);
+    const result = await adminRepository.addAdvisor(clubId, userId);
+    await clubsCache.invalidateDetail(clubId); // danışmanlar profile gömülü
+    return result;
   },
 
   async removeAdvisor(universityId: string, clubId: string, userId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const existing = await adminRepository.findAdvisor(clubId, userId);
     if (!existing) {
-      throw new Error("Bu kullanıcı kulübün danışmanı değil.");
+      throw badRequest("admin.advisorNotAssigned");
     }
     await adminRepository.removeAdvisor(clubId, userId);
+    await clubsCache.invalidateDetail(clubId);
   },
 
   // ═══════════════════════════════════════════════
@@ -252,7 +242,7 @@ export const adminService = {
   async listClubMembers(universityId: string, clubId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const members = await adminRepository.findMembersByClub(clubId);
     return members
@@ -263,36 +253,39 @@ export const adminService = {
   async removeClubMember(universityId: string, clubId: string, userId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const membership = await adminRepository.findClubMember(clubId, userId);
     if (!membership) {
-      throw new Error("Bu kullanıcı kulübün üyesi değil.");
+      throw badRequest("admin.memberNotFound");
     }
     await adminRepository.removeClubMember(clubId, userId);
+    await clubsCache.invalidateMembership(clubId); // üye listesi + profil (üye gömülü)
   },
 
   async moderateRemoveAnnouncement(universityId: string, clubId: string, announcementId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const announcement = await adminRepository.findAnnouncementInClub(clubId, announcementId);
     if (!announcement) {
-      throw new Error("Duyuru bulunamadı.");
+      throw notFound("admin.announcementNotFound");
     }
     await adminRepository.deleteAnnouncement(announcementId);
+    await announcementsCache.invalidate(clubId);
   },
 
   async moderateRemoveGalleryImage(universityId: string, clubId: string, imageId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
-      throw new Error("Kulüp bulunamadı.");
+      throw notFound("admin.clubNotFound");
     }
     const image = await adminRepository.findGalleryImageInClub(clubId, imageId);
     if (!image) {
-      throw new Error("Görsel bulunamadı.");
+      throw notFound("admin.galleryImageNotFound");
     }
     await adminRepository.deleteGalleryImage(imageId);
+    await galleryCache.invalidate(clubId);
   },
 };

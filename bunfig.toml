@@ -1,0 +1,6 @@
+# Test yapılandırması. `preload`, her test dosyasından ÖNCE çalışır ve
+# uygulamayı import etmeden ÖNCE ortam değişkenlerini izole test veritabanına/
+# Redis DB'sine çevirir (bkz. tests/setup.ts). Bu sıralama kritik: src/config/env.ts
+# process.env'i import anında okur.
+[test]
+preload = ["./tests/setup.ts"]

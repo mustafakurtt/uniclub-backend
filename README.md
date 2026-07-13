@@ -135,11 +135,32 @@ Verification emails land in the Mailpit inbox at **http://localhost:8025**.
 | --- | --- |
 | `bun run dev` | Dev server with hot reload |
 | `bun run typecheck` | `tsc --noEmit` (run in CI) |
+| `bun run test:all` | Provision the isolated test DB, then run the test suite |
+| `bun run test` | `bun test` — integration tests (run in CI) |
 | `bun run db:generate` | Generate a SQL migration from `schema.ts` |
 | `bun run db:migrate` | Apply pending migrations |
 | `bun run db:push` | Push schema without a migration file |
 | `bun run db:seed` | Seed universities, roles and sample data |
 | `bun run db:sync-permissions` | Backfill permission keys into an existing DB |
+
+## Testing
+
+Integration tests run the **full middleware chain** — JWT auth, the RBAC
+`guard()` composer, tenant-scope enforcement and multi-tenant isolation — through
+Hono's `app.request()` against a **real Postgres + Redis**, exactly the way CI
+does. They run against a dedicated `uniclub_test` database (and Redis DB index 1)
+that is dropped, migrated and re-seeded on every run, so they are deterministic
+and never touch dev data.
+
+```sh
+bun run test:all   # provision the isolated test DB, then run the suite
+```
+
+Covered today: health/readiness, registration (email-domain → tenant inference,
+unknown-domain and duplicate rejection), login (JWT issue, wrong-password and
+suspended-account rejection), and the RBAC matrix — `401` without a token, `403`
+without the permission, `403` when a tenant admin reaches into another
+university, and `200` for `super_admin` across tenants (scope bypass).
 
 ## Environment
 

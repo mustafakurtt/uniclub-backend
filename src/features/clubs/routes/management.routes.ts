@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
 import { authMiddleware } from "../../../core/auth/auth.middleware";
 import { requireClubOfficer, requireClubPresident, ClubVariables } from "../../../middlewares/club.middleware";
 import {
@@ -9,13 +8,16 @@ import {
 } from "../clubs.schema";
 import { clubsService } from "../clubs.service";
 import { requireTenant } from "../../../shared/utils/tenant.util";
-import { statusFromError } from "./shared";
-import { respondWithBusinessError } from "../../../shared/utils/error.util";
+import { validate } from "../../../shared/utils/validate";
+import { ok, created, done } from "../../../shared/utils/respond";
 
 /**
  * Kulübün kendi yönetimi: başkanın kulüp profilini düzenlemesi ve iletişim/sosyal
  * medya linkleri (officer/president). Kulübün DURUMUNU (approved/archived) buradan
  * değiştiremezsin — o okul yöneticisinin işidir (admin: club.update).
+ *
+ * Bilinçli olarak try/catch İÇERMEZ — servis katmanı HttpError fırlatır,
+ * `app.onError` (core/http/error-handler) tek noktadan çevirir.
  */
 export const managementRoutes = new Hono<{ Variables: ClubVariables }>();
 
@@ -24,17 +26,13 @@ managementRoutes.patch(
   "/:clubId",
   authMiddleware,
   requireClubPresident,
-  zValidator("json", updateOwnClubSchema),
+  validate("json", updateOwnClubSchema),
   async (c) => {
     const user = c.get("user");
     const { clubId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const updated = await clubsService.updateOwnClub(requireTenant(user.universityId), clubId, body);
-      return c.json({ success: true, message: "Kulüp bilgileri güncellendi.", data: updated });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const updated = await clubsService.updateOwnClub(requireTenant(user.universityId), clubId, body);
+    return ok(c, updated, "club.infoUpdated");
   }
 );
 
@@ -43,16 +41,12 @@ managementRoutes.post(
   "/:clubId/contact-links",
   authMiddleware,
   requireClubOfficer,
-  zValidator("json", createContactLinkSchema),
+  validate("json", createContactLinkSchema),
   async (c) => {
     const { clubId } = c.req.param();
     const body = c.req.valid("json");
-    try {
-      const link = await clubsService.addContactLink(clubId, body);
-      return c.json({ success: true, message: "İletişim linki eklendi.", data: link }, 201);
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const link = await clubsService.addContactLink(clubId, body);
+    return created(c, link, "club.contactLinkAdded");
   }
 );
 
@@ -61,26 +55,18 @@ managementRoutes.patch(
   "/:clubId/contact-links/:linkId",
   authMiddleware,
   requireClubOfficer,
-  zValidator("json", updateContactLinkSchema),
+  validate("json", updateContactLinkSchema),
   async (c) => {
     const { clubId, linkId } = c.req.param();
     const { url } = c.req.valid("json");
-    try {
-      const link = await clubsService.updateContactLink(clubId, linkId, url);
-      return c.json({ success: true, message: "İletişim linki güncellendi.", data: link });
-    } catch (error) {
-      return respondWithBusinessError(c, error, statusFromError);
-    }
+    const link = await clubsService.updateContactLink(clubId, linkId, url);
+    return ok(c, link, "club.contactLinkUpdated");
   }
 );
 
 // 4. İLETİŞİM LİNKİ SİLME (officer/president)
 managementRoutes.delete("/:clubId/contact-links/:linkId", authMiddleware, requireClubOfficer, async (c) => {
   const { clubId, linkId } = c.req.param();
-  try {
-    await clubsService.removeContactLink(clubId, linkId);
-    return c.json({ success: true, message: "İletişim linki kaldırıldı." });
-  } catch (error) {
-    return respondWithBusinessError(c, error, statusFromError);
-  }
+  await clubsService.removeContactLink(clubId, linkId);
+  return done(c, "club.contactLinkRemoved");
 });

@@ -3,12 +3,13 @@ import { verifyPassword, hashPassword } from "../../shared/utils/password.util";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
 import { UpdateProfileDTO, ChangePasswordDTO } from "./users.schema";
+import { notFound, badRequest } from "../../shared/utils/errors";
 
 export const usersService = {
   async getProfile(userId: string) {
     const user = await usersRepository.findProfileById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("user.notFound");
     }
     return toSafeUser(user);
   },
@@ -16,7 +17,7 @@ export const usersService = {
   async updateProfile(userId: string, data: UpdateProfileDTO) {
     const updated = await usersRepository.updateProfile(userId, data);
     if (!updated) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("user.notFound");
     }
     return toSafeUser(updated);
   },
@@ -27,12 +28,12 @@ export const usersService = {
   async changePassword(userId: string, data: ChangePasswordDTO) {
     const user = await usersRepository.findUserById(userId);
     if (!user) {
-      throw new Error("Kullanıcı bulunamadı.");
+      throw notFound("user.notFound");
     }
 
     const isCurrentPasswordValid = await verifyPassword(data.currentPassword, user.passwordHash);
     if (!isCurrentPasswordValid) {
-      throw new Error("Mevcut şifre yanlış.");
+      throw badRequest("user.currentPasswordWrong");
     }
 
     const newPasswordHash = await hashPassword(data.newPassword);

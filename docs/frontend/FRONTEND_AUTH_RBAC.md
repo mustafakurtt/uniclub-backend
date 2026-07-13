@@ -8,7 +8,7 @@
 
 Clubs, Admin, Announcements ve Gallery feature'ları bu dokümanın sonraki sürümlerinde eklenecektir.
 
-> Bu doküman kod tabanından birebir doğrulanmıştır (Temmuz 2026). Backend'in tüm hata mesajları ve `message` alanları **Türkçedir** — UI'da doğrudan gösterilebilir.
+> Bu doküman kod tabanından birebir doğrulanmıştır (Temmuz 2026). `message` alanları **isteğin diline** göre döner (`Accept-Language: tr|en`, varsayılan `tr`) ve UI'da doğrudan gösterilebilir; kalıcı mantık için mesaj metni yerine `code`/HTTP status kullanın (bkz. `docs/DENETIM_VE_HATA.md`).
 
 > ⚠️ **GÜNCELLEME (Temmuz 2026 — v2 model):** Bu doküman **auth temeli + self-service** (kayıt, giriş, doğrulama, profil, public üniversite listeleri) için hâlâ geçerlidir. Ancak **rol/yetki modeli ve tüm yönetim endpoint'leri güncellendi:**
 > - Roller artık **9** (4 değil): `admin` → **`university_admin`** olarak yeniden adlandırıldı; ayrıca `platform_support`, `student_affairs`, `academic_affairs`, `content_moderator`, `auditor` eklendi.
@@ -54,10 +54,16 @@ GET /health → { "status": "ok", "environment": "development", "timestamp": "..
 Her endpoint aynı JSON zarfını döner:
 
 ```jsonc
+// Başarı
+{ "success": true, "message": "...", "data": { ... } }
+
+// Hata (tek tip zarf — ham SQL/stack asla sızmaz)
 {
-  "success": true,            // işlem sonucu
-  "message": "Türkçe mesaj",  // kullanıcıya gösterilebilir
-  "data": { ... }             // asıl veri (her endpoint'te olmayabilir)
+  "success": false,
+  "message": "...",           // isteğin diline çevrilir (Accept-Language)
+  "code": "VALIDATION_ERROR", // OPSİYONEL, makine-okur
+  "details": [ ... ],         // OPSİYONEL, alan-bazlı doğrulama hataları
+  "requestId": "..."          // her hata yanıtında
 }
 ```
 
@@ -69,12 +75,13 @@ Her endpoint aynı JSON zarfını döner:
 |---|---|---|
 | `200` | Başarılı | — |
 | `201` | Kayıt oluşturuldu (POST) | — |
-| `400` | Validasyon hatası veya iş kuralı ihlali | `message`'ı formda/toast'ta göster |
+| `400` | Doğrulama (`code: VALIDATION_ERROR` + `details[]`) veya iş kuralı ihlali | `details` varsa alan altına, yoksa `message`'ı toast'la |
 | `401` | Token yok / geçersiz / süresi dolmuş | Token'ı sil, `/login`'e yönlendir |
-| `403` | Kimlik doğru ama **yetki yok** (permission veya tenant scope) | `message`'ı göster; ilgili ekranı gizle |
-| `404` | Kaynak bulunamadı (backend, mesajda "bulunamadı" geçiyorsa 404 döner) | "Bulunamadı" ekranı |
+| `403` | Kimlik doğru ama **yetki yok** (permission / tenant scope / askılı hesap) | `message`'ı göster; ilgili ekranı gizle |
+| `404` | Kaynak bulunamadı | "Bulunamadı" ekranı |
+| `500` | Beklenmeyen | Jenerik hata + `requestId`'yi destek için göster |
 
-Zod validasyon hataları `zValidator` tarafından `400` ile döner; bu durumda gövde standart zarf yerine zod'un hata formatındadır (`error.issues[].message` alanları Türkçedir).
+**Doğrulama hataları artık birleşik zarfla döner** (ham `ZodError` DEĞİL): `code: "VALIDATION_ERROR"` + `details: [{ path, code, message }]`. Form alanı bazlı hata için `details[].path` kullanın; `details[].code` diller arası sabittir. **i18n:** `Accept-Language: tr|en` (varsayılan `tr`) — mesajlar buna göre çevrilir; kalıcı mantık için mesaj metnine değil `code`/HTTP status'a bakın.
 
 ### Kimlik Doğrulama Header'ı
 
@@ -299,7 +306,9 @@ authMiddleware → attachAuthz → requirePermission("<key>") [→ enforceTenant
 
 `user` objesi **rol içermez** — login sonrası hemen `GET /api/users/me` çağırıp rolleri alın (bkz. §5.1, §7.1).
 
-**Hatalar (401):** `"E-posta adresi veya şifre hatalı."` (e-posta/şifre ayrımı yapılmaz), `"Hesabınız askıya alınmıştır. Lütfen SKS birimiyle iletişime geçin."`
+> **`user.mustChangePassword`**: Bir yönetici şifreyi sıfırladıysa `true` döner. Bu durumda kullanıcıyı zorunlu **şifre değiştirme** ekranına yönlendirin; `PATCH /api/users/me/password` ile yeni şifre belirlenince bayrak otomatik `false` olur. (Şifre sıfırlama yönetici tarafı: `docs/frontend/FRONTEND_MODERASYON.md`.)
+
+**Hatalar (401):** `"E-posta adresi veya şifre hatalı."` (e-posta/şifre ayrımı yapılmaz), askıya alınmış hesap reddedilir. (Mesajlar i18n — metne göre eşleştirmeyin.)
 
 ### 4.3. `GET /api/auth/verify?token=<uuid>`
 
@@ -554,7 +563,7 @@ Frontend guard'ları yalnızca **UX** içindir (buton gizleme, erken yönlendirm
 
 ### 7.4. Hata Gösterimi
 
-`message` alanı her zaman Türkçe ve kullanıcıya gösterilebilir niteliktedir — ayrıca bir hata sözlüğü tutmanıza gerek yok. Yalnızca zod validasyon hatalarının (400) gövde formatı farklıdır; form alanı bazlı hata göstermek isterseniz zod issue formatını parse edin, istemiyorsanız genel bir "formu kontrol edin" mesajı yeterli.
+`message` alanı isteğin diline göre döner ve kullanıcıya gösterilebilir — ayrı bir hata sözlüğü tutmanıza gerek yok. Doğrulama (400) hataları artık **standart zarf** içinde `code: "VALIDATION_ERROR"` + `details: [{ path, code, message }]` taşır (ham `ZodError` değil); form alanı bazlı hata için `details[].path`'i kullanın, istemiyorsanız genel bir "formu kontrol edin" mesajı yeterli.
 
 ---
 

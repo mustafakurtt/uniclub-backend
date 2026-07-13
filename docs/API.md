@@ -8,7 +8,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 > - `docs/FRONTEND_CLUBS.md` — **Clubs katmanının tam derinlemesine referansı**: kulüp keşfi/üyeliği, kulüp-içi roller (member/officer/başkan), danışman (advisor) akışı, kulüp kurma başvuruları, granüler `club.*` yetki modeli ve admin kulüp yönetimi + uçtan uca senaryolar.
 > - `docs/FRONTEND_AUTH_GUARD_GUIDE.md` — React tarafında route/UI guard mimarisi önerisi.
 >
-> Not: Backend kodu ve hata mesajları Türkçe yazılmıştır; API'nin döndüğü `message` alanları da Türkçedir.
+> Not: `message` alanları **isteğin diline** göre döner (`Accept-Language: tr|en`, varsayılan `tr`). Kalıcı mantık için mesaj metnine değil `code`/`details`/HTTP status'a bakın — bkz. [Genel Kurallar → Hata & i18n](#hata-zarf%C4%B1-ve-i18n).
 
 ## İçindekiler
 
@@ -23,6 +23,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Announcements (kulüp alt-kaynağı)](#5-announcements--apiclubsclubidannouncements)
   - [Gallery (kulüp alt-kaynağı)](#6-gallery--apiclubsclubidgallery)
   - [Admin (okul yöneticisi)](#7-admin--apiadmin)
+  - [Moderation (kullanıcı yönetimi)](#8-moderation--apimoderation)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -30,24 +31,47 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth` ve `/api/universities` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/notifications`, `/api/audit`, `/api/moderation`. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
 
-**Response zarfı** — her endpoint aynı şekli döner:
+**Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
 ```json
-{
-  "success": true,
-  "message": "İnsan tarafından okunabilir Türkçe mesaj",
-  "data": { }
-}
+{ "success": true, "message": "...", "data": { } }
 ```
 
-- `success: false` durumunda `data` olmayabilir; HTTP status code genelde `400` (iş kuralı hatası), `401` (auth), `403` (yetki), `404` (bulunamadı — mesaj içeriğinde "bulunamadı" geçtiği için 404 döner) şeklindedir.
 - `POST` ile yeni kayıt oluşturan endpoint'ler `201 Created` döner.
 - `/api/auth/login` response'u zarfın dışında ayrıca `user` ve `token` alanlarını da köke koyar — bu tek istisnadır.
 - Şifre alanı (`passwordHash`) döndürülen hiçbir kullanıcı objesinde yer almaz (kulüp detayındaki üye/danışman objeleri dahil).
 
-**Health check:** `GET /health` → `{ status, environment, timestamp }` (auth gerektirmez).
+### Hata zarfı ve i18n
+
+Tüm hatalar tek tip zarfla döner (ham SQL/stack **asla** sızmaz):
+
+```jsonc
+{
+  "success": false,
+  "message": "Kullanıcı bulunamadı.",   // isteğin diline çevrilir (Accept-Language)
+  "code": "VALIDATION_ERROR",           // OPSİYONEL — makine-okur; string eşleştirme yerine BUNU kullanın
+  "details": [ /* OPSİYONEL — alan-bazlı doğrulama hataları */ ],
+  "requestId": "174a9256-..."           // her hata yanıtında; destek/log korelasyonu
+}
+```
+
+| Durum | HTTP | Ek |
+|---|---|---|
+| Bulunamadı | `404` | — |
+| Geçersiz iş kuralı | `400` | — |
+| Girdi doğrulama | `400` | `code: "VALIDATION_ERROR"` + `details[]` |
+| Token yok/geçersiz | `401` | — |
+| Yetki yok / tenant dışı / askılı hesap | `403` | — |
+| Beklenmeyen | `500` | jenerik mesaj + `requestId` |
+
+- **i18n:** `Accept-Language: tr|en` (varsayılan `tr`). Hem hata hem başarı mesajları çevrilir.
+- **Doğrulama** hatasında ham `ZodError` DÖNMEZ; `details[]` = `[{ path, code, message }]`.
+- **`code`** taşıyanlar: `VALIDATION_ERROR`, `EMAIL_NOT_VERIFIED`, `RATE_LIMITED`. Mantığı mesaj metnine değil bu koda/HTTP status'a bağlayın.
+- Ayrıntı: `docs/DENETIM_VE_HATA.md`.
+
+**Health check:** `GET /health` → `{ status, environment, checks, timestamp }` (auth gerektirmez).
 
 ---
 
@@ -66,12 +90,14 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 {
   "success": true,
   "message": "Giriş başarılı.",
-  "user": { "id": "...", "email": "...", "firstName": "...", "universityId": "...", "status": "active", "...": "passwordHash HARİÇ tüm user kolonları" },
+  "user": { "id": "...", "email": "...", "firstName": "...", "universityId": "...", "status": "active", "mustChangePassword": false, "...": "passwordHash HARİÇ tüm user kolonları" },
   "token": "eyJhbGciOi..."
 }
 ```
 
 Frontend, token'ı saklayıp sonraki tüm isteklerde `Authorization: Bearer <token>` olarak göndermeli. Login response'undaki `user` objesi **rol içermez** — roller için login sonrası `GET /api/users/me` çağrılmalıdır.
+
+> **`mustChangePassword`**: Bir yönetici kullanıcının şifresini sıfırladıysa (moderation) bu alan `true` döner. Frontend bu durumda kullanıcıyı **şifre değiştirme ekranına** yönlendirmelidir; kullanıcı `PATCH /api/users/me/password` ile yeni şifresini belirleyince bayrak otomatik `false` olur.
 
 ---
 
@@ -339,8 +365,9 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 |---|---|---|---|
 | GET | `/api/admin/universities/:universityId/users?status=` | `user.manage` | Kullanıcıları listele |
 | GET | `/api/admin/universities/:universityId/users/:userId` | `user.manage` | Tek kullanıcı |
-| PATCH | `/api/admin/universities/:universityId/users/:userId/status` | `user.manage` | Kullanıcı durumunu güncelle |
 | PATCH | `/api/admin/universities/:universityId/users/:userId/department` | `user.manage` | Kullanıcının bölümünü güncelle |
+
+> **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/frontend/FRONTEND_MODERASYON.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
 | GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `club.approve` | Başvuruyu onayla (**gerçek bir kulüp oluşturur, başvuran başkan olur**) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `club.approve` | Başvuruyu reddet |
@@ -353,13 +380,36 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | DELETE | `/api/admin/universities/:universityId/clubs/:clubId/advisors/:userId` | `club.advisor.manage` | Danışman kaldır |
 
 Body şemaları:
-- `PATCH .../users/:userId/status`: `{ "status": "pending" | "active" | "suspended" }`
 - `PATCH .../users/:userId/department`: `{ "departmentId": "uuid" | null }`
 - `PATCH .../clubs/:clubId/status`: `{ "status": "pending" | "approved" | "rejected" | "archived" }`
 - `PATCH .../clubs/:clubId`: en az bir alan → `{ name? (3-256), description? (max 2000), logoUrl?, coverUrl?, joinPolicy? }`
 - `DELETE .../clubs/:clubId`: body almaz — yalnızca `archived`/`rejected` kulüp silinir, bağlı içerik (üye/danışman/link/duyuru/galeri) cascade temizlenir.
 - `POST .../advisors`: `{ "userId": "uuid" }` — hedef aynı üniversiteden ve `advisor` rolünde olmalı.
 - Query filtreleri (`?status=`) hepsi opsiyonel; enum değerleri ilgili tablonunkilerle aynı.
+
+---
+
+### 8) Moderation — `/api/moderation`
+
+Kullanıcı yönetimi/moderasyon yüzeyi: ban/unban (sebepli), admin şifre sıfırlama,
+kullanıcının denetim aktivitesi ve moderasyon geçmişi. Tüm rotalar
+`guard(<permission>, { tenantScoped: true })` — `:universityId` çağıranın kendi
+üniversitesiyle eşleşmeli (super_admin/platform_support bypass). **Ayrıntılı örnekler:
+`docs/frontend/FRONTEND_MODERASYON.md`.**
+
+| Method | Path | Permission | Açıklama |
+|---|---|---|---|
+| POST | `/api/moderation/universities/:universityId/users/:userId/ban` | `user.manage` | Kullanıcıyı askıya al (**sebep zorunlu**) |
+| POST | `/api/moderation/universities/:universityId/users/:userId/unban` | `user.manage` | Askıyı kaldır |
+| POST | `/api/moderation/universities/:universityId/users/:userId/reset-password` | `user.manage` | Şifre sıfırla (**geçici şifre bir kez döner**) |
+| GET | `/api/moderation/universities/:universityId/users/:userId/activity` | `user.view` | Kullanıcının denetim (audit) aktivitesi (cursor) |
+| GET | `/api/moderation/universities/:universityId/users/:userId/moderation-history` | `user.view` | Ban/unban/şifre-sıfırlama geçmişi (cursor) |
+
+Body / dönüş:
+- `POST .../ban`: `{ "reason": "string (3-500)" }` → `data`: güncel kullanıcı (`status: "suspended"`).
+- `POST .../unban`: body yok → `data`: kullanıcı (`status: "active"`).
+- `POST .../reset-password`: body yok → `data`: `{ "temporaryPassword": "..." }` (**yalnızca bu yanıtta; güvenli kanaldan iletin**). Kullanıcı bir sonraki girişte `mustChangePassword: true` alır.
+- `GET .../activity` & `.../moderation-history`: `?limit=1-100&cursor=<ISO>` → `data`: `{ items, nextCursor }` (keyset sayfalama).
 
 ---
 
@@ -375,8 +425,8 @@ Body şemaları:
 | `application_status` / `application_approval_status` | `pending`, `approved`, `rejected` |
 | `contact_platform` | `whatsapp`, `instagram`, `discord`, `telegram`, `twitter`, `website`, `email`, `other` |
 | `domain_type` | `student`, `staff` |
-| Global roller (seed) | `student`, `advisor`, `admin`, `super_admin` |
-| Global permission'lar (seed) | `user.manage`, `club.approve`, `club.update`, `club.advisor.manage`, `club.delete`, `role.manage`, `permission.manage`, `university.create`, `university.update`, `university.delete`, `university.domain.create`, `university.domain.update`, `university.domain.delete`, `university.faculty.create`, `university.faculty.update`, `university.faculty.delete`, `university.department.create`, `university.department.update`, `university.department.delete` |
+| Global roller (seed — 9 rol) | `super_admin`, `platform_support`, `university_admin`, `student_affairs`, `academic_affairs`, `content_moderator`, `auditor`, `advisor`, `student` |
+| Global permission'lar (seed) | `user.view`, `user.manage`, `audit.view`, `club.approve`, `club.update`, `club.advisor.manage`, `club.delete`, `announcement.moderate`, `gallery.moderate`, `role.manage`, `permission.manage`, `university.create`, `university.update`, `university.delete`, `university.domain.create`, `university.domain.update`, `university.domain.delete`, `university.faculty.create`, `university.faculty.update`, `university.faculty.delete`, `university.department.create`, `university.department.update`, `university.department.delete` (**kapalı küme değil** — `permission.manage` ile runtime'da genişletilebilir) |
 
 ---
 

@@ -1,6 +1,7 @@
 import { pgTable as table, pgEnum } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
+import { softDeleteColumn } from "../core/db/base.entity";
 
 // ═══════════════════════════════════════════════
 // ORTAK KOLONLAR (spread ile her tabloya eklenir)
@@ -18,6 +19,7 @@ export const universities = table("universities", {
   name: t.varchar({ length: 256 }).notNull(),
   slug: t.varchar({ length: 256 }).notNull().unique(), // ileride SaaS subdomain için: xyz-universitesi.uygulaman.com
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 
 export const universityDomains = table("university_domains", {
@@ -26,6 +28,7 @@ export const universityDomains = table("university_domains", {
   domain: t.varchar({ length: 256 }).notNull().unique(), // "ogrenci.xyz.edu.tr", "xyz.edu.tr" gibi birden fazla olabilir
   domainType: t.varchar("domain_type", { length: 50 }).default("student").notNull(),
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 
 // ═══════════════════════════════════════════════
@@ -36,6 +39,7 @@ export const faculties = table("faculties", {
   universityId: t.uuid("university_id").references(() => universities.id).notNull(),
   name: t.varchar({ length: 256 }).notNull(), // "Mühendislik Fakültesi"
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 
 export const departments = table("departments", {
@@ -43,6 +47,7 @@ export const departments = table("departments", {
   facultyId: t.uuid("faculty_id").references(() => faculties.id).notNull(),
   name: t.varchar({ length: 256 }).notNull(), // "Bilgisayar Mühendisliği"
   ...baseTimestamps,
+  ...softDeleteColumn,
 });
 // Not: departments.universityId kasıtlı olarak eklenmedi.
 // Bilgiye faculty -> university zinciriyle ulaşılır, tekrar (redundancy) yaratmamak için.
@@ -72,6 +77,9 @@ export const users = table("users", {
   preferredLanguage: t.varchar("preferred_language", { length: 10 }).default("tr").notNull(), // ISO 639-1: "tr", "en"...
 
   status: userStatusEnum().default("pending").notNull(),
+  // Admin şifre sıfırlaması sonrası true; kullanıcı bir sonraki girişte şifresini
+  // değiştirmeye zorlanır (moderation feature'ı set eder, self change-password sıfırlar).
+  mustChangePassword: t.boolean("must_change_password").default(false).notNull(),
   ...baseTimestamps,
 }, (cols) => [
   t.uniqueIndex("email_per_university_idx").on(cols.universityId, cols.email),
@@ -82,6 +90,26 @@ export const users = table("users", {
   t.uniqueIndex("platform_user_email_idx")
     .on(cols.email)
     .where(sql`${cols.universityId} is null`),
+]);
+
+// ═══════════════════════════════════════════════
+// USER MODERATION ACTIONS (kullanıcı moderasyon geçmişi — append-only)
+// ═══════════════════════════════════════════════
+// Her ban/unban/şifre-sıfırlama işlemini kim, ne zaman, hangi sebeple yaptı
+// kaydeder. users.status anlık durumu tutar; bu tablo TARİHÇEyi tutar.
+// Append-only (audit_logs gibi): satır güncellenmez → updatedAt/softDelete YOK.
+// action: pgEnum DEĞİL, varchar + ModerationAction katalog (yeni tip migration istemesin).
+export const userModerationActions = table("user_moderation_actions", {
+  id: t.uuid().primaryKey().defaultRandom(),
+  userId: t.uuid("user_id").references(() => users.id).notNull(),
+  actorId: t.uuid("actor_id").references(() => users.id).notNull(), // işlemi yapan yönetici
+  action: t.varchar({ length: 50 }).notNull(),
+  reason: t.text(),
+  previousStatus: userStatusEnum("previous_status"),
+  newStatus: userStatusEnum("new_status"),
+  createdAt: t.timestamp("created_at").defaultNow().notNull(),
+}, (cols) => [
+  t.index("moderation_user_created_idx").on(cols.userId, cols.createdAt.desc()),
 ]);
 
 // ═══════════════════════════════════════════════

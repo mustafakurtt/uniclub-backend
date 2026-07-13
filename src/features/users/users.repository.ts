@@ -1,52 +1,60 @@
-import { eq } from "drizzle-orm";
 import { db } from "../../db";
-import * as schema from "../../db/schema";
+import { users } from "../../db/schema";
+import { BaseRepository } from "../../core/db";
 import { UpdateProfilePayload } from "./users.types";
 
-export const usersRepository = {
-  async findProfileById(userId: string) {
-    return await db.query.users.findFirst({
+/**
+ * Kullanıcı self-service veri erişimi. Birincil tablo `users` — profil/şifre yazımları
+ * BaseRepository'nin `updateById`'siyle. Kulüp üyelikleri/başvuruları/danışmanlıkları
+ * başka tabloları okuduğu için (cross-table) `db.query.*` ile özel kalır.
+ */
+class UsersRepository extends BaseRepository<typeof users, typeof db.query.users> {
+  constructor() {
+    super(db, users, { query: db.query.users });
+  }
+
+  findProfileById(userId: string) {
+    return this.query!.findFirst({
       where: { id: userId },
       with: { university: true, department: true, roles: true },
     });
-  },
+  }
 
-  async findUserById(userId: string) {
-    return await db.query.users.findFirst({ where: { id: userId } });
-  },
+  findUserById(userId: string) {
+    return this.findById(userId);
+  }
 
-  async updateProfile(userId: string, data: UpdateProfilePayload) {
-    const [updated] = await db
-      .update(schema.users)
-      .set(data)
-      .where(eq(schema.users.id, userId))
-      .returning();
-    return updated;
-  },
+  updateProfile(userId: string, data: UpdateProfilePayload) {
+    return this.updateById(userId, data);
+  }
 
   async updatePasswordHash(userId: string, passwordHash: string) {
-    await db.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
-  },
+    // Şifre değişince mustChangePassword sıfırlanır: admin sıfırlaması sonrası
+    // kullanıcı kendi şifresini belirleyince "değiştirmeye zorla" bayrağı kalkar.
+    await this.updateById(userId, { passwordHash, mustChangePassword: false });
+  }
 
-  async findClubMembershipsByUser(userId: string) {
-    return await db.query.clubMembers.findMany({
+  findClubMembershipsByUser(userId: string) {
+    return db.query.clubMembers.findMany({
       where: { userId },
       with: { club: true },
     });
-  },
+  }
 
-  async findClubApplicationsByUser(userId: string) {
-    return await db.query.clubApplications.findMany({
+  findClubApplicationsByUser(userId: string) {
+    return db.query.clubApplications.findMany({
       where: { applicantId: userId },
       orderBy: { createdAt: "desc" },
     });
-  },
+  }
 
   /** Danışmanı olduğum kulüpler (advisor rolündeki personel için). */
-  async findAdvisedClubsByUser(userId: string) {
-    return await db.query.clubAdvisors.findMany({
+  findAdvisedClubsByUser(userId: string) {
+    return db.query.clubAdvisors.findMany({
       where: { userId },
       with: { club: true },
     });
-  },
-};
+  }
+}
+
+export const usersRepository = new UsersRepository();
