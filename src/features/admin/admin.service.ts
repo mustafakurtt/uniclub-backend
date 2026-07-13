@@ -6,6 +6,9 @@ import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest } from "../../shared/utils/errors";
+import { clubsCache } from "../clubs/clubs.cache";
+import { announcementsCache } from "../announcements/announcements.cache";
+import { galleryCache } from "../gallery/gallery.cache";
 
 /**
  * Başvuru sahibine kararı bildirir. `notifySafe` kullanılır: bildirim
@@ -120,6 +123,8 @@ export const adminService = {
   async approveClubApplication(universityId: string, applicationId: string, actorUserId: string) {
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved");
     await notifyApplicationDecision(result, "approved");
+    // Yeni onaylı kulüp public listeye girer.
+    await clubsCache.invalidateList(universityId);
     return result;
   },
 
@@ -139,6 +144,8 @@ export const adminService = {
       throw notFound("admin.clubNotFound");
     }
     const updated = await adminRepository.updateClubStatus(universityId, clubId, data.status);
+    // Durum onaylı<->diğer geçişi public listeye giriş/çıkışı belirler.
+    await clubsCache.invalidateClubFull(universityId, clubId);
     return updated;
   },
 
@@ -147,7 +154,9 @@ export const adminService = {
     if (!club) {
       throw notFound("admin.clubNotFound");
     }
-    return await adminRepository.updateClub(universityId, clubId, data);
+    const updated = await adminRepository.updateClub(universityId, clubId, data);
+    await clubsCache.invalidateProfile(universityId, clubId); // isim/logo listede + profilde
+    return updated;
   },
 
   /**
@@ -166,6 +175,10 @@ export const adminService = {
       throw badRequest("admin.clubNotArchivedOrRejected");
     }
     await adminRepository.deleteClub(universityId, clubId);
+    await clubsCache.invalidateClubFull(universityId, clubId);
+    // Silinen kulübün duyuru/galeri listeleri de düşsün (repo bunları da temizler).
+    await announcementsCache.invalidate(clubId);
+    await galleryCache.invalidate(clubId);
     return { id: clubId };
   },
 
@@ -203,7 +216,9 @@ export const adminService = {
     if (existing) {
       throw badRequest("admin.advisorAlreadyAssigned");
     }
-    return await adminRepository.addAdvisor(clubId, userId);
+    const result = await adminRepository.addAdvisor(clubId, userId);
+    await clubsCache.invalidateDetail(clubId); // danışmanlar profile gömülü
+    return result;
   },
 
   async removeAdvisor(universityId: string, clubId: string, userId: string) {
@@ -216,6 +231,7 @@ export const adminService = {
       throw badRequest("admin.advisorNotAssigned");
     }
     await adminRepository.removeAdvisor(clubId, userId);
+    await clubsCache.invalidateDetail(clubId);
   },
 
   // ═══════════════════════════════════════════════
@@ -244,6 +260,7 @@ export const adminService = {
       throw badRequest("admin.memberNotFound");
     }
     await adminRepository.removeClubMember(clubId, userId);
+    await clubsCache.invalidateMembership(clubId); // üye listesi + profil (üye gömülü)
   },
 
   async moderateRemoveAnnouncement(universityId: string, clubId: string, announcementId: string) {
@@ -256,6 +273,7 @@ export const adminService = {
       throw notFound("admin.announcementNotFound");
     }
     await adminRepository.deleteAnnouncement(announcementId);
+    await announcementsCache.invalidate(clubId);
   },
 
   async moderateRemoveGalleryImage(universityId: string, clubId: string, imageId: string) {
@@ -268,5 +286,6 @@ export const adminService = {
       throw notFound("admin.galleryImageNotFound");
     }
     await adminRepository.deleteGalleryImage(imageId);
+    await galleryCache.invalidate(clubId);
   },
 };

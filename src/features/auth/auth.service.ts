@@ -14,6 +14,7 @@ import { GalleryPermission } from "../gallery/gallery.permissions";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
+import { authCache } from "./auth.cache";
 
 // Kayıt otomatik rolü + promote/demote hedefi. Not: "admin" rolü kurumsal modelde
 // "university_admin" olarak yeniden adlandırıldı (bkz. docs/yonetim/06).
@@ -463,11 +464,13 @@ export const authService = {
     if (existing) {
       throw badRequest("auth.permissionKeyExists");
     }
-    return await authRepository.createPermission(data);
+    const created = await authRepository.createPermission(data);
+    await authCache.invalidatePermissions();
+    return created;
   },
 
   async listPermissions() {
-    return await authRepository.findAllPermissions();
+    return await authCache.permissions(() => authRepository.findAllPermissions());
   },
 
   /**
@@ -479,7 +482,9 @@ export const authService = {
     if (!permission) {
       throw notFound("auth.permissionNotFound");
     }
-    return await authRepository.updatePermission(permissionId, data);
+    const updated = await authRepository.updatePermission(permissionId, data);
+    await authCache.invalidatePermissions();
+    return updated;
   },
 
   /**
@@ -497,6 +502,9 @@ export const authService = {
     }
     const affectedUserIds = await authRepository.deletePermission(permissionId);
     await invalidateUsersPermissions(affectedUserIds);
+    await authCache.invalidatePermissions();
+    // İzin bir daha roller katalogunda görünmeyecek → rol katalogu da tazelensin.
+    await authCache.invalidateRoles();
   },
 
   /** Bir yetkiyi taşıyan roller (ters listeleme — bkz. docs/yonetim/05 #8). */
@@ -524,7 +532,9 @@ export const authService = {
     const payload = actor.isSuperAdmin
       ? { ...data, rank }
       : { ...data, rank, universityId: actor.universityId };
-    return await authRepository.createRole(payload);
+    const created = await authRepository.createRole(payload);
+    await authCache.invalidateRoles();
+    return created;
   },
 
   /**
@@ -532,7 +542,8 @@ export const authService = {
    * rolleri + kendi tenant'ının rollerini görür (başka tenant'ın özel rolleri gizli).
    */
   async listRoles(actor: RoleAdminActor) {
-    const roles = await authRepository.findAllRolesWithPermissions();
+    // Global liste tek anahtarla cache'lenir; aktör filtresi cache DIŞINDA uygulanır.
+    const roles = await authCache.roles(() => authRepository.findAllRolesWithPermissions());
     if (actor.isSuperAdmin) return roles;
     return roles.filter((r) => r.universityId === null || r.universityId === actor.universityId);
   },
@@ -555,7 +566,9 @@ export const authService = {
     if (data.rank !== undefined && !actor.isSuperAdmin && data.rank >= actor.maxRank) {
       throw badRequest("auth.roleRankCannotExceedActor");
     }
-    return await authRepository.updateRole(roleId, data);
+    const updated = await authRepository.updateRole(roleId, data);
+    await authCache.invalidateRoles();
+    return updated;
   },
 
   /**
@@ -573,6 +586,7 @@ export const authService = {
     }
     const affectedUserIds = await authRepository.deleteRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
+    await authCache.invalidateRoles();
   },
 
   /** Bir role sahip kullanıcılar (ters listeleme — bkz. docs/yonetim/05 #8). */
@@ -735,6 +749,7 @@ export const authService = {
     await authRepository.attachPermissionToRole(roleId, permissionId);
     const affectedUserIds = await authRepository.findUserIdsByRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
+    await authCache.invalidateRoles(); // rolün gömülü izin listesi değişti
   },
 
   async detachPermissionFromRole(actor: RoleAdminActor, roleId: string, permissionId: string) {
@@ -751,5 +766,6 @@ export const authService = {
     await authRepository.detachPermissionFromRole(roleId, permissionId);
     const affectedUserIds = await authRepository.findUserIdsByRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
+    await authCache.invalidateRoles(); // rolün gömülü izin listesi değişti
   },
 };

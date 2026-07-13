@@ -57,6 +57,26 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     });
   }
 
+  /**
+   * findClubDetail'in tenant filtresi OLMAYAN varyantı — clubId zaten global
+   * benzersiz. Cache clubId ile anahtarlanır (universityId anahtarda taşınamadığı
+   * invalidasyon yollarıyla tutarlı olsun diye); tenant doğrulaması cache DIŞINDA,
+   * dönen `universityId` karşılaştırılarak service'te yapılır (çapraz-tenant sızıntı yok).
+   */
+  findClubDetailById(clubId: string) {
+    return this.query!.findFirst({
+      where: { id: clubId },
+      with: {
+        advisors: true,
+        clubMembers: {
+          where: { status: "approved" },
+          with: { user: true },
+        },
+        contactLinks: true,
+      },
+    });
+  }
+
   findClubInUniversity(universityId: string, clubId: string) {
     return this.findOne({ id: clubId, universityId });
   }
