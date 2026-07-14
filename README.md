@@ -31,9 +31,11 @@ realtime delivery, background jobs, auditing and structured logging.
   per-user grant/deny overrides where **deny wins**) plus a separate per-club
   membership layer. Effective permissions are cached read-through in Redis with
   correct invalidation on role/status changes.
-- **Portable authorization core** — `src/core/` is project-agnostic
-  (JWT + RBAC middleware, a single `guard()` composer, audit hook, pino
-  factory), decoupled from the schema-bound `src/shared/rbac/`.
+- **Portable backend core** — `src/core/` is a project-agnostic Bun/Hono/Drizzle
+  toolkit (config, logger, HTTP error/response/validation, `BaseRepository`, JWT +
+  RBAC + `guard()`, cache, redis, i18n, mail, metrics, graceful shutdown) — every
+  project-specific detail injected via a `createX`/`configureX` seam, decoupled
+  from the schema-bound `src/shared/`.
 - **Realtime notifications** — persisted **and** pushed over Bun-native
   WebSockets, authenticated with a single-use Redis ticket (no token in the
   query string), fanned out across instances via Redis Pub/Sub.
@@ -42,9 +44,12 @@ realtime delivery, background jobs, auditing and structured logging.
 - **Append-only audit trail** — every mutating request (including denied 403s)
   auto-recorded with actor, action, target and redacted body.
 - **Resilient by default** — Redis-backed rate limiting keyed by *resource
-  identity, not IP* (campus NAT-aware) and **fail-open**; a strict error
-  contract that never leaks SQL; structured pino logging correlated by
-  `requestId`.
+  identity, not IP* (campus NAT-aware) and **fail-open**; a **fail-open cache**
+  (a Redis blip never fails an authenticated request); a strict error contract
+  that never leaks SQL; **graceful shutdown** that drains in-flight work on deploy.
+- **Observability & hardening** — structured pino logs (Vector → Loki) + Prometheus
+  metrics (`/metrics` → Grafana), security headers, an env-driven CORS allowlist
+  and a request body-size cap.
 
 ## Tech stack
 
@@ -57,7 +62,7 @@ realtime delivery, background jobs, auditing and structured logging.
 | Validation | **Zod** |
 | Auth | JWT (HS256) + `Bun.password` (bcrypt) |
 | Mail | Nodemailer (Mailpit locally) |
-| Logging | Pino (structured JSON) + optional Vector → Loki → Grafana ([docs](docs/LOGLAMA.md)) |
+| Observability | Pino → Vector → Loki (logs) · Prometheus → Grafana (metrics) — [docs](docs/LOGLAMA.md) |
 | Language | TypeScript (strict) |
 
 ## Architecture at a glance
@@ -82,13 +87,14 @@ the only layer that touches the database. See
 ```
 src/
 ├─ config/        env validation (zod) — the only place process.env is read
-├─ core/          portable RBAC engine (auth, rbac, guard, audit hook, logger)
+├─ core/          portable backend toolkit — config · logger · http · db ·
+│                 auth · rbac/guard · cache · redis · i18n · mail · metrics · shutdown
 ├─ db/            schema.ts (source of truth), relations, migrations, seed
 ├─ features/      auth · users · university · admin · clubs · announcements ·
-│                 gallery · notifications · audit  (routes/service/repo/…)
+│                 gallery · notifications · audit · moderation  (routes/service/repo/…)
 ├─ middlewares/   error · rate-limit · request-logger · verified/active-user
-├─ shared/        rbac cache/repo · mail · redis · ws · logger · utils
-└─ index.ts       app wiring + Bun WebSocket export
+├─ shared/        rbac cache/repo · cache · mail · redis · ws · logger · metrics · i18n · utils
+└─ index.ts       app wiring + Bun.serve (import.meta.main) + graceful shutdown
 ```
 
 ## Getting started
@@ -109,6 +115,7 @@ cp .env.example .env      # then set JWT_SECRET (openssl rand -base64 48)
 
 ```sh
 docker-compose up -d      # Postgres :5432 · Redis :6379 · Mailpit :8025
+                          # + observability: Grafana :3001 · Prometheus :9090 · Loki :3100
 ```
 
 ### 3. Migrate & seed
@@ -166,8 +173,9 @@ university, and `200` for `super_admin` across tenants (scope bypass).
 
 Validated at startup via `src/config/env.ts` (Zod) — the app **fails fast** with
 a clear message on any invalid/missing var. Required: `PORT`, `NODE_ENV`,
-`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`. Mail (`SMTP_*`, `MAIL_FROM`,
-`APP_URL`) and rate-limit vars have dev defaults. See
+`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`. Mail (`SMTP_*`, `MAIL_FROM`, `APP_URL`),
+rate-limit, logging (`LOG_LEVEL`, `LOG_FILE`) and security (`CORS_ORIGINS` — set in
+production — `MAX_BODY_BYTES`) vars have dev defaults. See
 [`.env.example`](.env.example).
 
 ## Deployment
@@ -195,6 +203,8 @@ documented in **[docs/operations.md](docs/operations.md)**.
 
 - **[docs/API.md](docs/API.md)** — REST endpoint reference
 - **[docs/architecture.md](docs/architecture.md)** — full system design
+- **[docs/LOGLAMA.md](docs/LOGLAMA.md)** — logging + metrics observability stack
+- **[docs/operations.md](docs/operations.md)** — deploy, backups, incident response
 - **[docs/frontend/](docs/frontend/)** — per-surface frontend integration guides
 - **[docs/design/](docs/design/)** — RBAC model design notes & scenarios
 
