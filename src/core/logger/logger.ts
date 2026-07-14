@@ -3,6 +3,23 @@ import pino, { type Logger, type LoggerOptions, type TransportTargetOptions } fr
 export type { Logger, TransportTargetOptions };
 
 /**
+ * Log seviyeleri, çıplak string yerine tipli sabit olarak. Değerler pino'nun
+ * seviye adlarıyla (ve `Logger` üzerindeki `LogFn` metod adlarıyla) birebir
+ * örtüşür — böylece `logger[level](...)` tip-güvenli çağrılabilir ve seviyeler
+ * uygulama genelinde magic string olarak gezmez.
+ */
+export const LogLevel = {
+  Trace: "trace",
+  Debug: "debug",
+  Info: "info",
+  Warn: "warn",
+  Error: "error",
+  Fatal: "fatal",
+} as const;
+
+export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
+
+/**
  * core/ proje-bağımsız kalmalı: bu fabrika `env`/`shared` bilmez, seviye ve
  * hedef tercihini çağıran belirler. Proje kendi kök logger'ını
  * `shared/logger/logger.ts`'de bu fabrikayı çağırarak kurar — aynı enjeksiyon
@@ -22,17 +39,32 @@ export interface CreateLoggerOptions {
    * proje tek hedef de birden fazla hedef de geçebilir.
    */
   transports?: TransportTargetOptions[];
+  /**
+   * Hassas alanların log çıktısında maskelenmesi (pino `redact`). Yol listesi
+   * (`["req.headers.authorization", "*.password"]`) ya da tam config nesnesi.
+   * Verilmezse maskeleme yapılmaz — geriye tam uyumlu, hiçbir şeyi zorunlu kılmaz.
+   */
+  redact?: LoggerOptions["redact"];
+  /**
+   * Alanlara özel serializer'lar (pino `serializers`). Verilenler, varsayılan
+   * `err` serializer'ının ÜZERİNE MERGE edilir (aynı anahtar çağıranınkiyle
+   * ezilebilir); `err` verilmezse stack'li varsayılan korunur.
+   */
+  serializers?: LoggerOptions["serializers"];
 }
 
 export function createLogger(options: CreateLoggerOptions = {}): Logger {
-  const { level = "info", pretty = false, bindings, transports } = options;
+  const { level = LogLevel.Info, pretty = false, bindings, transports, redact, serializers } =
+    options;
 
   const pinoOptions: LoggerOptions = {
     level,
     // Error nesneleri (stack dahil) doğru serileşsin — düz console.error(err)
-    // yerine geçen tüm çağrılar bunu otomatik kullanır.
-    serializers: { err: pino.stdSerializers.err },
+    // yerine geçen tüm çağrılar bunu otomatik kullanır. Çağıran ek serializer
+    // verebilir; aynı anahtarla `err`'i de ezebilir.
+    serializers: { err: pino.stdSerializers.err, ...serializers },
     ...(bindings ? { base: bindings } : {}),
+    ...(redact ? { redact } : {}),
     ...buildTransport({ pretty, transports }),
   };
 
