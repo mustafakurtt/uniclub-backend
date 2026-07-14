@@ -24,6 +24,12 @@ export interface RequestLoggerOptions {
    * genişletme dikişi: ileride alan eklemek çekirdeği değiştirmesin (OCP).
    */
   getExtraFields?: (c: Context) => Record<string, unknown>;
+  /**
+   * `true` dönerse istek LOGLANMAZ (yalnızca log satırı atlanır; istek normal işler).
+   * Sık pollanan altyapı uçlarının (Prometheus `/metrics`, load-balancer `/health`)
+   * gürültüsünü kesmek için — bunlar saniyeler içinde logu doldurur ve sinyal taşımaz.
+   */
+  skip?: (c: Context) => boolean;
 }
 
 /** Her istekte loglanan sabit iskelet; `getExtraFields` bunun üstüne eklenir. */
@@ -59,9 +65,13 @@ export function createRequestLogger(options: RequestLoggerOptions) {
     getLevel = defaultGetLevel,
     getMessage,
     getExtraFields,
+    skip,
   } = options;
 
   return async (c: Context, next: Next) => {
+    // Atlanan uçlar (ör. /metrics, /health) hiç loglanmaz — zaman ölçümü de gereksiz.
+    if (skip?.(c)) return next();
+
     const start = Date.now();
     await next();
     const durationMs = Date.now() - start;
