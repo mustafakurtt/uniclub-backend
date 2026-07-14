@@ -53,6 +53,20 @@ const envSchema = z.object({
   CACHE_DRIVER: z.enum(["redis", "memory", "null"]).default("redis"),
   /** TTL verilmeyen yazımların varsayılan ömrü (saniye). */
   CACHE_DEFAULT_TTL: z.coerce.number().default(300),
+
+  // ── GÜVENLİK / HTTP SINIRLARI ────────────────────────────────────────────
+  /**
+   * İzin verilen CORS origin'leri (virgülle ayrık, ör.
+   * "https://uniclub.test,https://app.uniclub.test"). Verilmezse tüm origin'lere
+   * açık (`*`) — dev için pratik; PROD'da mutlaka doldurulmalı. Kimlik
+   * Authorization başlığında taşındığı için credentials/cookie gerekmez.
+   */
+  CORS_ORIGINS: z.string().optional(),
+  /**
+   * İstek gövdesi üst sınırı (byte). Aşılırsa 413 döner — dev bir payload ile
+   * bellek/DoS'a karşı ucuz kalkan. Bu API JSON-only (binary upload yok); 1MB bol.
+   */
+  MAX_BODY_BYTES: z.coerce.number().default(1_048_576),
 });
 
 // process.env'yi şemadan geçiriyoruz. Eğer .env içinde hata varsa uygulama burada
