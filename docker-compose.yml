@@ -54,5 +54,59 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: 1  # TLS'siz bağlantıya izin ver (yerel geliştirme)
     restart: unless-stopped
 
+  # ─── LOG YIĞINI ────────────────────────────────────────────────────────────
+  # Diğer servislerle BİRLİKTE ayağa kalkar: `docker compose up -d` hepsini başlatır.
+  # Yalnızca çekirdeği istersen servisleri açıkça say:
+  #     docker compose up -d postgres redis mailpit
+  #
+  # Akış: Bun uygulaması (host) → ./logs/app.log → Vector → Loki → Grafana.
+  # Uygulama container'da olmadığı için Vector, host'un yazdığı log DOSYASINI okur
+  # (LOG_FILE=./logs/app.log). Bkz. docs/LOGLAMA.md.
+
+  # Depo: hafif, etiket-indeksli log veritabanı. Varsayılan gömülü config ile çalışır.
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: uniclub_loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "${DEV_BIND_ADDR:-127.0.0.1}:3100:3100"
+    volumes:
+      - lokidata:/loki
+    restart: unless-stopped
+
+  # Ajan: Rust ile yazılmış, yüksek performanslı, vendor-bağımsız log shipper.
+  # ./logs'u salt-okunur bağlar, app.log'u tail'ler, JSON'ı parse edip Loki'ye yollar.
+  vector:
+    image: timberio/vector:0.40.0-alpine
+    container_name: uniclub_vector
+    depends_on: [loki]
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - ./deploy/logging/vector.yaml:/etc/vector/vector.yaml:ro
+      - ./logs:/logs:ro
+      - vectordata:/var/lib/vector
+    restart: unless-stopped
+
+  # Arayüz: LogQL ile arama + grafik. App 3000'de olduğu için Grafana 3001'e alınır.
+  # Yerelde sürtünmeyi azaltmak için anonim Admin erişimi açık (SADECE geliştirme).
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: uniclub_grafana
+    depends_on: [loki]
+    ports:
+      - "${DEV_BIND_ADDR:-127.0.0.1}:3001:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./deploy/logging/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafanadata:/var/lib/grafana
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  lokidata:
+  vectordata:
+  grafanadata:
