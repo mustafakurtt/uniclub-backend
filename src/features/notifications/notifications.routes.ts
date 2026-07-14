@@ -5,8 +5,13 @@ import { requireActiveUser } from "../../middlewares/active-user.middleware";
 import { upgradeWebSocket } from "../../shared/ws/bun-ws";
 import { validate } from "../../shared/utils/validate";
 import { ok } from "../../shared/utils/respond";
-import { listNotificationsQuerySchema } from "./notifications.schema";
+import {
+  listNotificationsQuerySchema,
+  pushSubscribeSchema,
+  pushUnsubscribeSchema,
+} from "./notifications.schema";
 import { notificationsService } from "./notifications.service";
+import { isPushEnabled, webPushSender } from "./push.gateway";
 import {
   addConnection,
   consumeWsTicket,
@@ -113,4 +118,27 @@ notificationsRoutes.patch("/read-all", async (c) => {
   const user = c.get("user");
   const result = await notificationsService.markAllRead(user.userId);
   return ok(c, result, "notification.allMarkedRead");
+});
+
+// ── WEB PUSH (WebSocket'in tamamlayıcısı — uygulama kapalıyken teslimat) ──
+
+// 5. VAPID PUBLIC ANAHTARI — istemci `pushManager.subscribe` için ihtiyaç duyar.
+//    `enabled:false` ise sunucuda VAPID yok → istemci abone OLMAMALI.
+notificationsRoutes.get("/push-key", (c) =>
+  ok(c, { enabled: isPushEnabled, publicKey: webPushSender?.publicKey ?? null }, "notification.pushKey")
+);
+
+// 6. PUSH ABONELİĞİ KAYDET (bu cihazı bildirimlere kaydeder — endpoint'e göre upsert).
+notificationsRoutes.post("/push-subscribe", validate("json", pushSubscribeSchema), async (c) => {
+  const user = c.get("user");
+  const subscription = c.req.valid("json");
+  await notificationsService.subscribePush(user.userId, subscription);
+  return ok(c, { subscribed: true }, "notification.pushSubscribed");
+});
+
+// 7. PUSH ABONELİĞİNDEN ÇIK (bu cihazı siler).
+notificationsRoutes.delete("/push-subscribe", validate("json", pushUnsubscribeSchema), async (c) => {
+  const { endpoint } = c.req.valid("json");
+  await notificationsService.unsubscribePush(endpoint);
+  return ok(c, { unsubscribed: true }, "notification.pushUnsubscribed");
 });
