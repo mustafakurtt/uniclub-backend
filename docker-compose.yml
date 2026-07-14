@@ -87,6 +87,24 @@ services:
       - vectordata:/var/lib/vector
     restart: unless-stopped
 
+  # Metrik deposu: uygulamanın /metrics'ini periyodik scrape eder. Uygulama host'ta
+  # (bun run dev) çalıştığı için host.docker.internal ile host'a ulaşır (extra_hosts
+  # ile Linux'ta da çözülür). Bkz. deploy/metrics/prometheus.yml.
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: uniclub_prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "${DEV_BIND_ADDR:-127.0.0.1}:9090:9090"
+    volumes:
+      - ./deploy/metrics/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
   # Arayüz: LogQL ile arama + grafik. App 3000'de olduğu için Grafana 3001'e alınır.
   # Yerelde sürtünmeyi azaltmak için anonim Admin erişimi açık (SADECE geliştirme).
   grafana:
@@ -110,3 +128,4 @@ volumes:
   lokidata:
   vectordata:
   grafanadata:
+  promdata:

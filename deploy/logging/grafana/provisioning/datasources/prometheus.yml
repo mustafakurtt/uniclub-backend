@@ -1,0 +1,12 @@
+# Grafana açılışta Prometheus'u da otomatik veri kaynağı olarak tanır (Loki'nin
+# yanına). Böylece loglar (Loki) + metrikler (Prometheus) aynı Grafana'da.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # Docker ağı içi servis adı (Grafana container'ından erişilir).
+    url: http://prometheus:9090
+    isDefault: false
+    editable: true
