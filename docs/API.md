@@ -64,6 +64,7 @@ Tüm hatalar tek tip zarfla döner (ham SQL/stack **asla** sızmaz):
 | Girdi doğrulama | `400` | `code: "VALIDATION_ERROR"` + `details[]` |
 | Token yok/geçersiz | `401` | — |
 | Yetki yok / tenant dışı / askılı hesap | `403` | — |
+| İstek gövdesi çok büyük | `413` | `code: "PAYLOAD_TOO_LARGE"` (gövde `MAX_BODY_BYTES`'ı aştı) |
 | Beklenmeyen | `500` | jenerik mesaj + `requestId` |
 
 - **i18n:** `Accept-Language: tr|en` (varsayılan `tr`). Hem hata hem başarı mesajları çevrilir.

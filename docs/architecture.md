@@ -10,8 +10,9 @@ and a portable RBAC engine that could be lifted into another Bun/Hono project.
 HTTP request
    │
    ▼
-requestId ──▶ request logger ──▶ CORS
-   │
+requestId ─▶ metrics ─▶ secureHeaders ─▶ bodyLimit ─▶ locale ─▶ request logger ─▶ CORS
+   │   (global middleware: correlation id, Prometheus timing, security headers,
+   │    body-size cap → 413, Accept-Language, structured log line, CORS allowlist)
    ▼
 authMiddleware        (verify JWT, attach typed `user` to context)
    │
@@ -88,10 +89,44 @@ the next request.
 
 ## Portable core vs. project-coupled shared
 
-`src/core/` is intentionally project-agnostic — the HTTP enforcement mechanism
-only (JWT middleware, RBAC middleware, `guard()` composer, audit hook, pino
-factory). The schema-coupled counterpart lives in `src/shared/rbac/`. The two
-touch at exactly one seam: core reads back through the shared Redis cache.
+`src/core/` is intentionally project-agnostic — a reusable Bun/Hono/Drizzle
+backend toolkit that never reads `env` or knows a project field/role name.
+Everything project-specific is **injected** via a `createX(options)` /
+`configureX(...)` / `registerX(...)` seam (the recurring pattern). It spans:
+
+| Area | What core provides (mechanism only) |
+| --- | --- |
+| `config` | `createEnv` (zod validation), `envBoolean` |
+| `logger` | `createLogger` (pino factory, `LogLevel`, redaction) |
+| `http` | `HttpError` + `createErrorHandler`, `createResponder`, `createValidator`, `createRequestLogger`, `createShutdownManager` |
+| `db` | `BaseRepository` (CRUD, soft-delete, keyset, composite-where guard, tx) + column sets |
+| `auth` | JWT factory, password hashing, `authMiddleware` (empty `AuthClaims`) |
+| `rbac` | `attachAuthz`, `requirePermission`, `enforceTenantScope`, `guard()` composer, audit hook |
+| `cache` | `CacheStore` port + memory/redis/null adapters + `Cache` facade (`getOrSet` single-flight, **fail-open**) |
+| `redis` | `createRedisClient` |
+| `i18n` | `createTranslator`, `defineCatalog`, locale middleware |
+| `mail` | `createMailer` (SMTP, optional pool) |
+| `metrics` | `createMetrics` (Prometheus registry + HTTP instruments + `/metrics`) |
+
+The schema-coupled counterparts live in `src/shared/` (e.g. `shared/rbac/`),
+which fill those seams with this project's env, Drizzle relations and Turkish
+message catalog. The RBAC pair touches at exactly one seam: core reads back
+through the shared Redis cache.
+
+## Operational hardening & observability
+
+- **Graceful shutdown** — `createShutdownManager` (core) runs registered cleanup
+  tasks in order on `SIGTERM`/`SIGINT` (HTTP drain → queue → redis → db → mailer)
+  with a timeout backstop, so deploys don't drop in-flight work.
+- **HTTP hardening** — `secureHeaders`, an env-driven CORS allowlist
+  (`CORS_ORIGINS`), and a request `bodyLimit` (`MAX_BODY_BYTES` → 413).
+- **Cache resilience** — the `Cache` facade is **fail-open**: a transient Redis
+  error on reads becomes a miss (recompute from source) and `getOrSet` writes are
+  best-effort, so a Redis blip never fails an authenticated request. Explicit
+  `delete` (invalidation) still propagates — a missed invalidation is a correctness bug.
+- **Observability** — structured pino logs shipped by **Vector → Loki**, plus
+  **Prometheus** metrics (`/metrics`) scraped into **Grafana**. See
+  [docs/LOGLAMA.md](LOGLAMA.md).
 
 ## Realtime notifications
 
