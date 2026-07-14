@@ -29,9 +29,12 @@ import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim ş
 import "./shared/rbac/authz"; // AuthzContext declaration merging (proje authz alanları)
 import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
 import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
-import { verifyMailConnection } from "./shared/mail/mailer";
+import { verifyMailConnection, mailer } from "./shared/mail/mailer";
+import { redisSubscriber } from "./shared/redis/redis.subscriber";
+import { closeEmailQueue } from "./features/auth/auth.queue";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
+import { createShutdownManager } from "./core/http/shutdown";
 
 const log = logger.child({ module: "bootstrap" });
 
@@ -151,26 +154,44 @@ app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);
 
-export default {
-  port: env.PORT,
-  fetch: app.fetch,
-  // Bun'ın native WebSocket handler'ı. `upgradeWebSocket` ile aynı
-  // createBunWebSocket() örneğinden gelmelidir (bkz. shared/ws/bun-ws.ts).
-  websocket,
-};
+// Sunucuyu başlat + graceful shutdown — YALNIZCA bu dosya doğrudan entrypoint
+// iken (import.meta.main). Testler `app`'i import eder (import.meta.main false),
+// bu yüzden Bun.serve/sinyal dinleyicileri kurulmaz — port açılmaz, testler
+// tüm middleware zincirini `app.request()` ile portsuz koşturur.
+if (import.meta.main) {
+  const server = Bun.serve({
+    port: env.PORT,
+    fetch: app.fetch,
+    // Bun'ın native WebSocket handler'ı — upgradeWebSocket ile aynı
+    // createBunWebSocket() örneğinden gelmelidir (bkz. shared/ws/bun-ws.ts).
+    websocket,
+  });
 
-log.info({ port: env.PORT }, "🚀 Sistem ayağa kalktı");
+  log.info({ port: env.PORT }, "🚀 Sistem ayağa kalktı");
 
-// SMTP erişilebilir mi? Bilgi amaçlıdır — başarısız olsa bile uygulama ÇÖKMEZ,
-// mail kuyruğu (BullMQ) gönderimi yeniden dener.
-verifyMailConnection().then((ok) => {
-  if (ok) {
-    log.info({ host: env.SMTP_HOST, port: env.SMTP_PORT }, "📧 SMTP bağlantısı hazır");
-    log.debug("📬 Gelen kutusu (Mailpit): http://localhost:8025");
-  } else {
-    log.warn(
-      { host: env.SMTP_HOST, port: env.SMTP_PORT },
-      "⚠️  SMTP'ye ulaşılamıyor — doğrulama mailleri gönderilemez (yerelde: docker-compose up -d mailpit)"
-    );
-  }
-});
+  // Graceful shutdown: SIGTERM/SIGINT'te SIRAYLA kapat — önce trafiği kes, sonra
+  // bağımlılıkları. Böylece deploy'da yeni istek gelmez, uçuştaki istek biter ve
+  // yarım job/bağlantı kalmaz. Kaynaklar core'a değil BURADA (proje) enjekte edilir.
+  const shutdown = createShutdownManager({ logger: log, timeoutMs: 10_000 });
+  shutdown.register("http-server", () => server.stop()); // yeni bağlantı yok, uçuştakini bekle
+  shutdown.register("email-queue", closeEmailQueue); // worker önce (job'u bitir), sonra queue
+  shutdown.register("redis-subscriber", async () => void (await redisSubscriber.quit()));
+  shutdown.register("redis", async () => void (await redis.quit()));
+  shutdown.register("db", () => db.$client.end({ timeout: 5 }));
+  shutdown.register("mailer", () => mailer.close());
+  shutdown.install();
+
+  // SMTP erişilebilir mi? Bilgi amaçlıdır — başarısız olsa bile uygulama ÇÖKMEZ,
+  // mail kuyruğu (BullMQ) gönderimi yeniden dener.
+  verifyMailConnection().then((ok) => {
+    if (ok) {
+      log.info({ host: env.SMTP_HOST, port: env.SMTP_PORT }, "📧 SMTP bağlantısı hazır");
+      log.debug("📬 Gelen kutusu (Mailpit): http://localhost:8025");
+    } else {
+      log.warn(
+        { host: env.SMTP_HOST, port: env.SMTP_PORT },
+        "⚠️  SMTP'ye ulaşılamıyor — doğrulama mailleri gönderilemez (yerelde: docker-compose up -d mailpit)"
+      );
+    }
+  });
+}
