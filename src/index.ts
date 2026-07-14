@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
+import { bodyLimit } from "hono/body-limit";
 import { requestId } from "hono/request-id";
 import { sql } from "drizzle-orm";
 import { env } from "./config/env";
@@ -27,11 +29,21 @@ import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim ş
 import "./shared/rbac/authz"; // AuthzContext declaration merging (proje authz alanları)
 import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
 import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
-import { verifyMailConnection } from "./shared/mail/mailer";
+import { verifyMailConnection, mailer } from "./shared/mail/mailer";
+import { redisSubscriber } from "./shared/redis/redis.subscriber";
+import { closeEmailQueue } from "./features/auth/auth.queue";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
+import { metrics } from "./shared/metrics/metrics";
+import { createShutdownManager } from "./core/http/shutdown";
 
 const log = logger.child({ module: "bootstrap" });
+
+/** CORS allowlist: virgülle ayrık env → temizlenmiş dizi (boşları at). */
+const CORS_ORIGINS = (env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
 
 // Ana uygulamaya Variables tipini ekliyoruz.
 // `app` export edilir: testler Hono'nun `app.request()` arayüzüyle tüm
@@ -44,11 +56,28 @@ export const app = new Hono<{ Variables: Variables & LocaleVariables }>();
 // requestId EN ÖNDE: her istek bir korelasyon kimliği alır; errorHandler bunu
 // istemciye döner + sunucu loguna yazar → "hata aldım" dendiğinde eşleştirilebilir.
 app.use("*", requestId());
+// Metrics: her isteği ölç (süre + sayaç). Erken mount → tüm alt zinciri (413/hata
+// dahil) kapsar; `route` etiketi eşleşen route deseninden gelir (düşük kardinalite).
+app.use("*", metrics.middleware);
+// Güvenlik başlıkları (X-Content-Type-Options, X-Frame-Options, ...) tüm
+// cevaplara (hata dahil) uygulansın diye erken. TLS/HSTS prod'da Caddy'de.
+app.use("*", secureHeaders());
+// Gövde üst sınırı: dev bir payload'a karşı erken kalkan (route'lar body okumadan).
+app.use("*", bodyLimit({
+  maxSize: env.MAX_BODY_BYTES,
+  onError: (c) =>
+    c.json(
+      { success: false, message: "İstek gövdesi çok büyük.", code: "PAYLOAD_TOO_LARGE", requestId: c.get("requestId") },
+      413
+    ),
+}));
 // Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
 // bu dile çevirir (bkz. core/i18n).
 app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
 app.use("*", requestLogger);
-app.use("*", cors());
+// CORS: allowlist env'den (CORS_ORIGINS). Verilmezse tüm origin'lere açık (`*`) —
+// dev için; PROD'da CORS_ORIGINS doldurulmalı. Kimlik Authorization'da, cookie yok.
+app.use("*", cors({ origin: CORS_ORIGINS.length > 0 ? CORS_ORIGINS : "*" }));
 
 // core/auth'un token doğrulayıcısını enjekte et (SECRET env'de olduğu için core
 // import edemez — dikiş). authMiddleware bunu kullanır. Bkz. core/auth/auth.middleware.
@@ -119,6 +148,10 @@ app.get("/health", async (c) => {
   );
 });
 
+// Prometheus metrics exposition — Prometheus periyodik scrape eder.
+// PROD: iç bilgileri sızdırır; Caddy/proxy bunu DIŞARIYA açmamalı (bkz. shared/metrics).
+app.get("/metrics", metrics.handler);
+
 // Rotaları Bağlama
 app.route("/api/auth", authRoutes);
 app.route("/api/admin", adminRoutes);
@@ -129,26 +162,44 @@ app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);
 
-export default {
-  port: env.PORT,
-  fetch: app.fetch,
-  // Bun'ın native WebSocket handler'ı. `upgradeWebSocket` ile aynı
-  // createBunWebSocket() örneğinden gelmelidir (bkz. shared/ws/bun-ws.ts).
-  websocket,
-};
+// Sunucuyu başlat + graceful shutdown — YALNIZCA bu dosya doğrudan entrypoint
+// iken (import.meta.main). Testler `app`'i import eder (import.meta.main false),
+// bu yüzden Bun.serve/sinyal dinleyicileri kurulmaz — port açılmaz, testler
+// tüm middleware zincirini `app.request()` ile portsuz koşturur.
+if (import.meta.main) {
+  const server = Bun.serve({
+    port: env.PORT,
+    fetch: app.fetch,
+    // Bun'ın native WebSocket handler'ı — upgradeWebSocket ile aynı
+    // createBunWebSocket() örneğinden gelmelidir (bkz. shared/ws/bun-ws.ts).
+    websocket,
+  });
 
-log.info({ port: env.PORT }, "🚀 Sistem ayağa kalktı");
+  log.info({ port: env.PORT }, "🚀 Sistem ayağa kalktı");
 
-// SMTP erişilebilir mi? Bilgi amaçlıdır — başarısız olsa bile uygulama ÇÖKMEZ,
-// mail kuyruğu (BullMQ) gönderimi yeniden dener.
-verifyMailConnection().then((ok) => {
-  if (ok) {
-    log.info({ host: env.SMTP_HOST, port: env.SMTP_PORT }, "📧 SMTP bağlantısı hazır");
-    log.debug("📬 Gelen kutusu (Mailpit): http://localhost:8025");
-  } else {
-    log.warn(
-      { host: env.SMTP_HOST, port: env.SMTP_PORT },
-      "⚠️  SMTP'ye ulaşılamıyor — doğrulama mailleri gönderilemez (yerelde: docker-compose up -d mailpit)"
-    );
-  }
-});
+  // Graceful shutdown: SIGTERM/SIGINT'te SIRAYLA kapat — önce trafiği kes, sonra
+  // bağımlılıkları. Böylece deploy'da yeni istek gelmez, uçuştaki istek biter ve
+  // yarım job/bağlantı kalmaz. Kaynaklar core'a değil BURADA (proje) enjekte edilir.
+  const shutdown = createShutdownManager({ logger: log, timeoutMs: 10_000 });
+  shutdown.register("http-server", () => server.stop()); // yeni bağlantı yok, uçuştakini bekle
+  shutdown.register("email-queue", closeEmailQueue); // worker önce (job'u bitir), sonra queue
+  shutdown.register("redis-subscriber", async () => void (await redisSubscriber.quit()));
+  shutdown.register("redis", async () => void (await redis.quit()));
+  shutdown.register("db", () => db.$client.end({ timeout: 5 }));
+  shutdown.register("mailer", () => mailer.close());
+  shutdown.install();
+
+  // SMTP erişilebilir mi? Bilgi amaçlıdır — başarısız olsa bile uygulama ÇÖKMEZ,
+  // mail kuyruğu (BullMQ) gönderimi yeniden dener.
+  verifyMailConnection().then((ok) => {
+    if (ok) {
+      log.info({ host: env.SMTP_HOST, port: env.SMTP_PORT }, "📧 SMTP bağlantısı hazır");
+      log.debug("📬 Gelen kutusu (Mailpit): http://localhost:8025");
+    } else {
+      log.warn(
+        { host: env.SMTP_HOST, port: env.SMTP_PORT },
+        "⚠️  SMTP'ye ulaşılamıyor — doğrulama mailleri gönderilemez (yerelde: docker-compose up -d mailpit)"
+      );
+    }
+  });
+}

@@ -15,16 +15,27 @@ export interface CreateMailerOptions {
   /** Kimlik yoksa (örn. Mailpit) hiç gönderilmez — boş AUTH denemesini önler. */
   auth?: { user: string; pass: string };
   ignoreTLS?: boolean;
+  /**
+   * SMTP bağlantı havuzu. `true` iken nodemailer bağlantıları açık tutup yeniden
+   * kullanır — art arda çok mail atan bir kuyruk worker'ı (ör. doğrulama mailleri)
+   * her gönderimde yeniden el sıkışmaz. Verilmezse (varsayılan) gönderim başına
+   * bağlantı; düşük hacimde/Mailpit'te fark etmez. `maxConnections` havuz boyutunu
+   * ayarlar (nodemailer varsayılanı 5).
+   */
+  pool?: boolean;
+  maxConnections?: number;
 }
 
 export function createMailer(options: CreateMailerOptions): Transporter {
-  const { host, port, secure, auth, ignoreTLS } = options;
+  const { host, port, secure, auth, ignoreTLS, pool, maxConnections } = options;
   return nodemailer.createTransport({
     host,
     port,
     secure,
     ...(auth ? { auth } : {}),
     ...(ignoreTLS ? { ignoreTLS: true } : {}),
+    ...(pool ? { pool: true } : {}),
+    ...(maxConnections ? { maxConnections } : {}),
   });
 }
 

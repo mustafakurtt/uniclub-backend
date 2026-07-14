@@ -23,6 +23,7 @@ Aşağıdakiler frontend'i etkiler; ilgili dokümanlar güncellendi:
 | --- | --- |
 | [architecture.md](architecture.md) | System design: layering, multi-tenancy, RBAC engine, realtime, data flow |
 | [operations.md](operations.md) | Environments, migrations, backups, deploys, incident response |
+| [LOGLAMA.md](LOGLAMA.md) | Observability: structured logs (Vector → Loki) + metrics (Prometheus → Grafana) |
 | [MAKINE_KURULUMU.md](MAKINE_KURULUMU.md) | Makine kurulumu (dev/prod), ağ ayarları ve frontend notları |
 | [API.md](API.md) | REST endpoint reference |
 | [BILDIRIMLER.md](BILDIRIMLER.md) | Notification system + WebSocket delivery |

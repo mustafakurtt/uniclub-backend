@@ -126,9 +126,52 @@ docker compose down -v       # + tüm volume verilerini (log dahil) sil
 
 | Dosya | İşi |
 |---|---|
-| `docker-compose.yml` (`logging` profili) | loki + vector + grafana servisleri |
+| `docker-compose.yml` | loki + vector + grafana + prometheus servisleri (diğerleriyle birlikte kalkar) |
 | `deploy/logging/vector.yaml` | dosya kaynağı → JSON parse + seviye/etiket → Loki sink |
 | `deploy/logging/grafana/provisioning/datasources/loki.yml` | Grafana'ya Loki'yi otomatik tanıt |
+| `deploy/logging/grafana/provisioning/datasources/prometheus.yml` | Grafana'ya Prometheus'u otomatik tanıt |
+| `deploy/metrics/prometheus.yml` | Prometheus scrape yapılandırması (app'in /metrics'ini çeker) |
+
+---
+
+## Metrikler (Prometheus)
+
+Loglar "ne oldu" der; **metrikler** "sistem nasıl davranıyor" der — gözlemlenebilirliğin
+ikinci ayağı. Uygulama `prom-client` ile bir `/metrics` endpoint'i açar (Prometheus
+metin formatı); Prometheus periyodik **scrape** eder, Grafana çizer.
+
+| Katman | Nerede |
+|---|---|
+| Taşınabilir seam | `core/metrics/metrics.ts` (`createMetrics`) |
+| Proje kurulumu | `shared/metrics/metrics.ts` (prefix `uniclub_`) |
+| Endpoint | `GET /metrics` (index.ts) |
+
+Otomatik toplananlar:
+- **HTTP**: `uniclub_http_request_duration_seconds` (histogram) + `uniclub_http_requests_total`
+  — etiketler `method`, `route` (**eşleşen desen**, ör. `/api/x/:id` — düşük kardinalite), `status`.
+- **Runtime**: `uniclub_process_*` / `uniclub_nodejs_*` (CPU, RSS bellek, event-loop lag, GC).
+
+Çalıştırma: `docker compose up -d` (Prometheus dahil kalkar) → Grafana `http://localhost:3001`
+→ **Explore → Prometheus**. Prometheus arayüzü: `http://localhost:9090`.
+
+### Örnek PromQL
+
+```promql
+# İstek hızı (route bazında, sn başına)
+sum(rate(uniclub_http_requests_total[1m])) by (route)
+
+# p95 gecikme (route bazında)
+histogram_quantile(0.95, sum(rate(uniclub_http_request_duration_seconds_bucket[5m])) by (le, route))
+
+# 5xx hata oranı
+sum(rate(uniclub_http_requests_total{status=~"5.."}[5m])) / sum(rate(uniclub_http_requests_total[5m]))
+
+# Bellek (RSS)
+uniclub_process_resident_memory_bytes
+```
+
+> **Prod güvenliği:** `/metrics` iç bilgileri sızdırır — Caddy/proxy bunu **dışarıya
+> açmamalı**, yalnızca Prometheus'un iç ağdan scrape'ine bırakılmalı.
 
 ---
 
@@ -153,3 +196,4 @@ Kod tarafında yapılacak bir şey yoktur — çıktı zaten aggregator-dostu JS
 | Vector sürekli restart | `docker logs uniclub_vector` — `vector.yaml` VRL sözdizim hatası |
 | Loki 503 | Loki açılırken normaldir; Vector otomatik yeniden dener. Kalıcıysa `docker logs uniclub_loki` |
 | Loki'de doğrudan sorgu | `curl -sG http://localhost:3100/loki/api/v1/query_range --data-urlencode 'query={app="universityClub"}'` |
+| Grafana'da metrik yok | Prometheus scrape hedefi `up` mı: `curl -s http://localhost:9090/api/v1/targets`. App host:3000'de çalışıyor + `/metrics` dönüyor mu? |

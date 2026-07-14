@@ -167,6 +167,12 @@ image** (the production image deliberately has no `drizzle-kit`), restarts the
 app and waits for `/health`. If health never turns green it **rolls back to the
 previous image**.
 
+On restart, the old container receives `SIGTERM` and shuts down **gracefully**
+(`createShutdownManager` in [`src/core/http/shutdown.ts`](../src/core/http/shutdown.ts)):
+it stops accepting new requests, lets in-flight ones finish, then closes the queue,
+Redis, database and mailer in order — so a deploy doesn't drop live requests or
+leave half-processed jobs.
+
 ```sh
 ./scripts/deploy-agent.sh            # check once
 ./scripts/deploy-agent.sh --watch    # poll every 5 minutes
@@ -301,8 +307,10 @@ separate release from the code that stops using the column.
 
 ## Incidents
 
-1. **Confirm.** Check `/health` and the logs. Every error response carries a
-   `requestId`; the matching server log line has the stack trace.
+1. **Confirm.** Check `/health`, then **Grafana** (`:3001`) — logs (Loki) and
+   metrics (Prometheus: error rate, p95 latency, memory). Every error response
+   carries a `requestId`; filter the logs by it (`| json | requestId="…"`) to get
+   the exact server log line and stack trace. See [LOGLAMA.md](LOGLAMA.md).
 2. **Stop the bleeding.** Roll back or disable the feature before diagnosing.
 3. **Hotfix.** Branch from `main` (`hotfix/<name>`), fix, PR into `main`.
    Then merge `main` back into `develop` so the fix is not lost.

@@ -204,10 +204,71 @@ function disconnect() { closedByUs = true; ws?.close(); }
 
 ---
 
+## Web Push (uygulama kapalıyken teslimat)
+
+WebSocket yalnızca uygulama **açıkken** çalışır. **Web Push** (W3C Push API + VAPID),
+kullanıcı sekmeyi/uygulamayı kapatmışken de bildirimi cihaza ulaştırır: tarayıcının
+push servisi → **service worker** → OS bildirimi. İkisi **tamamlayıcıdır**, biri
+diğerini değiştirmez.
+
+| | WebSocket | Web Push |
+|---|---|---|
+| Ne zaman | uygulama açık | uygulama kapalı da |
+| Taşıma | kendi sunucun | tarayıcının push servisi (FCM/Mozilla…) + VAPID |
+| Kod | `notifications.gateway.ts` | `core/notifications/*` + `push.gateway.ts` |
+
+**Sunucu tarafı akışı** (`notificationsService.notify`): (1) DB'ye yaz (kalıcılık),
+(2) web push'ı **fire-and-forget** başlat (WS/Redis'ten bağımsız, best-effort),
+(3) WS fanout. Push kanalı devre dışıysa (VAPID yok) sessizce atlanır — WS etkilenmez.
+Push servisi `404/410` dönen ölü abonelikler **otomatik silinir** (`core` sender).
+
+### ⚠️ Service Worker sözleşmesi — çift-bildirim önleme
+
+İkili teslimatta (hem WS hem push) tehlike, kullanıcının aynı bildirimi **iki kez**
+görmesidir. Bunu **service worker çözer** — çünkü odak/görünürlüğü yalnızca istemci bilir:
+
+```js
+// service-worker.js
+self.addEventListener("push", (event) => {
+  const n = event.data.json();               // { title, body, tag, data }
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const focused = clients.some((c) => c.focused || c.visibilityState === "visible");
+    if (focused) {
+      // Uygulama zaten açık/odaklı → WS canlı gösterdi. OS bildirimini GÖSTERME;
+      // istersen client'a mesaj at (rozet güncelle vb.).
+      clients.forEach((c) => c.postMessage({ type: "notification", data: n }));
+      return;
+    }
+    // Kapalı/arka planda → OS bildirimini göster. `tag` = bildirim id → aynı bildirim üst üste binmez.
+    await self.registration.showNotification(n.title, { body: n.body, tag: n.tag, data: n.data });
+  })());
+});
+```
+
+> Sunucu her ikisine de gönderir; **odaklanmışken bastırma kararı SW'dedir** (yalnızca
+> istemci gerçekten "bakılıyor mu"yu bilir). `tag`=bildirim id ek güvenlik (dedup).
+
+### REST uçları (kimlik: giriş + aktif hesap)
+
+| Yöntem | Uç | İş |
+|---|---|---|
+| `GET` | `/api/notifications/push-key` | `{ enabled, publicKey }` — istemci `subscribe` için VAPID public key. `enabled:false` ise abone olma. |
+| `POST` | `/api/notifications/push-subscribe` | `PushSubscription.toJSON()` (`{ endpoint, keys:{p256dh,auth} }`) kaydeder (endpoint'e göre upsert). |
+| `DELETE` | `/api/notifications/push-subscribe` | `{ endpoint }` — bu cihazın aboneliğini siler. |
+
+### Kurulum (VAPID)
+
+```sh
+bunx web-push generate-vapid-keys      # publicKey + privateKey üretir
+```
+
+`.env`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:). **İkisi de**
+verilmezse web push graceful biçimde kapalı kalır. Public key gizli değildir; private
+key gizlidir (prod'da environment secret).
+
 ## Bilinen sınırlar
 
-- **Push bildirimi (uygulama kapalıyken) yok.** WS yalnızca sayfa açıkken çalışır.
-  Mobil/masaüstü push için Web Push (VAPID) ya da FCM ayrı bir katmandır.
 - **`createdAt` cursor'ı teorik olarak eşitlenebilir.** Pratikte timestamp
   çözünürlüğü yeterli; tam determinizm gerekirse `(createdAt, id)` bileşik cursor'a
   geçilmelidir.
