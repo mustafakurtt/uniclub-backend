@@ -20,6 +20,9 @@ export const mailer = createMailer({
   auth: env.SMTP_USER && env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
   // Yerelde Mailpit'in TLS'i yok; prod'da secure/STARTTLS devreye girer.
   ignoreTLS: env.NODE_ENV === "development",
+  // Doğrulama mailleri BullMQ worker'ından art arda gider; havuz bağlantıyı
+  // yeniden kullanır (her mailde SMTP el sıkışması yok).
+  pool: true,
 });
 
 export interface SendMailParams {

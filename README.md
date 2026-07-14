@@ -57,7 +57,7 @@ realtime delivery, background jobs, auditing and structured logging.
 | Validation | **Zod** |
 | Auth | JWT (HS256) + `Bun.password` (bcrypt) |
 | Mail | Nodemailer (Mailpit locally) |
-| Logging | Pino (+ pino-pretty in dev) |
+| Logging | Pino (structured JSON) + optional Vector → Loki → Grafana ([docs](docs/LOGLAMA.md)) |
 | Language | TypeScript (strict) |
 
 ## Architecture at a glance

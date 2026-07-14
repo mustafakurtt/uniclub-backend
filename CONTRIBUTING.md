@@ -38,12 +38,20 @@ git push -u origin feature/club-search
 gh pr create --base develop                   # or use the VS Code GitHub PR extension
 ```
 
-A teammate reviews, CI runs, then **squash merge** into `develop`.
+A teammate reviews, CI runs, then **squash merge** into `develop` — this keeps
+`develop` history one clean commit per unit of work.
 
 ### Cutting a release
 
+> **Use a merge commit for `develop → main` — never squash.** A squash rewrites
+> develop's commits into a brand-new SHA on `main`, so `main` stops being an
+> ancestor of `develop` and the two branches read as "diverged" forever after
+> (even though their content is identical). A merge commit keeps `main` a true
+> superset of `develop`. (Squash is only for `feature → develop`, above.)
+
 ```sh
 gh pr create --base main --head develop --title "release: v1.1.0"
+gh pr merge --merge          # merge commit, NOT --squash
 # after merge:
 git switch main && git pull
 git tag -a v1.1.0 -m "v1.1.0" && git push origin v1.1.0
