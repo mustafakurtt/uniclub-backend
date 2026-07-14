@@ -19,8 +19,12 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
 export const generatePassword = (length = 16): string => {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const symbols = "!@#$%&*?";
-  const bytes = crypto.getRandomValues(new Uint8Array(Math.max(length, 8)));
-  const body = Array.from(bytes.subarray(0, length - 4), (b) => alphabet[b % alphabet.length]).join("");
+  // Alt sınır 8: 4 karakter garantili prefix'e ayrıldığı için daha kısa istenirse
+  // `length - 4` negatife düşer (subarray sondan sayar → yanlış uzunluk). Geçici
+  // şifre zaten ≥8 olmalı.
+  const size = Math.max(length, 8);
+  const bytes = crypto.getRandomValues(new Uint8Array(size));
+  const body = Array.from(bytes.subarray(0, size - 4), (b) => alphabet[b % alphabet.length]).join("");
   // İlk 4 karakter garantili çeşitlilik (bir çok politikanın istediği sınıflar).
   const prefix =
     alphabet[bytes[0] % 26] + // büyük

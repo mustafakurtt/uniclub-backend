@@ -31,6 +31,13 @@ export interface WriteOptions {
  *
  * Not: single-flight süreç-yereldir (aynı instance içindeki eşzamanlı çağrılar).
  * Instance'lar arası koordinasyon amaçlanmaz; paylaşımlı sonuç zaten cache'e yazılır.
+ *
+ * DAYANIKLILIK (fail-open): cache bir OPTİMİZASYONDUR, doğruluk kaynağı değil. Store
+ * I/O hatası (ör. Redis anlık kopması) OKUMADA miss'e düşer (kaynağa gidilir) ve
+ * getOrSet'in İÇ YAZIMINDA yutulur (değer zaten hesaplandı) — böylece bir Redis
+ * takılması isteği düşürmez (rate-limit ile aynı fail-open ilkesi). İSTİSNA: açık
+ * `delete` (invalidasyon) hatayı YUTMAZ, çağırana yükseltir — bir invalidasyonu
+ * sessizce kaçırmak bayat/yanlış yetki gibi doğruluk hatalarına yol açardı.
  */
 export class Cache {
   private readonly store: CacheStore;
@@ -70,9 +77,9 @@ export class Cache {
     );
   }
 
-  /** Cache'ten tipli değer; yoksa/bozuksa `null`. */
+  /** Cache'ten tipli değer; yoksa/bozuksa/store hatasında `null` (miss). */
   async get<T>(key: string): Promise<T | null> {
-    const raw = await this.store.get(this.k(key));
+    const raw = await this.safeStoreGet(this.k(key));
     if (raw === null) return null;
     return this.tryDecode<T>(this.k(key), raw);
   }
@@ -110,7 +117,12 @@ export class Cache {
       const value = await loader();
       if (value !== null && value !== undefined) {
         const ttl = options?.ttlSeconds ?? this.defaultTtlSeconds;
-        await this.store.set(fullKey, this.codec.encode(value), ttl);
+        try {
+          await this.store.set(fullKey, this.codec.encode(value), ttl);
+        } catch (err) {
+          // Yazma best-effort: değer zaten hesaplandı; cache yazımı isteği düşürmesin.
+          this.logger?.warn({ err, key: fullKey }, "cache write failed; returning loaded value");
+        }
       }
       return value;
     })();
@@ -131,10 +143,24 @@ export class Cache {
 
   /** Tam anahtar üzerinden get + decode; miss'i sentinel ile ayırt eder (null da geçerli değer olabilir). */
   private async tryGetRaw<T>(fullKey: string): Promise<T | typeof MISS> {
-    const raw = await this.store.get(fullKey);
+    const raw = await this.safeStoreGet(fullKey);
     if (raw === null) return MISS;
     const decoded = this.tryDecode<T>(fullKey, raw);
     return decoded === null ? MISS : decoded;
+  }
+
+  /**
+   * Store okuma sarmalayıcısı: I/O hatasını (ör. Redis kopması) YUTAR, loglar ve
+   * `null` (miss) döner. Cache doğruluk kaynağı değildir — okuma hatasında kaynağa
+   * düşülür, istek düşmez (fail-open). Bozuk-değer temizliği `tryDecode`'ta.
+   */
+  private async safeStoreGet(fullKey: string): Promise<string | null> {
+    try {
+      return await this.store.get(fullKey);
+    } catch (err) {
+      this.logger?.warn({ err, key: fullKey }, "cache read failed; treating as miss");
+      return null;
+    }
   }
 
   /**
