@@ -68,3 +68,12 @@ emailWorker.on("failed", (job, err) => {
     "❌ doğrulama maili gönderilemedi"
   );
 });
+
+/**
+ * Graceful shutdown için kuyruğu düzgün kapatır: worker önce (işlenen job'un
+ * bitmesini bekler, yenisini almaz), sonra queue. Bkz. index.ts shutdown kaydı.
+ */
+export const closeEmailQueue = async (): Promise<void> => {
+  await emailWorker.close();
+  await emailQueue.close();
+};
