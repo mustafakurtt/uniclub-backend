@@ -34,6 +34,7 @@ import { redisSubscriber } from "./shared/redis/redis.subscriber";
 import { closeEmailQueue } from "./features/auth/auth.queue";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
+import { metrics } from "./shared/metrics/metrics";
 import { createShutdownManager } from "./core/http/shutdown";
 
 const log = logger.child({ module: "bootstrap" });
@@ -55,6 +56,9 @@ export const app = new Hono<{ Variables: Variables & LocaleVariables }>();
 // requestId EN ÖNDE: her istek bir korelasyon kimliği alır; errorHandler bunu
 // istemciye döner + sunucu loguna yazar → "hata aldım" dendiğinde eşleştirilebilir.
 app.use("*", requestId());
+// Metrics: her isteği ölç (süre + sayaç). Erken mount → tüm alt zinciri (413/hata
+// dahil) kapsar; `route` etiketi eşleşen route deseninden gelir (düşük kardinalite).
+app.use("*", metrics.middleware);
 // Güvenlik başlıkları (X-Content-Type-Options, X-Frame-Options, ...) tüm
 // cevaplara (hata dahil) uygulansın diye erken. TLS/HSTS prod'da Caddy'de.
 app.use("*", secureHeaders());
@@ -143,6 +147,10 @@ app.get("/health", async (c) => {
     healthy ? 200 : 503,
   );
 });
+
+// Prometheus metrics exposition — Prometheus periyodik scrape eder.
+// PROD: iç bilgileri sızdırır; Caddy/proxy bunu DIŞARIYA açmamalı (bkz. shared/metrics).
+app.get("/metrics", metrics.handler);
 
 // Rotaları Bağlama
 app.route("/api/auth", authRoutes);
