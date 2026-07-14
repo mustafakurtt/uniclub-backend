@@ -126,7 +126,7 @@ docker compose down -v       # + tüm volume verilerini (log dahil) sil
 
 | Dosya | İşi |
 |---|---|
-| `docker-compose.yml` (`logging` profili) | loki + vector + grafana servisleri |
+| `docker-compose.yml` | loki + vector + grafana servisleri (diğerleriyle birlikte kalkar) |
 | `deploy/logging/vector.yaml` | dosya kaynağı → JSON parse + seviye/etiket → Loki sink |
 | `deploy/logging/grafana/provisioning/datasources/loki.yml` | Grafana'ya Loki'yi otomatik tanıt |
 
