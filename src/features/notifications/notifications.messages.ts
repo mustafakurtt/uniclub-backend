@@ -18,6 +18,9 @@ export const notificationsMessages = defineCatalog({
     "notification.unreadCount": "Okunmamış bildirim sayısı.",
     "notification.markedRead": "Bildirim okundu işaretlendi.",
     "notification.allMarkedRead": "Tüm bildirimler okundu işaretlendi.",
+    "notification.pushKey": "Push public anahtarı.",
+    "notification.pushSubscribed": "Push aboneliği kaydedildi.",
+    "notification.pushUnsubscribed": "Push aboneliği silindi.",
   },
   en: {
     // error
@@ -29,6 +32,9 @@ export const notificationsMessages = defineCatalog({
     "notification.unreadCount": "Unread notification count.",
     "notification.markedRead": "Notification marked as read.",
     "notification.allMarkedRead": "All notifications marked as read.",
+    "notification.pushKey": "Push public key.",
+    "notification.pushSubscribed": "Push subscription saved.",
+    "notification.pushUnsubscribed": "Push subscription removed.",
   },
 });
 
