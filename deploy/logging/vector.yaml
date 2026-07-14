@@ -1,0 +1,62 @@
+# Vector — Rust ile yazılmış, yüksek performanslı, vendor-bağımsız log shipper.
+# Akış: ./logs/app.log (Bun uygulaması host'ta yazar) → JSON parse → Loki.
+#
+# Uygulama container'da değil host'ta (`bun run dev`) çalıştığı için stdout'u
+# doğrudan okuyamayız; bunun yerine LOG_FILE=./logs/app.log ile yazılan DOSYAYI
+# okuruz (compose'da ./logs salt-okunur bağlı). Prod'da uygulama container'a
+# taşınırsa `docker_logs` kaynağına geçilebilir — Loki sink'i aynı kalır.
+
+data_dir: /var/lib/vector
+
+sources:
+  app_logs:
+    type: file
+    include:
+      - /logs/app.log
+
+transforms:
+  parse:
+    type: remap
+    inputs: [app_logs]
+    # pino satırları ham JSON. Parse et; başarısızsa (nadiren) satırı ham bırak, DÜŞÜRME.
+    source: |
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = object!(parsed)
+
+        # pino sayısal seviyesini (30=info…) okunur ada çevir — Loki etiketi için.
+        # else-zinciri yerine "önce varsayılan, sonra bağımsız override" (VRL'de
+        # newline-güvenli, daha temiz).
+        lvl = .level
+        .level = "info"
+        if lvl == 10 { .level = "trace" }
+        if lvl == 20 { .level = "debug" }
+        if lvl == 40 { .level = "warn" }
+        if lvl == 50 { .level = "error" }
+        if lvl == 60 { .level = "fatal" }
+
+        # Kök logger (module'süz) satırları için güvenli varsayılan.
+        if !exists(.module) { .module = "app" }
+
+        # pino epoch-ms zaman damgasını olayın gerçek zamanı yap (aksi halde
+        # Loki alım zamanını kullanır → grafiklerde kayma olur).
+        if exists(.time) {
+          ts, terr = from_unix_timestamp(.time, unit: "milliseconds")
+          if terr == null { .timestamp = ts }
+        }
+      }
+
+sinks:
+  loki:
+    type: loki
+    inputs: [parse]
+    endpoint: http://loki:3100
+    encoding:
+      codec: json
+    # ETİKETLER yalnızca DÜŞÜK-KARDİNALİTE alanlar olmalı (Loki'nin altın kuralı):
+    # requestId/userId gibi yüksek-kardinalite alanları ETİKET YAPMA — onlar log
+    # gövdesinde kalır ve LogQL `| json | userId="..."` ile aranır.
+    labels:
+      app: "{{ app }}"
+      module: "{{ module }}"
+      level: "{{ level }}"

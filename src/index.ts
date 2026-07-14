@@ -19,9 +19,12 @@ import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
 import { Variables, setTokenVerifier } from "./core/auth/auth.middleware";
 import { configureRbac } from "./core/rbac/rbac.middleware";
+import { configureTenantScope } from "./core/rbac/tenant-scope";
 import { verifyToken } from "./shared/utils/jwt.util";
-import { getEffectivePermissions } from "./shared/rbac/rbac.cache";
+import { resolveAuthz } from "./shared/rbac/rbac.cache";
+import { enforceAccountStatus } from "./shared/rbac/authz-policy";
 import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim şekli)
+import "./shared/rbac/authz"; // AuthzContext declaration merging (proje authz alanları)
 import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
 import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
 import { verifyMailConnection } from "./shared/mail/mailer";
@@ -51,15 +54,21 @@ app.use("*", cors());
 // import edemez — dikiş). authMiddleware bunu kullanır. Bkz. core/auth/auth.middleware.
 setTokenVerifier(verifyToken);
 
-// core/rbac'ın projeye özgü tüm bağımlılıklarını enjekte et: alan erişimleri
-// (core alan adını bilmez), bypass rol adları ve izin kaynağı. Bu enjeksiyonla
-// core/rbac artık shared'a hiç bağlı değildir. Bkz. core/rbac/rbac.middleware.
+// core/rbac'a MİNİMAL sözleşmeyi enjekte et: özne kimliği + authz çözümü + resolve
+// sonrası proje politikası (suspended hesabı kes). Core "suspended"i bilmez; politika
+// projede (authz-policy). Bkz. core/rbac/rbac.middleware.
 configureRbac({
   getSubjectId: (user) => user.userId,
+  resolveAuthz,
+  enforce: enforceAccountStatus,
+});
+
+// Tenant-scope AYRI opsiyonel eksen (core/rbac/tenant-scope): alan/param/bypass
+// rolleri enjekte edilir. Sadece-rol/tek-tenant projeler bunu hiç çağırmaz.
+configureTenantScope({
   getTenantId: (user) => user.universityId,
-  tenantScopeBypassRoles: ["super_admin", "platform_support"],
-  tenantParamName: "universityId",
-  getEffectivePermissions,
+  paramName: "universityId",
+  bypassRoles: ["super_admin", "platform_support"],
 });
 
 // guard() zincirindeki denetim izi (audit trail) kancasına bu projenin

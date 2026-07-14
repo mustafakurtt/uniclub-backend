@@ -35,6 +35,13 @@ const envSchema = z.object({
   // ── LOGLAMA ───────────────────────────────────────────────────────────
   /** Verilmezse shared/logger.ts, NODE_ENV'e göre karar verir (prod: info, aksi: debug). */
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
+  /**
+   * Verilirse loglar stdout'a EK OLARAK bu dosyaya da (ham JSON) yazılır; bir
+   * log-toplayıcı ajanı (promtail, fluent-bit, datadog-agent) dosyayı tail'ler.
+   * Verilmezse yalnızca stdout'a yazılır — konteyner/12-factor varsayılanı, platform
+   * (Docker/k8s log driver) logları toplar. Bkz. shared/logger/logger.ts.
+   */
+  LOG_FILE: z.string().optional(),
 
   // ── CACHE ─────────────────────────────────────────────────────────────
   /**

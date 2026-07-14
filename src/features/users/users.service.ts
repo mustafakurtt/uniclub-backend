@@ -1,7 +1,7 @@
 import { usersRepository } from "./users.repository";
 import { verifyPassword, hashPassword } from "../../shared/utils/password.util";
 import { toSafeUser } from "../../shared/utils/user.util";
-import { getEffectivePermissions } from "../../shared/rbac/rbac.cache";
+import { resolveAuthz } from "../../shared/rbac/rbac.cache";
 import { UpdateProfileDTO, ChangePasswordDTO } from "./users.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
 
@@ -57,6 +57,6 @@ export const usersService = {
    * göster/gizle guard'ları için tek kaynak (bkz. docs/yonetim/05 #1).
    */
   async getMyPermissions(userId: string) {
-    return await getEffectivePermissions(userId);
+    return await resolveAuthz(userId);
   },
 };

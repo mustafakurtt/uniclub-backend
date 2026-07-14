@@ -1,6 +1,6 @@
 import { Context, Next } from "hono";
 import { Variables } from "../core/auth/auth.middleware";
-import { getEffectivePermissions } from "../shared/rbac/rbac.cache";
+import { resolveAuthz } from "../shared/rbac/rbac.cache";
 
 /**
  * authMiddleware'den SONRA çalışır. E-postasını henüz doğrulamamış (`pending`)
@@ -17,7 +17,7 @@ import { getEffectivePermissions } from "../shared/rbac/rbac.cache";
  */
 export const requireVerifiedUser = async (c: Context<{ Variables: Variables }>, next: Next) => {
   const user = c.get("user");
-  const authz = await getEffectivePermissions(user.userId);
+  const authz = await resolveAuthz(user.userId);
 
   if (authz.status === "pending") {
     return c.json(

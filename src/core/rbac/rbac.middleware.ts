@@ -1,31 +1,36 @@
 import { Context, Next } from "hono";
 import { Variables, AuthClaims } from "../auth/auth.middleware";
 import { ForbiddenError } from "../http/errors";
-import { EffectivePermissions } from "./rbac.types";
+import { AuthzContext } from "./rbac.types";
 
 export type RbacVariables = Variables & {
-  authz: EffectivePermissions;
+  authz: AuthzContext;
+  /** enforceTenantScope tarafından set edilir (bkz. tenant-scope.ts). Opsiyonel. */
   scopeTenantId?: string;
 };
 
 /**
- * DİKİŞ: RBAC motoru proje-bağımsız kalsın diye, projeye özgü olan HER ŞEY enjekte
- * edilir (setGuardAuditSink deseni). Böylece core kaynağı ne alan adı (userId,
- * universityId) ne de rol adı (super_admin) İSMEN bilir; ayrıca izin kaynağını
- * (getEffectivePermissions) da enjekte ettiğimiz için core/rbac artık shared'a
- * HİÇ bağlı değildir.
+ * DİKİŞ: RBAC motoru proje-bağımsız kalsın diye projeye özgü HER ŞEY enjekte edilir
+ * (setGuardAuditSink deseni). Core ne alan adı (userId) ne rol adı (super_admin)
+ * İSMEN bilir; izin kaynağı da (resolveAuthz) enjekte edildiği için core/rbac
+ * shared'a HİÇ bağlı değildir.
+ *
+ * Sözleşme MİNİMALDİR: yalnızca özne kimliği + authz çözümü. Hesap durumu / rütbe
+ * gibi proje POLİTİKALARI çekirdeğe girmez — `enforce` hook'u ile enjekte edilir.
+ * Tenant-scope AYRI bir modüldür (tenant-scope.ts, ayrı configure) — sadece-rol
+ * veya tek-tenant projeler tenant'ı hiç yapılandırmaz.
  */
 export interface RbacConfig {
-  /** Kullanıcı payload'ından izin araması için özne kimliğini çıkarır. */
+  /** Kullanıcı payload'ından authz araması için özne kimliğini çıkarır. */
   getSubjectId: (user: AuthClaims) => string;
-  /** Kullanıcı payload'ından tenant kimliğini çıkarır (yoksa null). */
-  getTenantId: (user: AuthClaims) => string | null;
-  /** Tenant sınırını aşabilen (çapraz-tenant) platform seviyesi rol adları. */
-  tenantScopeBypassRoles: string[];
-  /** tenantScoped rotalarda kıyaslanacak varsayılan path parametresinin adı. */
-  tenantParamName: string;
-  /** Bir öznenin etkin rol/izinlerini çözer (proje: Redis cache'li repo). */
-  getEffectivePermissions: (subjectId: string) => Promise<EffectivePermissions>;
+  /** Bir öznenin çözülmüş authz bağlamını verir (proje: Redis cache'li repo). */
+  resolveAuthz: (subjectId: string) => Promise<AuthzContext>;
+  /**
+   * Resolve SONRASI proje politikası (opsiyonel). `attachAuthz` her istekte çağırır;
+   * erişim reddediliyorsa FIRLATIR (ör. suspended hesabı kesmek). Verilmezse
+   * politika uygulanmaz — core "suspended" gibi bir kavramı bilmez.
+   */
+  enforce?: (authz: AuthzContext) => void;
 }
 
 let config: RbacConfig | null = null;
@@ -40,16 +45,13 @@ function cfg(): RbacConfig {
 }
 
 /**
- * authMiddleware'den SONRA çalışmalıdır. Kullanıcının etkin rol/izinlerini çözüp
- * context'e ekler. Askıya alınan kullanıcının erişimi ANINDA kesilir.
+ * authMiddleware'den SONRA çalışmalıdır. Öznenin authz bağlamını çözüp context'e
+ * ekler ve varsa proje politikasını (`enforce`) uygular — böylece askıya alınan
+ * kullanıcının erişimi bir sonraki istekte ANINDA kesilebilir (politika projede).
  */
 export const attachAuthz = async (c: Context<{ Variables: RbacVariables }>, next: Next) => {
-  const authz = await cfg().getEffectivePermissions(cfg().getSubjectId(c.get("user")));
-
-  if (authz.status === "suspended") {
-    throw new ForbiddenError("rbac.accountSuspended");
-  }
-
+  const authz = await cfg().resolveAuthz(cfg().getSubjectId(c.get("user")));
+  cfg().enforce?.(authz);
   c.set("authz", authz);
   await next();
 };
@@ -68,42 +70,6 @@ export const requireRole = (roleName: string) => {
     if (!c.get("authz").roles.includes(roleName)) {
       throw new ForbiddenError("rbac.forbidden");
     }
-    await next();
-  };
-};
-
-/**
- * Bir öznenin tenant sınırlarını aşabildiği (platform seviyesi rolü olduğu) mı?
- * Bypass rol adları enjekte edilir (proje verisi). admin.service ile aynı tanımı
- * paylaşsın diye tek noktadan verilir.
- */
-export const hasTenantScopeBypass = (authz: EffectivePermissions): boolean =>
-  authz.roles.some((role) => cfg().tenantScopeBypassRoles.includes(role));
-
-/**
- * Path'teki tenant parametresini, kullanıcının kendi tenant'ıyla kıyaslar. Bypass
- * rolü taşıyanlar herhangi bir tenant'ı hedefleyebilir. Param adı verilmezse
- * `config.tenantParamName`'e düşer; tenant kimliği enjekte edilen `getTenantId`
- * ile alınır — core ne param adını ne alan adını İSMEN bilir.
- */
-export const enforceTenantScope = (paramName?: string) => {
-  return async (c: Context<{ Variables: RbacVariables }>, next: Next) => {
-    const targetTenantId = c.req.param(paramName ?? cfg().tenantParamName);
-    const authz = c.get("authz");
-
-    if (hasTenantScopeBypass(authz)) {
-      c.set("scopeTenantId", targetTenantId);
-      return next();
-    }
-
-    // Tenant kimliği null ise (bypass'sız platform hesabı) karşılaştırma asla
-    // tutmaz — tenant kaynaklarına erişim doğru şekilde reddedilir.
-    const tenantId = cfg().getTenantId(c.get("user"));
-    if (!tenantId || targetTenantId !== tenantId) {
-      throw new ForbiddenError("rbac.tenantForbidden");
-    }
-
-    c.set("scopeTenantId", tenantId);
     await next();
   };
 };
