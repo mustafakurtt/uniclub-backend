@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
+import { bodyLimit } from "hono/body-limit";
 import { requestId } from "hono/request-id";
 import { sql } from "drizzle-orm";
 import { env } from "./config/env";
@@ -33,6 +35,12 @@ import { logger } from "./shared/logger/logger";
 
 const log = logger.child({ module: "bootstrap" });
 
+/** CORS allowlist: virgülle ayrık env → temizlenmiş dizi (boşları at). */
+const CORS_ORIGINS = (env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 // Ana uygulamaya Variables tipini ekliyoruz.
 // `app` export edilir: testler Hono'nun `app.request()` arayüzüyle tüm
 // middleware zincirini gerçek port açmadan koşturur (bkz. tests/). Bir modülü
@@ -44,11 +52,25 @@ export const app = new Hono<{ Variables: Variables & LocaleVariables }>();
 // requestId EN ÖNDE: her istek bir korelasyon kimliği alır; errorHandler bunu
 // istemciye döner + sunucu loguna yazar → "hata aldım" dendiğinde eşleştirilebilir.
 app.use("*", requestId());
+// Güvenlik başlıkları (X-Content-Type-Options, X-Frame-Options, ...) tüm
+// cevaplara (hata dahil) uygulansın diye erken. TLS/HSTS prod'da Caddy'de.
+app.use("*", secureHeaders());
+// Gövde üst sınırı: dev bir payload'a karşı erken kalkan (route'lar body okumadan).
+app.use("*", bodyLimit({
+  maxSize: env.MAX_BODY_BYTES,
+  onError: (c) =>
+    c.json(
+      { success: false, message: "İstek gövdesi çok büyük.", code: "PAYLOAD_TOO_LARGE", requestId: c.get("requestId") },
+      413
+    ),
+}));
 // Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
 // bu dile çevirir (bkz. core/i18n).
 app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
 app.use("*", requestLogger);
-app.use("*", cors());
+// CORS: allowlist env'den (CORS_ORIGINS). Verilmezse tüm origin'lere açık (`*`) —
+// dev için; PROD'da CORS_ORIGINS doldurulmalı. Kimlik Authorization'da, cookie yok.
+app.use("*", cors({ origin: CORS_ORIGINS.length > 0 ? CORS_ORIGINS : "*" }));
 
 // core/auth'un token doğrulayıcısını enjekte et (SECRET env'de olduğu için core
 // import edemez — dikiş). authMiddleware bunu kullanır. Bkz. core/auth/auth.middleware.
