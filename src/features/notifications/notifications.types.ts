@@ -26,6 +26,12 @@ export const NotificationType = {
   CLUB_MEMBERSHIP_DECIDED: "club.membership.decided",
   /** Kullanıcıya global bir rol atandı. data: { roleId, roleName } */
   ROLE_ASSIGNED: "role.assigned",
+  /** Üye olunan kulüp yeni bir etkinlik yayınladı. data: { activityId, clubId } */
+  ACTIVITY_PUBLISHED: "activity.published",
+  /** Katılım bildirilen bir etkinlik iptal edildi. data: { activityId } */
+  ACTIVITY_CANCELLED: "activity.cancelled",
+  /** Kulüp bir etkinliğe co-host olarak davet edildi. data: { activityId, hostClubId, clubId } */
+  ACTIVITY_COHOST_INVITED: "activity.coHostInvited",
 } as const;
 
 export type NotificationTypeKey = (typeof NotificationType)[keyof typeof NotificationType];

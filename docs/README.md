@@ -11,6 +11,9 @@ lives in the [root README](../README.md); this folder holds the deep dives.
 
 Aşağıdakiler frontend'i etkiler; ilgili dokümanlar güncellendi:
 
+- **Yeni feature — Dashboard & Feed:** rollere göre özet/akış (okuma modeli). Öğrenci akışı `GET /api/feed` (kulüplerimin duyuru+etkinlikleri, keyset), öğrenci özeti `GET /api/users/me/dashboard`, kulüp paneli `GET /api/clubs/:clubId/dashboard` (staff), admin paneli `GET /api/admin/universities/:uid/dashboard` (`user.view`). (bkz. `frontend/FRONTEND_DASHBOARD.md`)
+- **Yeni feature — Activities (`/api/activities`):** kulüp etkinlikleri — keşif, katılım (RSVP), takvim (`/api/users/me/activities`) ve kulüp-içi yönetim (`/api/clubs/:clubId/activities`). Etkinlik↔kulüp **M:N** (host/co_host) → aynı üniversite co-hosting **ve** üniversitelerarası turnuva desteklenir. Yeni bildirim tipleri: `activity.published`, `activity.cancelled`. (bkz. `frontend/FRONTEND_ACTIVITIES.md`)
+
 - **Birleşik hata zarfı + i18n:** tüm hatalar `{ success:false, message, code?, details?, requestId }`; `message` `Accept-Language`'e göre (`tr`/`en`). Doğrulama hataları artık ham `ZodError` değil → `code: "VALIDATION_ERROR"` + `details:[{ path, code, message }]`. **Mantığı mesaj metnine değil `code`/HTTP status'a bağlayın.** (bkz. `DENETIM_VE_HATA.md`)
 - **Yeni feature — Moderation (`/api/moderation`):** kullanıcı ban/unban (sebepli), admin şifre sıfırlama (geçici şifre), kullanıcı aktivitesi + moderasyon geçmişi. (bkz. `frontend/FRONTEND_MODERASYON.md`)
 - **Kaldırıldı:** admin `PATCH .../users/:userId/status` → yerine moderation ban/unban.
@@ -40,6 +43,8 @@ Endpoint contracts and expected client behavior for each surface:
 | [FRONTEND_AUTH_GUARD_GUIDE.md](frontend/FRONTEND_AUTH_GUARD_GUIDE.md) | React route/UI guard mimarisi |
 | [FRONTEND_UNIVERSITY.md](frontend/FRONTEND_UNIVERSITY.md) | Üniversite/fakülte/bölüm/domain (soft delete notu) |
 | [FRONTEND_CLUBS.md](frontend/FRONTEND_CLUBS.md) | Kulüpler, üyelik, danışman, başvurular |
+| [FRONTEND_ACTIVITIES.md](frontend/FRONTEND_ACTIVITIES.md) | **Yeni** — etkinlikler: keşif/RSVP/takvim + kulüp-içi yönetim (M:N host/co-host, cross-university) |
+| [FRONTEND_DASHBOARD.md](frontend/FRONTEND_DASHBOARD.md) | **Yeni** — panel & akış: öğrenci feed/özeti, kulüp paneli, admin paneli |
 | [FRONTEND_YONETIM.md](frontend/FRONTEND_YONETIM.md) | Yönetim paneli (kullanıcı/kulüp/başvuru) |
 | [FRONTEND_MODERASYON.md](frontend/FRONTEND_MODERASYON.md) | **Yeni** — ban/unban/şifre sıfırla/aktivite/geçmiş |
 | [FRONTEND_BILDIRIM_VE_LIMITLER.md](frontend/FRONTEND_BILDIRIM_VE_LIMITLER.md) | Bildirimler (WS) + rate limit |

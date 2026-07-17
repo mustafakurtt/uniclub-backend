@@ -95,11 +95,24 @@ export const relations = defineRelations(schema, (r) => ({
 
     notifications: r.many.notifications(),
 
+    // --- ETKİNLİKLER (users↔activities arası 2 ilişki: oluşturan + katılan → ALIAS ZORUNLU) ---
+    createdActivities: r.many.activities({
+      from: r.users.id,
+      to: r.activities.createdBy,
+      alias: "creator_activity",
+    }),
+    attendingActivities: r.many.activities({
+      from: r.users.id.through(r.activityAttendees.userId),
+      to: r.activities.id.through(r.activityAttendees.activityId),
+      alias: "attendee_activity",
+    }),
+
     // Ara tablolara manuel sorgu atmak gerekirse diye:
     userRoles: r.many.userRoles(),
     userPermissions: r.many.userPermissions(),
     clubMemberships: r.many.clubMembers(),
     clubAdvisorships: r.many.clubAdvisors(),
+    activityAttendances: r.many.activityAttendees(),
   },
 
   notifications: {
@@ -183,6 +196,13 @@ export const relations = defineRelations(schema, (r) => ({
     contactLinks: r.many.clubContactLinks(),
     gallery: r.many.clubGallery(),
     announcements: r.many.announcements(),
+
+    // Etkinlikler (M:N — kulüp host ya da co_host olarak katılır).
+    activities: r.many.activities({
+      from: r.clubs.id.through(r.activityClubs.clubId),
+      to: r.activities.id.through(r.activityClubs.activityId),
+    }),
+    activityClubs: r.many.activityClubs(),
   },
   clubAdvisors: {
     club: r.one.clubs({ from: r.clubAdvisors.clubId, to: r.clubs.id }),
@@ -226,5 +246,40 @@ export const relations = defineRelations(schema, (r) => ({
       from: r.clubApplicationApprovals.approverId,
       to: r.users.id,
     }),
+  },
+
+  // ═══════════════════════════════════════════════
+  // ETKİNLİKLER (ACTIVITIES)
+  // ═══════════════════════════════════════════════
+  activities: {
+    // Oluşturan kişi (tekil FK) — users.createdActivities ile eşleşir.
+    creator: r.one.users({
+      from: r.activities.createdBy,
+      to: r.users.id,
+      alias: "creator_activity",
+    }),
+    // Katılan kullanıcılar (M:N) — users.attendingActivities ile eşleşir.
+    attendees: r.many.users({
+      from: r.activities.id.through(r.activityAttendees.userId),
+      to: r.users.id.through(r.activityAttendees.activityId),
+      alias: "attendee_activity",
+    }),
+    // Katılan kulüpler (M:N, host/co_host).
+    clubs: r.many.clubs({
+      from: r.activities.id.through(r.activityClubs.activityId),
+      to: r.clubs.id.through(r.activityClubs.clubId),
+    }),
+
+    // Ara tablolara doğrudan erişim (rol/status/checkedInAt okumak için).
+    activityClubs: r.many.activityClubs(),
+    activityAttendees: r.many.activityAttendees(),
+  },
+  activityClubs: {
+    activity: r.one.activities({ from: r.activityClubs.activityId, to: r.activities.id }),
+    club: r.one.clubs({ from: r.activityClubs.clubId, to: r.clubs.id }),
+  },
+  activityAttendees: {
+    activity: r.one.activities({ from: r.activityAttendees.activityId, to: r.activities.id }),
+    user: r.one.users({ from: r.activityAttendees.userId, to: r.users.id }),
   },
 }));

@@ -16,6 +16,8 @@ import {
 } from "../../features/notifications/notifications.messages";
 import { authMessages, type AuthMessageKey } from "../../features/auth/auth.messages";
 import { clubsMessages, type ClubsMessageKey } from "../../features/clubs/clubs.messages";
+import { activitiesMessages, type ActivitiesMessageKey } from "../../features/activities/activities.messages";
+import { dashboardMessages, type DashboardMessageKey } from "../../features/dashboard/dashboard.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -35,7 +37,9 @@ export const messages = mergeCatalogs(
   adminMessages,
   notificationsMessages,
   authMessages,
-  clubsMessages
+  clubsMessages,
+  activitiesMessages,
+  dashboardMessages
 );
 
 /**
@@ -55,4 +59,6 @@ export type MessageKey =
   | AdminMessageKey
   | NotificationsMessageKey
   | AuthMessageKey
-  | ClubsMessageKey;
+  | ClubsMessageKey
+  | ActivitiesMessageKey
+  | DashboardMessageKey;

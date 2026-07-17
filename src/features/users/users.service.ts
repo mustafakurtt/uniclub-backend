@@ -2,6 +2,8 @@ import { usersRepository } from "./users.repository";
 import { verifyPassword, hashPassword } from "../../shared/utils/password.util";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { resolveAuthz } from "../../shared/rbac/rbac.cache";
+import { activitiesService } from "../activities/activities.service";
+import { dashboardService } from "../dashboard/dashboard.service";
 import { UpdateProfileDTO, ChangePasswordDTO } from "./users.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
 
@@ -50,6 +52,16 @@ export const usersService = {
 
   async listMyAdvisedClubs(userId: string) {
     return await usersRepository.findAdvisedClubsByUser(userId);
+  },
+
+  /** Katılım bildirdiğim etkinlikler (takvimim) — activities feature'ına delege. */
+  async listMyActivities(userId: string) {
+    return await activitiesService.listMine(userId);
+  },
+
+  /** Öğrenci panel özeti (kulüp/etkinlik/istek sayaçları) — dashboard'a delege. */
+  async getDashboard(userId: string) {
+    return await dashboardService.getStudentSummary(userId);
   },
 
   /**

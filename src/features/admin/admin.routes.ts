@@ -9,6 +9,9 @@ import { AdminPermission } from "./admin.permissions";
 import { ClubPermission } from "../clubs/clubs.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
+import { ActivityPermission } from "../activities/activities.permissions";
+import { activitiesService } from "../activities/activities.service";
+import { DashboardPermission } from "../dashboard/dashboard.permissions";
 import {
   updateClubStatusSchema,
   listUsersQuerySchema,
@@ -19,6 +22,7 @@ import {
   updateUserDepartmentSchema,
 } from "./admin.schema";
 import { adminService } from "./admin.service";
+import { dashboardService } from "../dashboard/dashboard.service";
 
 export const adminRoutes = new Hono<{ Variables: RbacVariables }>();
 
@@ -38,6 +42,18 @@ adminRoutes.get("/universities", authMiddleware, attachAuthz, async (c) => {
   });
   return ok(c, universities, "admin.accessibleUniversitiesListed");
 });
+
+// 0B. TENANT PANEL ÖZETİ (salt-okunur → user.view, tenantScoped)
+// Kulüp/kullanıcı durum dağılımları + bekleyen başvuru + yaklaşan etkinlik sayaçları.
+adminRoutes.get(
+  "/universities/:universityId/dashboard",
+  ...guard(DashboardPermission.VIEW, { tenantScoped: true }),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const summary = await dashboardService.getAdminDashboard(universityId);
+    return ok(c, summary, "dashboard.adminLoaded");
+  }
+);
 
 // 1. ÜNİVERSİTEDEKİ KULLANICILARI LİSTELEME (salt-okunur → user.view)
 adminRoutes.get(
@@ -263,5 +279,17 @@ adminRoutes.delete(
     const { universityId, clubId, imageId } = c.req.param();
     await adminService.moderateRemoveGalleryImage(universityId, clubId, imageId);
     return done(c, "admin.galleryImageRemoved");
+  }
+);
+
+// 17. ETKİNLİK MODERASYONU — tenant'taki herhangi bir kulübün etkinliğini iptal etme
+// (etkinlik M:N olduğu için :clubId taşımaz; servis etkinliğin tenant'a ait olduğunu doğrular)
+adminRoutes.post(
+  "/universities/:universityId/activities/:activityId/cancel",
+  ...guard(ActivityPermission.MODERATE, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, activityId } = c.req.param();
+    const cancelled = await activitiesService.moderateCancel(universityId, activityId);
+    return ok(c, cancelled, "activity.cancelledOk");
   }
 );

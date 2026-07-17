@@ -1,0 +1,2 @@
+CREATE TYPE "activity_club_status" AS ENUM('invited', 'accepted');--> statement-breakpoint
+ALTER TABLE "activity_clubs" ADD COLUMN "status" "activity_club_status" DEFAULT 'accepted'::"activity_club_status" NOT NULL;

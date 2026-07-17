@@ -11,6 +11,8 @@ import { ClubPermission } from "../clubs/clubs.permissions";
 import { UniversityPermission } from "../university/university.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
+import { ActivityPermission } from "../activities/activities.permissions";
+import { DashboardPermission } from "../dashboard/dashboard.permissions";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
@@ -34,6 +36,8 @@ const SEED_PERMISSION_KEYS = new Set<string>([
   ...Object.values(AuthPermission),
   ...Object.values(AnnouncementPermission),
   ...Object.values(GalleryPermission),
+  ...Object.values(ActivityPermission),
+  ...Object.values(DashboardPermission),
 ]);
 
 /**
