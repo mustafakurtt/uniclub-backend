@@ -79,6 +79,7 @@ stuffing**'i (10.000 hesaba 1'er deneme) hiç görmez — her sayaç 1'de kalır
 (başarısız login toplamı) + kademeli hesap kilidi.
 
 ### 2.4 İstek bağlamı (AsyncLocalStorage)
+> Middleware ekseninin tamamı için bkz. [CORE_MIDDLEWARE.md](CORE_MIDDLEWARE.md).
 `requestId` elle taşınıyor; sadece request-logger ve error-handler görüyor. Servis
 veya kuyruk worker'ı log yazınca korelasyon kimliği düşüyor → zincir takip edilemiyor.
 
