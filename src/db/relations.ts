@@ -282,4 +282,12 @@ export const relations = defineRelations(schema, (r) => ({
     activity: r.one.activities({ from: r.activityAttendees.activityId, to: r.activities.id }),
     user: r.one.users({ from: r.activityAttendees.userId, to: r.users.id }),
   },
+
+  // ═══════════════════════════════════════════════
+  // MEDYA (MEDIA)
+  // ═══════════════════════════════════════════════
+  media: {
+    uploader: r.one.users({ from: r.media.uploaderId, to: r.users.id }),
+    university: r.one.universities({ from: r.media.universityId, to: r.universities.id }),
+  },
 }));

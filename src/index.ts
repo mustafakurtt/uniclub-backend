@@ -15,6 +15,7 @@ import { usersRoutes } from "./features/users/users.routes";
 import { clubsRoutes } from "./features/clubs/clubs.routes";
 import { activitiesRoutes } from "./features/activities/activities.routes";
 import { feedRoutes } from "./features/dashboard/dashboard.routes";
+import { mediaRoutes, mediaServeRoutes } from "./features/media/media.routes";
 import { notificationsRoutes } from "./features/notifications/notifications.routes";
 import { auditRoutes } from "./features/audit/audit.routes";
 import { moderationRoutes } from "./features/moderation/moderation.routes";
@@ -65,14 +66,19 @@ app.use("*", metrics.middleware);
 // cevaplara (hata dahil) uygulansın diye erken. TLS/HSTS prod'da Caddy'de.
 app.use("*", secureHeaders());
 // Gövde üst sınırı: dev bir payload'a karşı erken kalkan (route'lar body okumadan).
-app.use("*", bodyLimit({
+// Dosya YÜKLEME rotası (`/api/uploads`) bu global JSON sınırından MUAFTIR — kendi
+// (daha büyük) MAX_UPLOAD_BYTES'ını uygular (bkz. features/media/media.routes.ts).
+const globalBodyLimit = bodyLimit({
   maxSize: env.MAX_BODY_BYTES,
   onError: (c) =>
     c.json(
       { success: false, message: "İstek gövdesi çok büyük.", code: "PAYLOAD_TOO_LARGE", requestId: c.get("requestId") },
       413
     ),
-}));
+});
+app.use("*", (c, next) =>
+  c.req.path.startsWith("/api/uploads") ? next() : globalBodyLimit(c, next)
+);
 // Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
 // bu dile çevirir (bkz. core/i18n).
 app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
@@ -162,6 +168,9 @@ app.route("/api/users", usersRoutes);
 app.route("/api/clubs", clubsRoutes);
 app.route("/api/activities", activitiesRoutes);
 app.route("/api/feed", feedRoutes);
+app.route("/api/uploads", mediaRoutes);
+// Yüklenen dosyaların PUBLIC servisi (auth yok; /api altında DEĞİL).
+app.route("/uploads", mediaServeRoutes);
 app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);

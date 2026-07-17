@@ -26,6 +26,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Moderation (kullanıcı yönetimi)](#8-moderation--apimoderation)
   - [Activities (etkinlikler)](#9-activities--apiactivities)
   - [Dashboard & Feed](#10-dashboard--feed)
+  - [Media (dosya yükleme)](#11-media--dosya-yükleme)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -33,7 +34,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/notifications`, `/api/audit`, `/api/moderation`. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -358,7 +359,7 @@ Body şemaları:
 
 **POST** body: `{ "imageUrl": "url (max 512)", "caption": "string (max 256, opsiyonel)" }`
 
-> Not: Dosya upload endpoint'i yok — `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Görsel yükleme (S3/Cloudinary vb.) frontend veya ayrı bir servis tarafından yapılıp URL buraya verilmelidir.
+> Not: `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Bu URL'yi **`POST /api/uploads`** ile (gerçek dosya yükleyip) üretebilirsiniz — bkz. [Media](#11-media--dosya-yükleme). Alternatif olarak harici bir servisin (S3/Cloudinary) URL'si de verilebilir.
 
 ---
 
@@ -470,6 +471,21 @@ Rollere göre özet/akış (okuma modeli — mevcut veriyi birleştirir).
 | GET | `/api/admin/universities/:universityId/dashboard` | `dashboard.view` (tenant) | Tenant özeti (kulüp/kullanıcı durum dağılımı + bekleyen başvuru + yaklaşan etkinlik) |
 
 Feed öğesi: `{ type: "announcement"|"activity", at (ISO), club, item }`. `nextCursor` doluysa `?cursor=` ile devam.
+
+---
+
+### 11) Media (dosya yükleme)
+
+Gerçek dosya yükleme. **Tam referans: [`docs/frontend/FRONTEND_MEDIA.md`](frontend/FRONTEND_MEDIA.md).**
+Akış: **yükle → dönen URL'yi mevcut `*Url` alanına yaz** (endpoint'ler hâlâ URL string alır).
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| POST | `/api/uploads` | Bearer | multipart `file` + `purpose` → `{ id, url }`. Yalnızca görsel (magic-byte doğrulaması), ≤ `MAX_UPLOAD_BYTES` (5MB) |
+| DELETE | `/api/uploads/:mediaId` | Bearer | Sil (yalnızca yükleyen) |
+| GET | `/uploads/:key` | Public | Servis (`Cache-Control: immutable`) |
+
+`purpose`: `avatar\|club_logo\|club_cover\|gallery\|other`. Boyut aşımı → `413`; görsel değil → `400`.
 
 ---
 
