@@ -81,6 +81,18 @@ export class ConflictError extends HttpError {
 }
 
 /**
+ * Hız sınırı aşıldı. `code` varsayılan "RATE_LIMITED" — frontend'in mesaj metnine
+ * string-match etmeden 429'u ayırt edebilmesi için (aynı EMAIL_NOT_VERIFIED
+ * konvansiyonu). `Retry-After`/`RateLimit-*` başlıkları hatayı fırlatan katmanın
+ * sorumluluğudur (bkz. core/ratelimit/rate-limiter.ts).
+ */
+export class TooManyRequestsError extends HttpError {
+  constructor(message: string, options?: Omit<HttpErrorOptions, "code"> & { code?: string }) {
+    super(429, message, { ...options, code: options?.code ?? "RATE_LIMITED" });
+  }
+}
+
+/**
  * Girdi doğrulama hatası (422 değil, proje konvansiyonu gereği 400). `code`
  * varsayılan "VALIDATION_ERROR" — frontend string eşleştirmeden ayırt eder;
  * `details` alan-bazlı issue listesini taşır. Doğrulama katmanı (bkz.

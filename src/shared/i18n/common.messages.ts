@@ -17,6 +17,8 @@ export const commonMessages = defineCatalog({
     "rbac.accountSuspended": "Hesabınız askıya alınmıştır. Lütfen SKS birimiyle iletişime geçin.",
     "rbac.forbidden": "Bu işlem için yetkiniz bulunmamaktadır.",
     "rbac.tenantForbidden": "Bu üniversiteye ait kaynaklara erişim yetkiniz bulunmamaktadır.",
+    // hız sınırı (core/ratelimit) — {minutes}/{seconds} limiter tarafından geçilir
+    "rateLimit.exceeded": "Çok fazla deneme yaptınız. Lütfen {minutes} dakika sonra tekrar deneyin.",
     // alan-bazlı zod issue mesajları (validate.ts, issue.code'undan üretir)
     "validation.field.too_small": "Değer çok küçük (en az {minimum}).",
     "validation.field.too_big": "Değer çok büyük (en fazla {maximum}).",
@@ -37,6 +39,8 @@ export const commonMessages = defineCatalog({
     "rbac.accountSuspended": "Your account has been suspended. Please contact the student affairs office.",
     "rbac.forbidden": "You do not have permission for this action.",
     "rbac.tenantForbidden": "You do not have access to resources of this university.",
+    // rate limiting (core/ratelimit) — {minutes}/{seconds} passed by the limiter
+    "rateLimit.exceeded": "Too many attempts. Please try again in {minutes} minute(s).",
     // field-level zod issue messages (produced by validate.ts from issue.code)
     "validation.field.too_small": "Too small (min {minimum}).",
     "validation.field.too_big": "Too large (max {maximum}).",
