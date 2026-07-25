@@ -34,6 +34,7 @@ Bu klasör uzun olduğu için dosyalara bölünmüştür:
 | [05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md) | Bu sayfayı tam yapabilmek için backend'de **henüz olmayan** ama gereken endpoint'ler + öneri şemaları |
 | [06-rol-mimarisi-yeniden-tasarim.md](06-rol-mimarisi-yeniden-tasarim.md) | Kurumsal 9 rollük model, `admin` → `university_admin`, salt-okunur `*.view` yetkileri, tenant moderasyonu |
 | [07-rutbe-ve-kapsam.md](07-rutbe-ve-kapsam.md) | **Rol rütbesi (`roles.rank`) + hiyerarşi kuralları**, self-demotion / son-admin / escalation korumaları, tenant'sız platform hesapları, kapsam-farkında `GET /admin/universities` |
+| [08-aday-soru-platformu.md](08-aday-soru-platformu.md) | 🟡 **TASARIM (uygulanmadı)** — Tanıtım günleri soru-cevap platformu: tenant'sız **aday** kullanıcı sınıfı, `user_identities` ile kimlik temeli, `candidate`/`admission_rep` rolleri, ilk **auth'suz public** yüzey, moderasyon politikası, aday→öğrenci dönüşümü |
 
 ---
 
