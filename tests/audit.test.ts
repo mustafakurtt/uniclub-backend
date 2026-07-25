@@ -75,9 +75,10 @@ describe("Denetim izi (audit trail)", () => {
     expect(kayit!.status).toBe(200);
     expect(kayit!.targetType).toBe("club");
     expect(kayit!.targetId).toBe(techClubId);
-    // `clientIp` fırlatırsa sink düşer ve kayıt HİÇ yazılmaz; dolu olması
-    // app.request() bağlamında da IP çözümünün güvenli davrandığını gösterir.
-    expect(kayit!.ip).toBeTruthy();
+    // `app.request()` gerçek bir sokete bağlı değildir, yani IP YOKTUR ve `null`
+    // dürüst karşılıktır. Asıl güvence kaydın var olmasıdır: `clientIp` burada
+    // fırlatsaydı sink düşer ve satır HİÇ yazılmazdı (bu testin varlık sebebi).
+    expect(kayit!.ip).toBeNull();
   });
 
   it("REDDEDİLEN deneme de (403) kaydedilir — denetim izinin asıl değeri", async () => {
