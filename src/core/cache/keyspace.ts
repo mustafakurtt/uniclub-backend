@@ -109,6 +109,23 @@ export type Keyspace<S extends Record<string, AnySpec>> = {
     : never;
 };
 
+export interface KeyspaceOptions {
+  /**
+   * ŞEMA DAMGASI. Cache'lenen değerlerin ŞEKLİ değiştiğinde artırın (ör. bir
+   * repository sorgusuna kolon eklendi, bir ilişki `with`'e girdi).
+   *
+   * Neden gerekli: şekil değişikliği SESSİZDİR. Eski girdi hâlâ geçerli JSON'dur,
+   * yalnızca eksik alanlıdır — `tryDecode` onu bozuk saymaz, yakalayamaz. Deploy
+   * sonrası TTL boyunca (varsayılan 5 dk) eksik alanlı cevaplar döner. Sürüm
+   * artırınca anahtar uzayı (`university:v2:…`) değişir, eski girdilere hiç
+   * erişilmez ve TTL ile temizlenirler.
+   *
+   * Verilmezse önek sürümsüzdür (bugünkü davranış) — yani artırmayı unutmak
+   * durumu kötüleştirmez, sadece korumadan yararlanmamış olursunuz.
+   */
+  version?: number;
+}
+
 /**
  * Bir grup girdi tanımını verilen cache'in `namespace`'ine bağlar.
  *
@@ -122,9 +139,14 @@ export type Keyspace<S extends Record<string, AnySpec>> = {
 export function defineKeyspace<S extends Record<string, AnySpec>>(
   cache: Cache,
   namespace: string,
-  specs: S
+  specs: S,
+  options?: KeyspaceOptions
 ): Keyspace<S> {
-  const ns = cache.namespace(namespace);
+  // Sürüm ÖNEKİN İÇİNDE, namespace'ten SONRA durur (`university:v2:…`) ki Redis'te
+  // namespace bazlı tarama (`SCAN university:*`) ve metrik etiketi bozulmasın.
+  const ns = cache.namespace(
+    options?.version ? `${namespace}:v${options.version}` : namespace
+  );
   const bound: Record<string, unknown> = {};
 
   for (const [name, spec] of Object.entries(specs)) {

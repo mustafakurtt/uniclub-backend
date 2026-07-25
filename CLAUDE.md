@@ -95,7 +95,13 @@ Each feature owns a `<feature>.cache.ts` declaring two things and nothing else:
 
 What is *not* automated, on purpose: deciding which write invalidates what is business knowledge, and a path-convention engine that guessed it would fail silently on exactly the cases above. What **is** automated is catching an undeclared decision: `tests/unit/cache-coverage.test.ts` asserts via `uncoveredEntries()` that every declared entry is dropped by at least one effect — an entry nothing invalidates is permanently stale until TTL. Add an entry without wiring an effect and that test goes red. `dashboard` is listed there as an explicit, named exception rather than silently skipped.
 
-Recipe for a new cached read: add the entry to the keyspace → call `.read(loader)` in the service → add/extend the effect → trigger it (route `invalidates` if request-derivable and unconditional, else `emit` in the service) → the coverage test keeps you honest. Note the JSON codec turns `Date` into a string on round-trip: cached data that feeds **write-path logic** must re-coerce (`new Date(x)`); this bit `activities` once.
+Recipe for a new cached read: add the entry to the keyspace → call `.read(loader)` in the service → add/extend the effect → trigger it (route `invalidates` if request-derivable and unconditional, else `emit` in the service) → the coverage test keeps you honest.
+
+Two more things the layer handles for you. The default codec is **`richCodec`**, which round-trips `Date` (`{"__d":"<ISO>"}`) — plain JSON turned it into a string and blew up write-path logic like `startsAt.getTime()` once in `activities`; the one constraint is that cached data must not use `__d` as a field name. And a keyspace can carry a **schema stamp** (`defineKeyspace(..., { version: 2 })`): a shape change (a new column in a cached query) leaves old entries as *valid* JSON with missing fields, which `tryDecode` cannot catch — bumping the version moves the keyspace to `university:v2:` so stale-shaped entries become unreachable. Bump it in the same PR that changes a cached query's shape.
+
+Cache is **instrumented**: `uniclub_cache_operations_total{namespace,result=hit|miss|error}` and `uniclub_cache_operation_duration_seconds{namespace,operation}` land on `/metrics`. `error` is counted separately from `miss` on purpose — fail-open means a Redis outage never fails a request, so that counter is its only signal. Labels are the **namespace**, never the key (cardinality).
+
+Full architecture record + professionalization roadmap: [docs/cache/](docs/cache/).
 
 **Rate limiting** (`src/middlewares/rate-limit.middleware.ts`): Redis fixed-window counters, fail-open if Redis is down. Keyed by the **identity of the protected resource, not the IP** — students share one campus NAT IP, so an IP-keyed limit would lock out the whole university. `login` and `resend-verification` are keyed by email; only `register` (where no identity exists yet) uses a generous IP ceiling.
 

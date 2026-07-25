@@ -293,7 +293,9 @@ export const activitiesService = {
    */
   async rsvp(userId: string, universityId: string, activityId: string, data: RsvpDTO) {
     const detail = await this.resolveViewable(userId, universityId, activityId);
-    // detail cache'ten gelmiş olabilir (jsonCodec Date'i string'e çevirir) → coerce.
+    // `new Date(...)` sarmalaması ARTIK GEREKLİ DEĞİL: varsayılan cache codec'i
+    // (core/cache richCodec) Date'i Date olarak geri getiriyor. Savunma amaçlı
+    // bırakıldı — Date'i de string'i de kabul eder, maliyeti yok.
     if (new Date(detail.startsAt).getTime() < Date.now()) {
       throw badRequest("activity.pastCannotRsvp");
     }

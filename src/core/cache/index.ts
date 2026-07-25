@@ -8,7 +8,13 @@
  */
 export { Cache, type CacheOptions, type WriteOptions } from "./cache";
 export type { CacheStore } from "./cache.store";
-export { jsonCodec, type Codec } from "./codec";
+export { jsonCodec, richCodec, type Codec } from "./codec";
+export {
+  noopCacheMetrics,
+  type CacheMetrics,
+  type CacheOperation,
+  type CacheReadResult,
+} from "./cache.metrics";
 
 export {
   defineKeyspace,
@@ -23,6 +29,7 @@ export {
   type EntryOptions,
   type EntrySpec,
   type Keyspace,
+  type KeyspaceOptions,
 } from "./keyspace";
 export { invalidates, fromParams, type InvalidatesOptions } from "./invalidates";
 

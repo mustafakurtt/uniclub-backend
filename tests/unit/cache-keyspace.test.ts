@@ -213,6 +213,27 @@ describe("effect", () => {
   });
 });
 
+describe("şema damgası (version)", () => {
+  it("sürüm anahtar uzayını ayırır — eski girdilere erişilmez", async () => {
+    const cache = newCache();
+    const v1 = defineKeyspace(cache, "uni", { list: entry<string[]>()("list") });
+    const v2 = defineKeyspace(cache, "uni", { list: entry<string[]>()("list") }, { version: 2 });
+
+    await v1.list().read(async () => ["eski şekil"]);
+
+    let reloaded = false;
+    const fresh = await v2.list().read(async () => {
+      reloaded = true;
+      return ["yeni şekil"];
+    });
+
+    expect(reloaded).toBe(true); // v2 v1'in girdisini GÖRMEZ
+    expect(fresh).toEqual(["yeni şekil"]);
+    expect(await cache.get<string[]>("uni:list")).toEqual(["eski şekil"]); // v1 duruyor (TTL ile düşer)
+    expect(await cache.get<string[]>("uni:v2:list")).toEqual(["yeni şekil"]);
+  });
+});
+
 describe("uncoveredEntries (kapsam denetimi)", () => {
   it("hiçbir efektin düşürmediği girdiyi bildirir", () => {
     const keys = buildKeyspace(newCache());

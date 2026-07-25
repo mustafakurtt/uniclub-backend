@@ -1,11 +1,12 @@
 import type { CacheStore } from "./cache.store";
-import { jsonCodec, type Codec } from "./codec";
+import { richCodec, type Codec } from "./codec";
+import { noopCacheMetrics, type CacheMetrics, type CacheOperation } from "./cache.metrics";
 import type { Logger } from "../logger/logger";
 
 export interface CacheOptions {
   /** Alttaki depolama adaptörü (memory / redis / null). */
   store: CacheStore;
-  /** Serialization stratejisi. Varsayılan `jsonCodec`. */
+  /** Serialization stratejisi. Varsayılan `richCodec` (Date'i korur). */
   codec?: Codec;
   /** Anahtar öneki (namespace). Genelde `namespace()` ile kurulur. */
   prefix?: string;
@@ -13,6 +14,8 @@ export interface CacheOptions {
   defaultTtlSeconds?: number;
   /** Verilirse decode hataları buraya yazılır (dev-facing, İngilizce). */
   logger?: Logger;
+  /** Ölçüm dikişi. Verilmezse no-op (bkz. cache.metrics.ts). */
+  metrics?: CacheMetrics;
 }
 
 export interface WriteOptions {
@@ -45,6 +48,9 @@ export class Cache {
   private readonly prefix: string;
   private readonly defaultTtlSeconds?: number;
   private readonly logger?: Logger;
+  private readonly metrics: CacheMetrics;
+  /** Metrik etiketi: namespace'siz kök örnek için "root" (boş etiket yerine). */
+  private readonly label: string;
   /** Uçuştaki yüklemeler (tam anahtar → promise). Çocuk namespace'lerle PAYLAŞILIR. */
   private readonly inFlight: Map<string, Promise<unknown>>;
   /**
@@ -67,10 +73,14 @@ export class Cache {
     }
   ) {
     this.store = options.store;
-    this.codec = options.codec ?? jsonCodec;
+    this.codec = options.codec ?? richCodec;
     this.prefix = options.prefix ?? "";
     this.defaultTtlSeconds = options.defaultTtlSeconds;
     this.logger = options.logger;
+    this.metrics = options.metrics ?? noopCacheMetrics;
+    // Kardinalite: etiket keyspace ÖNEKİ, anahtar değil. Zincirli namespace'lerde
+    // en dıştaki segment yeter ("university:faculties" değil "university").
+    this.label = this.prefix ? this.prefix.split(":")[0] : "root";
     // Kök örnek yeni bir harita kurar; çocuklar kökünkini paylaşır ki aynı TAM
     // anahtar farklı namespace nesnelerinden çağrılsa bile tek yükleme olsun.
     this.inFlight = shared?.inFlight ?? new Map();
@@ -91,6 +101,7 @@ export class Cache {
         prefix: this.prefix ? `${this.prefix}:${prefix}` : prefix,
         defaultTtlSeconds: this.defaultTtlSeconds,
         logger: this.logger,
+        metrics: this.metrics,
       },
       {
         inFlight: this.inFlight,
@@ -102,14 +113,14 @@ export class Cache {
 
   /** Cache'ten tipli değer; yoksa/bozuksa/store hatasında `null` (miss). */
   async get<T>(key: string): Promise<T | null> {
-    const raw = await this.safeStoreGet(this.k(key));
-    if (raw === null) return null;
-    return this.tryDecode<T>(this.k(key), raw);
+    // getOrSet ile AYNI yoldan geçer → hit/miss/error sayımı tek yerde kalır.
+    const result = await this.tryGetRaw<T>(this.k(key));
+    return result === MISS ? null : result;
   }
 
   async set<T>(key: string, value: T, options?: WriteOptions): Promise<void> {
     const ttl = options?.ttlSeconds ?? this.defaultTtlSeconds;
-    await this.store.set(this.k(key), this.codec.encode(value), ttl);
+    await this.timed("set", () => this.store.set(this.k(key), this.codec.encode(value), ttl));
   }
 
   /** Bir veya birden çok anahtarı geçersiz kılar. */
@@ -120,7 +131,7 @@ export class Cache {
     for (const fullKey of keys) {
       if (this.loading.has(fullKey)) this.invalidatedWhileLoading.add(fullKey);
     }
-    await this.store.delete(keys);
+    await this.timed("delete", () => this.store.delete(keys));
   }
 
   /**
@@ -163,7 +174,7 @@ export class Cache {
         if (value !== null && value !== undefined && !invalidated) {
           const ttl = options?.ttlSeconds ?? this.defaultTtlSeconds;
           try {
-            await this.store.set(fullKey, this.codec.encode(value), ttl);
+            await this.timed("set", () => this.store.set(fullKey, this.codec.encode(value), ttl));
           } catch (err) {
             // Yazma best-effort: değer zaten hesaplandı; cache yazımı isteği düşürmesin.
             this.logger?.warn({ err, key: fullKey }, "cache write failed; returning loaded value");
@@ -208,11 +219,21 @@ export class Cache {
     return this.prefix ? `${this.prefix}:${key}` : key;
   }
 
-  /** Tam anahtar üzerinden get + decode; miss'i sentinel ile ayırt eder (null da geçerli değer olabilir). */
+  /**
+   * Tam anahtar üzerinden get + decode; miss'i sentinel ile ayırt eder (null da
+   * geçerli değer olabilir). Okuma metriğini BURADA sayarız — `get` ve `getOrSet`
+   * ikisi de buradan geçer, dolayısıyla sayım tek yerde ve tutarlı olur.
+   */
   private async tryGetRaw<T>(fullKey: string): Promise<T | typeof MISS> {
-    const raw = await this.safeStoreGet(fullKey);
-    if (raw === null) return MISS;
-    const decoded = this.tryDecode<T>(fullKey, raw);
+    const read = await this.safeStoreGet(fullKey);
+    if (read.raw === null) {
+      // Hata AYRI sayılır; normal bir "yok" ile aynı kefeye konmamalı.
+      this.metrics.onRead(this.label, read.errored ? "error" : "miss");
+      return MISS;
+    }
+    const decoded = this.tryDecode<T>(fullKey, read.raw);
+    // Bozuk değer de miss'tir (kaynağa gidilir), hit sayılmamalı.
+    this.metrics.onRead(this.label, decoded === null ? "miss" : "hit");
     return decoded === null ? MISS : decoded;
   }
 
@@ -220,13 +241,30 @@ export class Cache {
    * Store okuma sarmalayıcısı: I/O hatasını (ör. Redis kopması) YUTAR, loglar ve
    * `null` (miss) döner. Cache doğruluk kaynağı değildir — okuma hatasında kaynağa
    * düşülür, istek düşmez (fail-open). Bozuk-değer temizliği `tryDecode`'ta.
+   *
+   * Hata AYRI sayılır (`error`), çünkü fonksiyonel olarak miss gibi davranır ama
+   * anlamı tamamen farklıdır: biri normal, diğeri arıza sinyalidir.
    */
-  private async safeStoreGet(fullKey: string): Promise<string | null> {
+  private async safeStoreGet(fullKey: string): Promise<StoreRead> {
     try {
-      return await this.store.get(fullKey);
+      return { raw: await this.timed("get", () => this.store.get(fullKey)), errored: false };
     } catch (err) {
       this.logger?.warn({ err, key: fullKey }, "cache read failed; treating as miss");
-      return null;
+      return { raw: null, errored: true };
+    }
+  }
+
+  /**
+   * Bir depolama işlemini süreriyle ölçer. Hata durumunda da süre kaydedilir
+   * (timeout'lar en pahalı çağrılardır; ölçüm dışında bırakılırsa tablo yalancı
+   * derecede iyi görünür), sonra hata çağırana yükseltilir.
+   */
+  private async timed<T>(operation: CacheOperation, run: () => Promise<T>): Promise<T> {
+    const startedAt = performance.now();
+    try {
+      return await run();
+    } finally {
+      this.metrics.onOperation(this.label, operation, (performance.now() - startedAt) / 1000);
     }
   }
 
@@ -248,3 +286,13 @@ export class Cache {
 
 /** getOrSet içinde "cache'te yok" ile "değeri null" ayrımı için özel sentinel. */
 const MISS = Symbol("cache-miss");
+
+/**
+ * Store okumasının sonucu. `errored` bilgisi dönüş DEĞERİNDE taşınır, instance
+ * alanında değil: aynı Cache örneği üzerinde eşzamanlı okumalar bir bayrağı
+ * birbirinin altından çekerdi.
+ */
+interface StoreRead {
+  raw: string | null;
+  errored: boolean;
+}
