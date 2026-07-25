@@ -183,6 +183,47 @@ describe("Cache facade", () => {
     expect(await c.getOrSet("k", async () => "yeniden")).toBe("yeniden");
   });
 
+  it("YARIŞ: yükleme sürerken gelen invalidasyon, eski değerin yazılmasını engeller", async () => {
+    const c = cache();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    // T1: miss → DB'den ESKİ değeri yüklemeye başlar (henüz bitmedi).
+    const reading = c.getOrSet("k", async () => {
+      await gate;
+      return "eski";
+    });
+    // T2: yazma tamamlanır ve invalide eder — silecek bir şey YOK.
+    await c.delete("k");
+    // T1'in yüklemesi şimdi biter.
+    release();
+
+    expect(await reading).toBe("eski"); // çağıran yine de değerini alır
+    expect(await c.get<string>("k")).toBeNull(); // ama cache'e YAZILMAMIŞ olmalı
+  });
+
+  it("yarış işareti sonraki yüklemeye SIZMAZ", async () => {
+    const c = cache();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const first = c.getOrSet("k", async () => {
+      await gate;
+      return "eski";
+    });
+    await c.delete("k");
+    release();
+    await first;
+
+    // Yarış bitti; bundan sonraki yükleme normal şekilde cache'lenmeli.
+    expect(await c.getOrSet("k", async () => "yeni")).toBe("yeni");
+    expect(await c.get<string>("k")).toBe("yeni");
+  });
+
   it("delete birden çok anahtarı siler", async () => {
     const c = cache();
     await c.set("a", 1);

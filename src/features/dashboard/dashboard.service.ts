@@ -55,7 +55,7 @@ export const dashboardService = {
 
   // ── Öğrenci özeti (kısa TTL cache) ────────────────────────────────────────
   getStudentSummary(userId: string): Promise<StudentSummary> {
-    return dashboardCache.student(userId, async () => {
+    return dashboardCache.student(userId).read(async () => {
       const [clubCount, upcomingAttendingCount, pendingJoinRequests, pendingApplications, next] =
         await Promise.all([
           dashboardRepository.countApprovedMemberships(userId),
@@ -77,7 +77,7 @@ export const dashboardService = {
 
   // ── Kulüp paneli (staff) (kısa TTL cache) ─────────────────────────────────
   getClubDashboard(clubId: string): Promise<ClubDashboard> {
-    return dashboardCache.club(clubId, async () => {
+    return dashboardCache.club(clubId).read(async () => {
       const [memberCount, pendingJoinRequests, upcomingActivityCount, announcementCount] =
         await Promise.all([
           dashboardRepository.countApprovedMembers(clubId),
@@ -91,7 +91,7 @@ export const dashboardService = {
 
   // ── Admin özeti (tenant) (kısa TTL cache) ─────────────────────────────────
   getAdminDashboard(universityId: string): Promise<AdminDashboard> {
-    return dashboardCache.admin(universityId, async () => {
+    return dashboardCache.admin(universityId).read(async () => {
       const [clubsByStatus, usersByStatus, pendingApplications, upcomingActivityCount] =
         await Promise.all([
           dashboardRepository.clubStatusCounts(universityId),

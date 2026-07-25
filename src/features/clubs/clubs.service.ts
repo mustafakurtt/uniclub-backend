@@ -9,7 +9,7 @@ import {
   UpdateOwnClubDTO,
 } from "./clubs.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
-import { clubsCache } from "./clubs.cache";
+import { clubsCache, clubEffects } from "./clubs.cache";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -17,7 +17,7 @@ export const clubsService = {
     if (search) {
       return await clubsRepository.findApprovedClubsByUniversity(universityId, search);
     }
-    return await clubsCache.list(universityId, () =>
+    return await clubsCache.list(universityId).read(() =>
       clubsRepository.findApprovedClubsByUniversity(universityId)
     );
   },
@@ -25,7 +25,7 @@ export const clubsService = {
   async getClubDetail(universityId: string, clubId: string) {
     // clubId global benzersiz → cache clubId ile anahtarlanır; loader tenant-filtresiz
     // yükler, tenant doğrulaması cache DIŞINDA yapılır (yanlış tenant cache hit'te sızmasın).
-    const club = await clubsCache.detail(clubId, () => clubsRepository.findClubDetailById(clubId));
+    const club = await clubsCache.detail(clubId).read(() => clubsRepository.findClubDetailById(clubId));
     if (!club || club.universityId !== universityId) {
       throw notFound("club.notFound");
     }
@@ -45,7 +45,7 @@ export const clubsService = {
       throw notFound("club.notFound");
     }
     // Tenant guard (yukarıda) cache DIŞINDA; üye listesi clubId ile cache'lenir.
-    const members = await clubsCache.members(clubId, () =>
+    const members = await clubsCache.members(clubId).read(() =>
       clubsRepository.findApprovedMembers(clubId)
     );
     return members
@@ -121,7 +121,7 @@ export const clubsService = {
     const membership = await clubsRepository.addMembership(clubId, userId, status);
     // Yalnızca "approved" (open policy) üye listesini/profili değiştirir; pending değil.
     if (status === "approved") {
-      await clubsCache.invalidateMembership(clubId);
+      await clubEffects.membershipChanged.emit(clubId);
     }
     return membership;
   },
@@ -144,7 +144,7 @@ export const clubsService = {
     await clubsRepository.removeMembership(clubId, userId);
     // Ayrılan üye onaylıysa listeyi/profili etkiler; pending istekte membership
     // zaten listede değildi ama invalidasyon ucuz + güvenli.
-    await clubsCache.invalidateMembership(clubId);
+    await clubEffects.membershipChanged.emit(clubId);
   },
 
   /**
@@ -157,7 +157,7 @@ export const clubsService = {
       throw notFound("club.notFound");
     }
     const updated = await clubsRepository.updateOwnClub(clubId, data);
-    await clubsCache.invalidateProfile(universityId, clubId); // isim/logo listede de görünür
+    await clubEffects.profileChanged.emit(universityId, clubId); // isim/logo listede de görünür
     return updated;
   },
 
@@ -180,7 +180,7 @@ export const clubsService = {
     const updated = await clubsRepository.updateMembershipStatus(clubId, targetUserId, decision);
     // Onaylanan istek üye listesine girer; reddedilen zaten listede değildi.
     if (decision === "approved") {
-      await clubsCache.invalidateMembership(clubId);
+      await clubEffects.membershipChanged.emit(clubId);
     }
 
     const club = await clubsRepository.findClubById(clubId);
@@ -206,7 +206,7 @@ export const clubsService = {
       throw badRequest("club.presidentCannotBeRemoved");
     }
     await clubsRepository.removeMembership(clubId, targetUserId);
-    await clubsCache.invalidateMembership(clubId);
+    await clubEffects.membershipChanged.emit(clubId);
   },
 
   /**
@@ -222,7 +222,7 @@ export const clubsService = {
       throw badRequest("club.presidentRoleCannotChange");
     }
     const updated = await clubsRepository.updateMembershipRole(clubId, targetUserId, data.role);
-    await clubsCache.invalidateMembership(clubId); // rol üye listesinde görünür
+    await clubEffects.membershipChanged.emit(clubId); // rol üye listesinde görünür
     return updated;
   },
 
@@ -243,7 +243,7 @@ export const clubsService = {
     }
 
     const result = await clubsRepository.transferPresidency(clubId, currentPresidentId, newPresidentId);
-    await clubsCache.invalidateMembership(clubId); // roller üye listesinde görünür
+    await clubEffects.membershipChanged.emit(clubId); // roller üye listesinde görünür
     return result;
   },
 
@@ -253,7 +253,7 @@ export const clubsService = {
       throw badRequest("club.contactLinkPlatformExists");
     }
     const result = await clubsRepository.createContactLink(clubId, data);
-    await clubsCache.invalidateDetail(clubId); // iletişim linkleri profile gömülü
+    await clubEffects.detailChanged.emit(clubId); // iletişim linkleri profile gömülü
     return result;
   },
 
@@ -263,7 +263,7 @@ export const clubsService = {
       throw notFound("club.contactLinkNotFound");
     }
     const result = await clubsRepository.updateContactLink(clubId, linkId, url);
-    await clubsCache.invalidateDetail(clubId);
+    await clubEffects.detailChanged.emit(clubId);
     return result;
   },
 
@@ -273,6 +273,6 @@ export const clubsService = {
       throw notFound("club.contactLinkNotFound");
     }
     await clubsRepository.deleteContactLink(clubId, linkId);
-    await clubsCache.invalidateDetail(clubId);
+    await clubEffects.detailChanged.emit(clubId);
   },
 };

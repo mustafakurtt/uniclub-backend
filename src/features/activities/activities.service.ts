@@ -1,5 +1,5 @@
 import { activitiesRepository } from "./activities.repository";
-import { activitiesCache } from "./activities.cache";
+import { activitiesCache, activityEffects } from "./activities.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { notFound, badRequest, forbidden } from "../../shared/utils/errors";
 import { notificationsService } from "../notifications/notifications.service";
@@ -234,7 +234,7 @@ export const activitiesService = {
   /** Etkinlik cache'ini geçersiz kıl: detayı + etkilenen üniversitelerin keşif listeleri. */
   async invalidateCache(activityId: string, universityIds?: string[]) {
     const unis = universityIds ?? (await activitiesRepository.getAcceptedUniversityIds(activityId));
-    await activitiesCache.invalidateActivity(activityId, unis);
+    await activityEffects.activityChanged.emit(activityId, unis);
   },
 
   /** Etkinlik var + bu kulüp onun HOST'u — değilse 404/403. Yönetim rotalarının ortak guard'ı. */
@@ -258,7 +258,7 @@ export const activitiesService = {
     if (query.search) {
       return await activitiesRepository.listForUniversity(universityId, query.scope, query.search);
     }
-    return await activitiesCache.discovery(universityId, query.scope, () =>
+    return await activitiesCache.discovery(universityId, query.scope).read(() =>
       activitiesRepository.listForUniversity(universityId, query.scope)
     );
   },
@@ -338,7 +338,7 @@ export const activitiesService = {
     // Taban detay (satır + kulüp bağları) VIEWER-BAĞIMSIZDIR → cache'lenir. goingCount
     // ve çağıranın RSVP'si getDetail'de CANLI eklenir; tenant/görünürlük guard'ları
     // burada cache DIŞINDA her çağrıda çalışır (aynı university.getUniversity deseni).
-    const detail = await activitiesCache.detail(activityId, () =>
+    const detail = await activitiesCache.detail(activityId).read(() =>
       activitiesRepository.findDetailById(activityId)
     );
     if (!detail) {

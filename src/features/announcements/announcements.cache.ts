@@ -1,18 +1,23 @@
+import { defineKeyspace, entry, effect } from "../../core/cache";
 import { cache } from "../../shared/cache/cache.client";
+import type { announcementsRepository } from "./announcements.repository";
 
 /**
- * announcements feature'ının izole cache keyspace'i (`announcements:` öneki).
+ * announcements feature'ının cache sözleşmesi (`announcements:` keyspace'i).
  * Kulüp duyuru listesi okuma-yoğun + görece durağandır → read-through cache'lenir.
  *
  * ÇAPRAZ-FEATURE: admin moderasyonu (moderateRemoveAnnouncement) bir duyuruyu
- * silebilir → o yol da `invalidate(clubId)` çağırır.
+ * silebilir → o yol da `announcementEffects.changed.emit(clubId)` çağırır. Efektin
+ * TANIMI burada, tek yerde durur.
  */
-const c = cache.namespace("announcements");
+type AnnouncementList = Awaited<ReturnType<typeof announcementsRepository.findByClub>>;
 
-const listKey = (clubId: string) => `list:${clubId}`;
+export const announcementsCache = defineKeyspace(cache, "announcements", {
+  /** Bir kulübün duyuru listesi (ham satırlar; yazar şekillendirmesi serviste). */
+  list: entry<AnnouncementList>()((clubId: string) => `list:${clubId}`),
+});
 
-export const announcementsCache = {
-  list: <T>(clubId: string, loader: () => Promise<T>) => c.getOrSet(listKey(clubId), loader),
+export const announcementEffects = {
   /** Duyuru eklendi/silindi (moderasyon dahil) → o kulübün listesi. */
-  invalidate: (clubId: string) => c.delete(listKey(clubId)),
+  changed: effect("announcements.changed", (clubId: string) => [announcementsCache.list(clubId)]),
 };

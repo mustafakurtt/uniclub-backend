@@ -1,18 +1,22 @@
+import { defineKeyspace, entry, effect } from "../../core/cache";
 import { cache } from "../../shared/cache/cache.client";
+import type { galleryRepository } from "./gallery.repository";
 
 /**
- * gallery feature'ının izole cache keyspace'i (`gallery:` öneki). Kulüp galeri
+ * gallery feature'ının cache sözleşmesi (`gallery:` keyspace'i). Kulüp galeri
  * listesi okuma-yoğun + görece durağandır → read-through cache'lenir.
  *
  * ÇAPRAZ-FEATURE: admin moderasyonu (moderateRemoveGalleryImage) bir görseli
- * silebilir → o yol da `invalidate(clubId)` çağırır.
+ * silebilir → o yol da `galleryEffects.changed.emit(clubId)` çağırır.
  */
-const c = cache.namespace("gallery");
+type GalleryList = Awaited<ReturnType<typeof galleryRepository.findByClub>>;
 
-const listKey = (clubId: string) => `list:${clubId}`;
+export const galleryCache = defineKeyspace(cache, "gallery", {
+  /** Bir kulübün galeri listesi (ham satırlar; yükleyen şekillendirmesi serviste). */
+  list: entry<GalleryList>()((clubId: string) => `list:${clubId}`),
+});
 
-export const galleryCache = {
-  list: <T>(clubId: string, loader: () => Promise<T>) => c.getOrSet(listKey(clubId), loader),
+export const galleryEffects = {
   /** Görsel eklendi/silindi (moderasyon dahil) → o kulübün listesi. */
-  invalidate: (clubId: string) => c.delete(listKey(clubId)),
+  changed: effect("gallery.changed", (clubId: string) => [galleryCache.list(clubId)]),
 };

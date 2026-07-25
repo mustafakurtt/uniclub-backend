@@ -22,6 +22,10 @@ import {
  * (repositories/), hepsi core BaseRepository'yi extend eder. Silme YUMUŞAKTIR
  * (universities/faculties/departments); domainler UNIQUE + kayıt akışı gereği
  * FİZİKSEL silinir. Benzersizlik guard'ları silinmiş satırları da hesaba katar.
+ *
+ * CACHE: yalnızca OKUMA yolları cache'i bilir (read-through). İnvalidasyon burada
+ * DEĞİL, rota tanımlarında bildirilir (`invalidates(...)` + university.cache.ts
+ * efektleri) — yazma metodları saf iş kuralı olarak kalır.
  */
 export const universityService = {
   // ═══════════════════════════════════════════════
@@ -33,15 +37,15 @@ export const universityService = {
     if (search) {
       return await universityRepository.list(search);
     }
-    return await universityCache.list(() => universityRepository.list());
+    return await universityCache.list().read(() => universityRepository.list());
   },
 
   async getUniversity(universityId: string) {
     // Repo undefined dönerse cache'lenmez (getOrSet null/undefined'ı yazmaz);
     // notFound guard'ı her çağrıda çalışır.
-    const university = await universityCache.byId(universityId, () =>
-      universityRepository.findByIdWithDomains(universityId)
-    );
+    const university = await universityCache
+      .byId(universityId)
+      .read(() => universityRepository.findByIdWithDomains(universityId));
     if (!university) {
       throw notFound("university.notFound");
     }
@@ -74,9 +78,7 @@ export const universityService = {
       }
     }
 
-    const result = await universityRepository.createWithDomains(data);
-    await universityCache.invalidateList();
-    return result;
+    return await universityRepository.createWithDomains(data);
   },
 
   async updateUniversity(universityId: string, data: UpdateUniversityDTO) {
@@ -92,9 +94,7 @@ export const universityService = {
       }
     }
 
-    const result = await universityRepository.updateById(universityId, data);
-    await universityCache.invalidateUniversity(universityId);
-    return result;
+    return await universityRepository.updateById(universityId, data);
   },
 
   /**
@@ -121,7 +121,6 @@ export const universityService = {
     }
 
     await universityRepository.softDeleteWithDomains(universityId);
-    await universityCache.invalidateUniversityDeep(universityId);
     return { id: universityId };
   },
 
@@ -147,9 +146,7 @@ export const universityService = {
       throw badRequest("domain.alreadyRegistered");
     }
 
-    const result = await domainRepository.add(universityId, data.domain, data.domainType);
-    await universityCache.invalidateUniversityDomains(universityId);
-    return result;
+    return await domainRepository.add(universityId, data.domain, data.domainType);
   },
 
   async updateDomain(universityId: string, domainId: string, data: UpdateDomainDTO) {
@@ -165,9 +162,7 @@ export const universityService = {
       }
     }
 
-    const result = await domainRepository.update(domainId, data);
-    await universityCache.invalidateUniversityDomains(universityId);
-    return result;
+    return await domainRepository.update(domainId, data);
   },
 
   /**
@@ -189,7 +184,6 @@ export const universityService = {
     }
 
     await domainRepository.deleteById(domainId);
-    await universityCache.invalidateUniversityDomains(universityId);
     return { id: domainId };
   },
 
@@ -202,9 +196,9 @@ export const universityService = {
       throw notFound("university.notFound");
     }
     // Varlık/tenant guard'ı cache DIŞINDA; yalnızca liste read-through cache'lenir.
-    return await universityCache.faculties(universityId, () =>
-      facultyRepository.listByUniversity(universityId)
-    );
+    return await universityCache
+      .faculties(universityId)
+      .read(() => facultyRepository.listByUniversity(universityId));
   },
 
   async getFaculty(universityId: string, facultyId: string) {
@@ -220,9 +214,7 @@ export const universityService = {
     if (!university) {
       throw notFound("university.notFound");
     }
-    const result = await facultyRepository.create({ universityId, name: data.name });
-    await universityCache.invalidateFaculties(universityId);
-    return result;
+    return await facultyRepository.create({ universityId, name: data.name });
   },
 
   async updateFaculty(universityId: string, facultyId: string, data: UpdateFacultyDTO) {
@@ -230,9 +222,7 @@ export const universityService = {
     if (!faculty) {
       throw notFound("faculty.notFound");
     }
-    const result = await facultyRepository.updateById(facultyId, { name: data.name });
-    await universityCache.invalidateFaculties(universityId);
-    return result;
+    return await facultyRepository.updateById(facultyId, { name: data.name });
   },
 
   /**
@@ -253,7 +243,6 @@ export const universityService = {
     }
 
     await facultyRepository.deleteById(facultyId);
-    await universityCache.invalidateFacultyDeep(universityId, facultyId);
     return { id: facultyId };
   },
 
@@ -266,9 +255,9 @@ export const universityService = {
       throw notFound("faculty.notFound");
     }
     // Faculty guard'ı cache DIŞINDA; yalnızca bölüm listesi read-through cache'lenir.
-    return await universityCache.departments(facultyId, () =>
-      departmentRepository.listByFaculty(facultyId)
-    );
+    return await universityCache
+      .departments(facultyId)
+      .read(() => departmentRepository.listByFaculty(facultyId));
   },
 
   async getDepartment(universityId: string, facultyId: string, departmentId: string) {
@@ -288,9 +277,7 @@ export const universityService = {
     if (!faculty) {
       throw notFound("faculty.notFound");
     }
-    const result = await departmentRepository.create({ facultyId, name: data.name });
-    await universityCache.invalidateDepartments(facultyId);
-    return result;
+    return await departmentRepository.create({ facultyId, name: data.name });
   },
 
   async updateDepartment(
@@ -307,9 +294,7 @@ export const universityService = {
     if (!department) {
       throw notFound("department.notFound");
     }
-    const result = await departmentRepository.updateById(departmentId, { name: data.name });
-    await universityCache.invalidateDepartments(facultyId);
-    return result;
+    return await departmentRepository.updateById(departmentId, { name: data.name });
   },
 
   /**
@@ -334,7 +319,6 @@ export const universityService = {
     }
 
     await departmentRepository.deleteById(departmentId);
-    await universityCache.invalidateDepartments(facultyId);
     return { id: departmentId };
   },
 };

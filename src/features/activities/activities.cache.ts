@@ -1,7 +1,9 @@
+import { defineKeyspace, entry, effect } from "../../core/cache";
 import { cache } from "../../shared/cache/cache.client";
+import type { activitiesRepository } from "./activities.repository";
 
 /**
- * activities feature'ının izole cache keyspace'i (`activities:` öneki).
+ * activities feature'ının cache sözleşmesi (`activities:` keyspace'i).
  *
  * SEÇİCİ CACHE (aynı university.cache'in "arama cache'lenmez" ilkesi): yalnızca
  * VIEWER-BAĞIMSIZ ve VOLATİL-OLMAYAN okumalar cache'lenir:
@@ -13,29 +15,38 @@ import { cache } from "../../shared/cache/cache.client";
  * viewer'a göre değişir (staff taslak görür, üye members görür) → paylaşımlı bir
  * anahtara sığmaz.
  *
- * ÇAPRAZ-FEATURE: admin moderasyonu (moderateCancel) de `invalidateActivity` çağırır.
+ * TETİK NEDEN SERVİSTE: `activityChanged` efektinin `universityIds` parametresi
+ * DB SORGUSUNDAN gelir (`getAcceptedUniversityIds` — bir etkinlik birden çok
+ * üniversitenin kulüpleri tarafından co-host edilebilir). Rota path'inde böyle bir
+ * bilgi yoktur, dolayısıyla `invalidates()` middleware'i bunu türetemez.
+ *
+ * ÇAPRAZ-FEATURE: admin moderasyonu (moderateCancel) de aynı efekti emit eder.
  */
-const c = cache.namespace("activities");
+type ActivityDetail = Awaited<ReturnType<typeof activitiesRepository.findDetailById>>;
+type ActivityDiscovery = Awaited<ReturnType<typeof activitiesRepository.listForUniversity>>;
 
+/** Keşif listesi scope'a göre ayrı anahtarlanır; etkinlik değişince hepsi düşer. */
 const SCOPES = ["upcoming", "past", "all"] as const;
-const detailKey = (activityId: string) => `detail:${activityId}`;
-const discoveryKey = (universityId: string, scope: string) => `discovery:${universityId}:${scope}`;
 
-/** Bir üniversitenin tüm scope keşif anahtarları (etkinlik değişince hepsi düşer). */
-const discoveryKeysFor = (universityIds: string[]) =>
-  universityIds.flatMap((u) => SCOPES.map((s) => discoveryKey(u, s)));
+export const activitiesCache = defineKeyspace(cache, "activities", {
+  /** Etkinliğin viewer-bağımsız taban detayı. */
+  detail: entry<ActivityDetail>()((activityId: string) => `detail:${activityId}`),
+  /** Bir üniversitenin keşif listesi (scope başına ayrı anahtar). */
+  discovery: entry<ActivityDiscovery>()(
+    (universityId: string, scope: string) => `discovery:${universityId}:${scope}`
+  ),
+});
 
-export const activitiesCache = {
-  // ── Okuma (read-through) ────────────────────────────────────────────────
-  detail: <T>(activityId: string, loader: () => Promise<T>) => c.getOrSet(detailKey(activityId), loader),
-  discovery: <T>(universityId: string, scope: string, loader: () => Promise<T>) =>
-    c.getOrSet(discoveryKey(universityId, scope), loader),
-
-  // ── Invalidasyon ────────────────────────────────────────────────────────
+export const activityEffects = {
   /**
    * Bir etkinlik değişti (oluştur/yayınla/güncelle/iptal/co-host/moderasyon) →
-   * o etkinliğin detayı + etkilenen üniversitelerin keşif listeleri düşer.
+   * o etkinliğin detayı + ETKİLENEN TÜM üniversitelerin keşif listeleri düşer.
    */
-  invalidateActivity: (activityId: string, universityIds: string[]) =>
-    c.delete([detailKey(activityId), ...discoveryKeysFor(universityIds)]),
+  activityChanged: effect(
+    "activities.changed",
+    (activityId: string, universityIds: string[]) => [
+      activitiesCache.detail(activityId),
+      ...universityIds.flatMap((u) => SCOPES.map((s) => activitiesCache.discovery(u, s))),
+    ]
+  ),
 };

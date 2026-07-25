@@ -2,12 +2,12 @@ import { announcementsRepository } from "./announcements.repository";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { CreateAnnouncementDTO } from "./announcements.schema";
 import { notFound } from "../../shared/utils/errors";
-import { announcementsCache } from "./announcements.cache";
+import { announcementsCache, announcementEffects } from "./announcements.cache";
 
 export const announcementsService = {
   async listByClub(clubId: string) {
     // Yazar bilgisi cache'lenen ham satırdan sonra toSafeUser ile şekillenir.
-    const announcements = await announcementsCache.list(clubId, () =>
+    const announcements = await announcementsCache.list(clubId).read(() =>
       announcementsRepository.findByClub(clubId)
     );
     return announcements
@@ -17,7 +17,7 @@ export const announcementsService = {
 
   async create(universityId: string, clubId: string, authorId: string, data: CreateAnnouncementDTO) {
     const result = await announcementsRepository.add(universityId, clubId, authorId, data);
-    await announcementsCache.invalidate(clubId);
+    await announcementEffects.changed.emit(clubId);
     return result;
   },
 
@@ -27,6 +27,6 @@ export const announcementsService = {
       throw notFound("announcement.notFound");
     }
     await announcementsRepository.removeFromClub(clubId, announcementId);
-    await announcementsCache.invalidate(clubId);
+    await announcementEffects.changed.emit(clubId);
   },
 };
