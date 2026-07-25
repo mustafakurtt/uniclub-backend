@@ -48,7 +48,18 @@ const limiter = (options: {
     disabled: () => env.RATE_LIMIT_DISABLED,
   });
 
-/** Ters proxy arkasındaysak gerçek istemci IP'si X-Forwarded-For'un ilk girdisidir. */
+/**
+ * Ters proxy arkasındaysak gerçek istemci IP'si X-Forwarded-For'un ilk girdisidir.
+ *
+ * ASLA FIRLATMAZ. `getConnInfo` (hono/bun) soket bilgisini `c.env.server`
+ * üzerinden arar; bu yalnızca `Bun.serve` ile gelen isteklerde vardır. Hono'nun
+ * `app.request()` arayüzünde (testler, iç çağrılar) `c.env` yoktur ve fonksiyon
+ * TypeError atar. IP bir YAN BİLGİDİR — hız sınırı anahtarı ve denetim kaydı
+ * alanı; yokluğu isteği düşürmemeli:
+ *   - keyFn olarak kullanıldığında (aşağıda) fırlatmak isteği 500'e çevirirdi,
+ *   - denetim sink'inde fırlatmak kaydın HİÇ yazılmamasına yol açıyordu.
+ * Çözülemezse "unknown" döner; sayaçlar/kayıtlar o kova altında toplanır.
+ */
 export function clientIp(c: Context): string {
   if (env.TRUST_PROXY) {
     const forwarded = c.req.header("x-forwarded-for");
@@ -57,7 +68,11 @@ export function clientIp(c: Context): string {
       if (first) return first;
     }
   }
-  return getConnInfo(c).remote.address ?? "unknown";
+  try {
+    return getConnInfo(c).remote.address ?? "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 /** JSON body'den bir alanı, akışı bozmadan okur (Hono body'yi cache'ler). */
