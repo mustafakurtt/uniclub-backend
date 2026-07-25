@@ -12,24 +12,51 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
   await Bun.password.verify(password, hash);
 
 /**
+ * Karakter sınıfları AYRI sabitler olarak durur; tek bir birleşik alfabede
+ * "büyük harfler 0-25 arasındadır" gibi varsayımlar yapılamasın diye. Karışması
+ * kolay karakterler bilinçli olarak DIŞARIDA: `I`/`O` (büyük), `l` (küçük),
+ * `0`/`1` (rakam) — geçici şifre çoğu zaman elle okunup yazılır.
+ */
+const UPPERCASE = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const LOWERCASE = "abcdefghijkmnopqrstuvwxyz";
+const DIGITS = "23456789";
+const SYMBOLS = "!@#$%&*?";
+const ALPHABET = UPPERCASE + LOWERCASE + DIGITS;
+
+/**
+ * Modulo YANLILIĞI olmadan tek karakter seçer. `byte % n` doğrudan kullanılamaz:
+ * 256 çoğu alfabe uzunluğuna tam bölünmez, bu yüzden ilk karakterler diğerlerinden
+ * daha sık çıkar. Aralığın son (kısmi) turuna düşen baytlar ELENİR ve yenisi
+ * çekilir (rejection sampling) — dağılım tam düzgün olur.
+ */
+const pickChar = (alphabet: string): string => {
+  const limit = 256 - (256 % alphabet.length); // kabul edilen en büyük tam katı
+  const buffer = new Uint8Array(1);
+  let byte: number;
+  do {
+    crypto.getRandomValues(buffer);
+    byte = buffer[0];
+  } while (byte >= limit);
+  return alphabet[byte % alphabet.length];
+};
+
+/**
  * Kriptografik olarak güçlü, okunabilir geçici şifre üretir (örn. admin şifre
- * sıfırlaması). Büyük/küçük harf + rakam + sembol içerir; kalanı rastgeledir.
- * Amaç tek kullanımlık geçici şifredir — kullanıcı ilk girişte değiştirir.
+ * sıfırlaması). İlk 4 karakter GARANTİLİ olarak büyük harf, küçük harf, rakam ve
+ * sembol taşır (yaygın şifre politikalarının istediği sınıflar); kalanı bu
+ * sınıfların birleşiminden rastgele gelir.
+ *
+ * Sınıfların sabit konumda olması bilinçli bir ödündür: şifre tek kullanımlıktır
+ * ve kullanıcı ilk girişte değiştirir; buna karşılık "politikayı geçmedi" hatası
+ * hiç görülmez.
  */
 export const generatePassword = (length = 16): string => {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const symbols = "!@#$%&*?";
-  // Alt sınır 8: 4 karakter garantili prefix'e ayrıldığı için daha kısa istenirse
-  // `length - 4` negatife düşer (subarray sondan sayar → yanlış uzunluk). Geçici
-  // şifre zaten ≥8 olmalı.
+  // Alt sınır 8: ilk 4 karakter sınıf garantisine ayrıldığı için daha kısası
+  // gövdeye yer bırakmaz. Geçici şifre zaten ≥8 olmalı.
   const size = Math.max(length, 8);
-  const bytes = crypto.getRandomValues(new Uint8Array(size));
-  const body = Array.from(bytes.subarray(0, size - 4), (b) => alphabet[b % alphabet.length]).join("");
-  // İlk 4 karakter garantili çeşitlilik (bir çok politikanın istediği sınıflar).
   const prefix =
-    alphabet[bytes[0] % 26] + // büyük
-    alphabet[26 + (bytes[1] % 26)] + // küçük
-    "23456789"[bytes[2] % 8] + // rakam
-    symbols[bytes[3] % symbols.length]; // sembol
+    pickChar(UPPERCASE) + pickChar(LOWERCASE) + pickChar(DIGITS) + pickChar(SYMBOLS);
+  let body = "";
+  for (let i = 0; i < size - 4; i++) body += pickChar(ALPHABET);
   return prefix + body;
 };

@@ -1,5 +1,5 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { resolve, sep } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import type { StorageStore, StoredObject } from "../storage.port";
 import { contentTypeForExtension, extensionOf } from "../mime";
 
@@ -31,7 +31,10 @@ export class LocalDiskStorage implements StorageStore {
 
   async put(key: string, bytes: Uint8Array, _contentType: string): Promise<void> {
     const full = this.safePath(key);
-    await mkdir(this.baseDir, { recursive: true });
+    // baseDir DEĞİL, hedefin ÜST klasörü oluşturulur: key "2026/07/a.png" gibi
+    // yol bileşeni taşıyabilir (safePath buna izin verir, yeter ki baseDir'in
+    // altında kalsın) ve ara klasörler yoksa writeFile ENOENT ile düşerdi.
+    await mkdir(dirname(full), { recursive: true });
     await writeFile(full, bytes);
   }
 

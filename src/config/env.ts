@@ -32,6 +32,14 @@ const envSchema = z.object({
    */
   TRUST_PROXY: envBoolean(false),
 
+  /**
+   * Kapanış draini (ms): SIGTERM geldiğinde `/health` 503'e çevrilir ve sunucu
+   * kapatılmadan ÖNCE bu süre beklenir — yük dengeleyici bizi havuzdan çıkarsın
+   * diye. Verilmezse prod'da 5000, aksi halde 0 (yerelde Ctrl+C anında çıksın).
+   * Tipik LB probe aralığının ~2 katı olmalı.
+   */
+  HEALTH_DRAIN_MS: z.coerce.number().optional(),
+
   // ── LOGLAMA ───────────────────────────────────────────────────────────
   /** Verilmezse shared/logger.ts, NODE_ENV'e göre karar verir (prod: info, aksi: debug). */
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),

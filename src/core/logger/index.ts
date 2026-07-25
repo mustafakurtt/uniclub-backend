@@ -7,6 +7,7 @@ export {
   createLogger,
   LogLevel,
   type CreateLoggerOptions,
+  type EmittableLogLevel,
   type Logger,
   type TransportTargetOptions,
 } from "./logger";
