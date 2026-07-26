@@ -36,3 +36,13 @@ export { invalidates, fromParams, type InvalidatesOptions } from "./invalidates"
 export { InMemoryCacheStore, type InMemoryCacheStoreOptions } from "./stores/memory.store";
 export { RedisCacheStore, type RedisCacheClient } from "./stores/redis.store";
 export { NullCacheStore } from "./stores/null.store";
+export {
+  CircuitBreakerCacheStore,
+  CircuitOpenError,
+  type CircuitBreakerCacheStoreOptions,
+} from "./stores/circuit-breaker.store";
+export {
+  TimeoutCacheStore,
+  CacheTimeoutError,
+  type TimeoutCacheStoreOptions,
+} from "./stores/timeout.store";

@@ -10,6 +10,7 @@
 |---|---|
 | **README.md** (bu dosya) | Katmanlar, değişmezler (invariants), feature sözleşmesi, karar kayıtları |
 | [01-yol-haritasi.md](01-yol-haritasi.md) | Profesyonelleştirme yol haritası — fazlar, her madde için sorun/çözüm/maliyet/risk |
+| [02-redis-sertlestirme.md](02-redis-sertlestirme.md) | Redis'in KENDİSİ — karışık yük sorunu, `commandTimeout`, bellek politikası, kalan kararlar (şifre, ayrı instance) |
 
 ---
 
@@ -19,7 +20,9 @@
 CacheStore (port)            core/cache/cache.store.ts
   ├─ InMemoryCacheStore      süreç içi, LRU + tembel TTL
   ├─ RedisCacheStore         paylaşımlı, TTL'i Redis'in EX'ine devreder
-  └─ NullCacheStore          her okuma miss (cache'i kapatmak için)
+  ├─ NullCacheStore          her okuma miss (cache'i kapatmak için)
+  └─ DEKORATÖRLER (yalnızca redis sürücüsünde, sıra önemli):
+       CircuitBreakerCacheStore( TimeoutCacheStore( RedisCacheStore ) )
         ↓
 Codec                        core/cache/codec.ts
   ├─ richCodec (VARSAYILAN)  Date'i korur → {"__d":"<ISO>"}
@@ -60,6 +63,10 @@ Bunlar tasarım kararıdır, tercih değil. Değiştirmeden önce gerekçesini o
    `clubs`, `activities` — hepsinde aynı ilke.)
 6. **Viewer-bağımlı okumalar cache'lenmez.** Sonucu çağırana göre değişen bir
    liste paylaşımlı anahtara sığmaz (`activities.listByClub`: staff taslak görür).
+7. **Arıza anında gecikme sınırlıdır.** Redis erişilemezse istek 200 ms'den fazla
+   beklemez; 5 ardışık hatadan sonra devre açılır ve 5 sn boyunca hiç denenmez.
+   **Arıza gizlenmez** — devre açıkken işlemler hata fırlatır ki `result="error"`
+   metriği arızayı göstersin. Ölçülmüş etki: 43 476 ms → 0 ms.
 
 ## 3. Feature sözleşmesi
 
@@ -122,6 +129,7 @@ Grafana yığını):
 |---|---|---|
 | `uniclub_cache_operations_total` | `namespace`, `result=hit\|miss\|error` | Hit oranı; `error` = Redis arıza sinyali |
 | `uniclub_cache_operation_duration_seconds` | `namespace`, `operation=get\|set\|delete` | Bir Redis turunun gerçek maliyeti |
+| `uniclub_cache_breaker_transitions_total` | `from`, `to` | `closed→open` = cache tamamen devre dışı, her istek DB'ye iniyor (**alarma bağlanacak seri**) |
 
 `error`'ın ayrı sayılması kritiktir: fail-open sayesinde Redis düştüğünde istekler
 **düşmez**, yani başka hiçbir sinyal üretmez. Bu sayaç o sessiz arızanın tek sesidir.

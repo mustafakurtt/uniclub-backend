@@ -29,6 +29,7 @@
     "test": "bun test",
     "test:setup": "bun run tests/provision.ts",
     "test:all": "bun run test:setup && bun test",
+    "perf": "bun run perf/run.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

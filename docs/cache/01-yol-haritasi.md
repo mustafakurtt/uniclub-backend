@@ -25,6 +25,7 @@ Faz 1 tek maddedir ve önce o gelir.
 | ✅ | **Metrikler** (#1) | `uniclub_cache_*` serileri `/metrics`'te; canlı doğrulandı |
 | ✅ | **Date-güvenli codec** (#3) | `richCodec` varsayılan; yaşanmış bug sınıfı kapandı |
 | ✅ | **Şema damgası** (#4) | `defineKeyspace(..., { version })` |
+| ✅ | **Devre kesici + zaman aşımı** (#6) | Redis arızasında 43 476 ms → 0 ms (ölçüldü) |
 
 ---
 
@@ -127,17 +128,71 @@ invalidasyon yayını bu yarışı da büyük ölçüde kapatır.
 **Maliyet** orta · **Değer** ölçeğe bağlı · **Risk** orta → **çok-instance'a
 geçilmeden yapılmasın**
 
-### 6. Redis devre kesici (circuit breaker) ⚪
+### 6. Redis devre kesici + zaman aşımı ✅ UYGULANDI
 
 **Sorun.** Redis düştüğünde fail-open sayesinde istekler DÜŞMEZ ama **her okuma**
-yine de bağlantıyı deneyip timeout bekler. Yani cache arızası bir **gecikme
-arızasına** dönüşür — cache'in tam da yardım etmesi gereken anda.
+yine de bağlantıyı deneyip bekler. Yani cache arızası bir **gecikme arızasına**
+dönüşür — cache'in tam da yardım etmesi gereken anda.
 
-**Çözüm.** Store sarmalayıcısı: N ardışık hatadan sonra M saniye boyunca hiç
-denemeden miss dön (yarı-açık durumla periyodik yoklama). `rate-limit`'teki
-fail-open ilkesiyle aynı felsefe, bir adım ilerisi.
+**Uygulama sırasında ölçülen gerçek (tahmin değil).** Redis konteyneri durdurulup
+tek bir cache okuması yapıldı:
 
-**Maliyet** orta · **Değer** yüksek (olay anında) · **Risk** düşük
+```
+istek 1: kaynaktan — 43476 ms      ← devre kesici YOKken
+```
+
+**43 saniye.** Sebep beklenenden farklı çıktı: ioredis bağlantı koptuğunda komutu
+HATA VERMEZ, kuyruğa alıp yeniden dener (`enableOfflineQueue` +
+`maxRetriesPerRequest`), yani çağrı **asılı kalır**. Devre kesici yalnızca DÖNMÜŞ
+hataları sayabildiği için bu senaryoda **tek başına hiç tripleyemezdi** —
+tasarımın gözden kaçan noktası buydu.
+
+**Çözüm: iki dekoratör, sırası önemli — `CircuitBreaker( Timeout( Redis ) )`.**
+İçteki `TimeoutCacheStore` asılı çağrıyı 200 ms'de sayılabilir bir hataya çevirir;
+dıştaki `CircuitBreakerCacheStore` o hataları sayar ve 5 ardışık hatadan sonra
+5 sn boyunca alttaki store'a hiç dokunmaz (yarı-açık durumda TEK yoklama ile
+toparlanma denenir).
+
+**Aynı ölçüm, uygulamadan sonra:**
+
+```
+istek 1: kaynaktan — 435 ms
+istek 2: kaynaktan — 427 ms
+istek 3: kaynaktan — 215 ms      ← devre burada açıldı
+istek 4-8: kaynaktan — 0 ms
+```
+
+**43 476 ms → 0 ms.** İstekler yine doğru cevabı veriyor (fail-open korunuyor).
+
+**Tasarım kararı: devre AÇIKKEN hata FIRLATILIR, sessizce boş sonuç dönülmez.**
+Sessiz dönseydi `Cache` bunu normal bir `miss` sayardı ve arıza **metriklerde
+kaybolurdu** — oysa istekler düşmediği için `result="error"` sayacı tek sinyaldir.
+Devre kesicinin kazancı hatayı gizlemek değil, hatayı ANINDA vermektir.
+
+**Maliyet** orta · **Değer** çok yüksek · **Risk** düşük
+
+### 6b. ⚠️ AYNI SORUN CACHE DIŞINDA DA VAR — rate-limit 🟡
+
+Bu bulgu cache'e özgü değildir. Aynı Redis istemcisini kullanan diğer tüketiciler
+de arıza anında **43 sn asılı kalır**:
+
+| Tüketici | Durum |
+|---|---|
+| Feature cache'leri | ✅ Korumalı (bu madde) |
+| `shared/rbac/rbac.cache.ts` | ✅ Korumalı — `cache` facade'ından geçiyor (her kimlikli isteğin yolu) |
+| `middlewares/rate-limit.middleware.ts` | ❌ **AÇIK** — `RedisRateLimitStore(redis)` doğrudan paylaşılan istemciyi kullanıyor |
+| `notifications` pub/sub + WS bileti | ❌ Açık |
+| BullMQ (mail kuyruğu) | ❌ Açık (ama arka plan; istek yolunda değil) |
+
+**En kritiği rate-limit**: `login` / `register` / `resend-verification` yollarında,
+yani Redis arızasında **giriş yapmak 43 sn sürüyordu**.
+
+> **KISMEN ÇÖZÜLDÜ** → paylaşılan Redis istemcisine `commandTimeout: 500` eklendi;
+> bu, port başına sarmalayıcı yazmaktan daha doğru bir katmandır ve rate-limit /
+> WS bileti / notifications'ı birden korur. Ölçüldü: **giriş 43 476 ms → ~600 ms**
+> (HTTP 200, fail-open korunuyor). KALAN: rate-limit'in devre kesicisi yok, yani
+> arıza boyunca her giriş 600 ms öder (cache'te bu sıfır). Ayrıntı ve kalan
+> kararlar → [02-redis-sertlestirme.md](02-redis-sertlestirme.md).
 
 ### 7. Negatif cache (kontrollü) 🔵
 
@@ -153,7 +208,18 @@ Metrikler (Faz 1) bunun gerçek bir sorun olduğunu gösterirse yeniden açılı
 
 > **Bu fazın hiçbir maddesi Faz 1 (metrikler) olmadan başlamamalı.**
 
-### 8. Katmanlı cache (L1/L2) + pub/sub invalidasyon yayını ⚪
+### 8. Katmanlı cache (L1/L2) + pub/sub invalidasyon yayını 🔵 ÖLÇÜLDÜ → GEREKSİZ
+
+> **YÜK TESTİ BU MADDEYİ İPTAL ETTİ** (2026-07-25, bkz. [PERFORMANS.md](../PERFORMANS.md)).
+> Bu maddenin tüm gerekçesi "her okuma Redis'e ağ turu atıyor" idi. Ölçüldü:
+> Redis 50 eşzamanlıda **20 236 ops/sn** veriyor — Postgres'in (7 846) 2.6 katı ve
+> uygulamanın uçtan uca ulaştığı en yüksek sayının (≈10 700 RPS) çok üstünde.
+> **Redis darboğaz değil.** L1 eklemek ciddi karmaşıklık (pub/sub yayını, kayıp
+> mesaj = bayat L1) getirip ölçülebilir bir kazanç sağlamazdı.
+> Gerçek darboğaz DB'ye giden yol (2500 RPS tavan) — yatırım oraya yapılmalı.
+> Veri kümesi büyüyüp Redis trafiği artarsa yeniden değerlendirilir.
+
+<details><summary>Özgün plan (kayıt için)</summary>
 
 **Sorun.** Her okuma Redis'e ağ turu atıyor. Üniversite ağacı gibi neredeyse hiç
 değişmeyen veriler için bu saf israf.
@@ -168,6 +234,8 @@ zorunluluğu dahil).
 bayat kalır → L1 TTL'i kısa tutulmalı (ör. 10-30 sn).
 
 **Maliyet** yüksek · **Değer** trafiğe bağlı · **Risk** orta
+
+</details>
 
 ### 9. Stale-while-revalidate (SWR) ⚪
 
@@ -261,9 +329,23 @@ ve devir-teslim için.
 1. ~~**#1 metrikler**~~ ✅ — her şeyin kararını besler
 2. ~~**#3 Date-güvenli codec**~~ ✅ — yaşanmış bug sınıfını kapatır
 3. ~~**#4 şema damgası**~~ ✅ — ucuz, sessiz deploy hatasını önler
-4. **#6 devre kesici** 🟡 — olay anındaki davranışı düzeltir (sıradaki)
-5. Buradan sonrası **ölçüme bakarak**: #13 (ETag) ucuz kazanç, #8 (L1/L2) ancak
+4. ~~**#6 devre kesici + zaman aşımı**~~ ✅ — olay anındaki davranışı düzeltir
+5. **#6b rate-limit'i de koru** 🟡 — aynı sorun, giriş yolunda; ayrı karar gerektirir
+6. Buradan sonrası **ölçüme bakarak**: #13 (ETag) ucuz kazanç, #8 (L1/L2) ancak
    metrikler yüksek Redis trafiği gösterirse
+
+### Yük testinin yol haritasına etkisi (2026-07-25)
+
+Ölçümün tamamı → [docs/PERFORMANS.md](../PERFORMANS.md). Özet:
+
+| Bulgu | Etki |
+|---|---|
+| Redis 20 236 ops/sn — uygulamanın 2× üstünde | **#8 (L1/L2) İPTAL** |
+| Cache 2.5–3.8× kazandırıyor (büyük payload'da) | Strateji doğru, devam |
+| 3 satırlık listede kazanç yalnızca 1.3× | Ucuz sorguları cache'lemek zorunlu değil |
+| Sertleştirme katmanları istek başına 4.3 µs (%0.6) | Timeout+breaker+richCodec KALSIN |
+| DB'ye giden yol 2500 RPS tavanlı | Ölçekte ilk yatırım **DB tarafı** |
+| Doygunluk 50–200 eşzamanlı arası, 0 hata | p99 > 25 ms erken uyarı eşiği olabilir |
 
 ### Artık ölçebildiğimiz için sorulacak sorular
 
