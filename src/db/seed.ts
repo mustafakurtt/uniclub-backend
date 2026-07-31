@@ -190,6 +190,61 @@ async function main() {
       return inserted;
     }
 
+    /** "n gün sonra/önce" — etkinlik tarihleri için (negatif = geçmiş). */
+    const inDays = (n: number) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+
+    /**
+     * Etkinlik + kulüp bağlarını (1 host + opsiyonel co_host'lar) + RSVP'leri
+     * kurar. co_host'lar farklı ÜNİVERSİTEDEN olabilir (turnuva) — M:N yapı
+     * ikisini de kaldırır. v1 varsayılanı: published + university görünürlük.
+     */
+    async function createActivity(a: {
+      hostClubId: string;
+      coHostClubIds?: string[];
+      createdBy: string;
+      title: string;
+      description?: string;
+      location?: string;
+      startsAt: Date;
+      endsAt?: Date;
+      capacity?: number;
+      visibility?: "university" | "members";
+      status?: "draft" | "published" | "cancelled";
+      attendees?: { userId: string; status?: "going" | "interested" | "waitlist" }[];
+    }) {
+      const [activity] = await tx.insert(schema.activities).values({
+        title: a.title,
+        description: a.description ?? null,
+        location: a.location ?? null,
+        startsAt: a.startsAt,
+        endsAt: a.endsAt ?? null,
+        capacity: a.capacity ?? null,
+        visibility: a.visibility ?? "university",
+        status: a.status ?? "published",
+        createdBy: a.createdBy,
+      }).returning();
+
+      await tx.insert(schema.activityClubs).values([
+        { activityId: activity.id, clubId: a.hostClubId, role: "host" as const },
+        ...(a.coHostClubIds ?? []).map((clubId) => ({
+          activityId: activity.id,
+          clubId,
+          role: "co_host" as const,
+        })),
+      ]);
+
+      if (a.attendees?.length) {
+        await tx.insert(schema.activityAttendees).values(
+          a.attendees.map((att) => ({
+            activityId: activity.id,
+            userId: att.userId,
+            status: att.status ?? ("going" as const),
+          }))
+        );
+      }
+      return activity;
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // 1B. PLATFORM HESAPLARI (universityId: NULL — hiçbir okula ait değiller)
     // Şirketin kendi çalışanları. Tenant scope'unu rolleriyle bypass ederler;
@@ -471,6 +526,55 @@ async function main() {
     console.log("   📝 Karadeniz başvuruları...");
     await createApplication({ universityId: kartek.id, proposedName: "Satranç Kulübü", description: "Antalya'daki başvuruyla AYNI isim — tenant izolasyon testi.", applicantId: esra, status: "pending" });
     await createApplication({ universityId: kartek.id, proposedName: "Havacılık Kulübü", description: "Model uçak ve drone atölyeleri.", applicantId: hakan, status: "rejected", reviewerId: omerHoca });
+
+    // ═══════════════════════════════════════════════════════════════
+    // 5. ETKİNLİKLER (activities) — tüm kulüpler kurulduktan SONRA
+    // Kulüp↔etkinlik M:N (activity_clubs): tek-host, çok-kulüp, hatta
+    // ÇOK-ÜNİVERSİTE (turnuva) senaryolarını gösterir.
+    // ═══════════════════════════════════════════════════════════════
+    console.log("🎉 Etkinlikler (activities) kuruluyor...");
+
+    // 1) Tek host, kapasiteli, yaklaşan — keşif + RSVP akışının temel örneği.
+    await createActivity({
+      hostClubId: techClub.id, createdBy: mustafa,
+      title: "React ile Web Atölyesi", description: "Sıfırdan bir SPA kuruyoruz.",
+      location: "B Blok Lab 2", startsAt: inDays(7), endsAt: inDays(7), capacity: 30,
+      attendees: [{ userId: sen }, { userId: can }, { userId: emre, status: "interested" }],
+    });
+
+    // 2) AYNI üniversiteden co-host (Yazılım + Müzik) — tek üniversitede birlikte etkinlik.
+    await createActivity({
+      hostClubId: techClub.id, coHostClubIds: [musicClub.id], createdBy: can,
+      title: "Kod & Müzik Gecesi", description: "Canlı kodlama + akustik performans.",
+      location: "Merkezi Amfi", startsAt: inDays(14), capacity: 100,
+      attendees: [{ userId: mustafa }, { userId: can }, { userId: emre }],
+    });
+
+    // 3) members görünürlüğü — yalnızca Fotoğrafçılık üyelerine görünür/RSVP.
+    await createActivity({
+      hostClubId: photographyClub.id, createdBy: ayse,
+      title: "Üyelere Özel Karanlık Oda Atölyesi", description: "Analog film banyosu (yalnızca üyeler).",
+      location: "Güzel Sanatlar Stüdyo", startsAt: inDays(10), visibility: "members",
+      attendees: [{ userId: burak }],
+    });
+
+    // 4) ⭐ ÇOK-ÜNİVERSİTELİ TURNUVA — Antalya (host) + Ege (co_host).
+    //    Tek etkinlik iki üniversitenin kulüplerini birleştirir; universityId
+    //    denormalize EDİLMEDİĞİ için bu ŞEMA DEĞİŞMEDEN mümkün olur.
+    await createActivity({
+      hostClubId: techClub.id, coHostClubIds: [egeTechClub.id], createdBy: mustafa,
+      title: "Üniversitelerarası Hackathon 2026", description: "Antalya ve Ege kulüpleri ortak turnuva.",
+      location: "Online + Kampüsler", startsAt: inDays(21), endsAt: inDays(23), capacity: 200,
+      attendees: [{ userId: mustafa }, { userId: cem }, { userId: gizem }, { userId: sen, status: "interested" }],
+    });
+
+    // 5) GEÇMİŞ etkinlik (scope=past) — Karadeniz Robotik.
+    await createActivity({
+      hostClubId: mechClub.id, createdBy: yusuf,
+      title: "Teknofest Hazırlık Kampı", description: "Geçen dönemin yarışma kampı.",
+      location: "Mekatronik Lab", startsAt: inDays(-20), endsAt: inDays(-18), capacity: 40,
+      attendees: [{ userId: yusuf }, { userId: merve }, { userId: hakan }],
+    });
   });
 
   console.log("✅ Seeding başarıyla tamamlandı!");
@@ -523,6 +627,12 @@ async function main() {
   console.log("   esra.bulut@std.kartek.edu.tr     → student  (Robotik'te pending istek, Satranç başvurusu)");
   console.log("   Kulüpler: Robotik ve Mekatronik(approved) Deniz Sporları(approved)");
   console.log("             Fotoğrafçılık(pending — Antalya'dakiyle aynı slug)");
+  console.log("\n── ETKİNLİKLER (activities) ───────────────────────");
+  console.log("   React Atölyesi (Yazılım)                → tek host, kapasiteli, yaklaşan");
+  console.log("   Kod & Müzik Gecesi (Yazılım + Müzik)    → AYNI üniversite co-host");
+  console.log("   Karanlık Oda Atölyesi (Fotoğrafçılık)   → members görünürlük (yalnızca üyeler)");
+  console.log("   Üniversitelerarası Hackathon (Antalya + Ege) → ⭐ ÇOK-ÜNİVERSİTELİ turnuva (M:N)");
+  console.log("   Teknofest Hazırlık Kampı (Karadeniz)    → GEÇMİŞ etkinlik (scope=past)");
 }
 
 // Bağlantı havuzu kapatılmadan süreç sonlanmaz: postgres-js açık soketleri

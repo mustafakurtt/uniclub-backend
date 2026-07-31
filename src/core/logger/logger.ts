@@ -15,9 +15,19 @@ export const LogLevel = {
   Warn: "warn",
   Error: "error",
   Fatal: "fatal",
+  /** Tüm çıktıyı kapatır (pino'nun özel seviyesi) — test/CI'da gürültüyü keser. */
+  Silent: "silent",
 } as const;
 
 export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
+
+/**
+ * Gerçekten bir log satırı YAZILABİLEN seviyeler. `Silent` bir EŞİKTİR (createLogger'a
+ * "hiçbir şey yazma" demek için), emisyon seviyesi değil — pino'da `logger.silent()`
+ * diye bir metod yoktur, `logger[level](...)` oraya düşerse çalışma anında patlar.
+ * Bir seviyeyi yazmak için kullanan her yer (bkz. createRequestLogger) bu tipi almalı.
+ */
+export type EmittableLogLevel = Exclude<LogLevel, typeof LogLevel.Silent>;
 
 /**
  * core/ proje-bağımsız kalmalı: bu fabrika `env`/`shared` bilmez, seviye ve

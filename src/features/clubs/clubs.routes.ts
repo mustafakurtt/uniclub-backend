@@ -5,6 +5,7 @@ import { requireActiveUser } from "../../middlewares/active-user.middleware";
 import { requireVerifiedUserForWrites } from "../../middlewares/verified-user.middleware";
 import { announcementsRoutes } from "../announcements/announcements.routes";
 import { galleryRoutes } from "../gallery/gallery.routes";
+import { clubActivitiesRoutes } from "../activities/routes/club-activities.routes";
 import { browseRoutes } from "./routes/browse.routes";
 import { applicationsRoutes } from "./routes/applications.routes";
 import { membershipRoutes } from "./routes/membership.routes";
@@ -39,6 +40,7 @@ clubsRoutes.use("*", authMiddleware, requireActiveUser, requireVerifiedUserForWr
 // Kulübe özel alt-kaynaklar (":clubId" parametresi bu mount'lardan miras alınır)
 clubsRoutes.route("/:clubId/announcements", announcementsRoutes);
 clubsRoutes.route("/:clubId/gallery", galleryRoutes);
+clubsRoutes.route("/:clubId/activities", clubActivitiesRoutes);
 
 clubsRoutes.route("/", applicationsRoutes);
 clubsRoutes.route("/", membershipRoutes);

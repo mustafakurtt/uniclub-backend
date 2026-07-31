@@ -445,3 +445,24 @@ olarak yazılmalı** — yoksa her yeni dosyada tek tek karar veriliyor.
 > ama içinde henüz kulübün asıl işi (etkinlik) ve SaaS'ın asıl işi (tenant
 > yapılandırması/abonelik) yok. Sıradaki yatırım `core/`'u daha da cilalamak
 > değil, bu iki eksen olmalı.
+
+---
+
+## Merge sonrası açılan borç (31 Tem 2026)
+
+`origin/develop` ile birleşme, Tier 0/1 kurallarından ÖNCE yazılmış üç yeni
+feature getirdi (activities, dashboard/feed, media). Zaman kolonları birleşme
+sırasında `timestamptz`'a çevrildi (migration `20260731142308_*`), ama iki kural
+bu tablolara **henüz uygulanmadı**:
+
+- **Tier 0.4 (`onDelete`):** `activities`, `activity_clubs`, `activity_attendees`,
+  `media` FK'lerinde politika yok — varsayılan `no action`.
+- **Tier 1.1 (çapraz-tenant kilidi):** `activity_clubs` ve `activity_attendees`
+  bileşik FK ile korunmuyor. **Deseni birebir kopyalamak burada YANLIŞ olur:**
+  etkinliğin tenant'ı `activity_clubs`'tan türetiliyor ve üniversitelerarası
+  turnuva bilinçli olarak destekleniyor — yani "tek tenant" varsayımı geçerli değil.
+  Doğru koruma ayrıca tasarlanmalı (muhtemelen `activity_attendees` için
+  "katılımcı, etkinliğin host/co_host kulüplerinden birinin tenant'ında olmalı"
+  kuralı — bu bir CHECK/trigger ya da servis-katmanı politikası olabilir).
+
+Bu iki madde, etkinlik feature'ı üzerinde çalışılacak ilk turda ele alınmalı.

@@ -1,95 +1,106 @@
-/**
- * Denetim izi (audit trail) — `guard()` zincirindeki `auditTrail` hook'unun
- * gerçekten yazdığını sınar.
- *
- * NEDEN AYRI BİR DOSYA: bu davranış uzun süre HİÇ sınanmıyordu. Sink, istemci
- * IP'sini okurken `app.request()` altında (Bun sunucusu yok) patlıyor, hook da
- * hatayı bilinçli olarak yutuyordu — "bildirim gidemedi diye işlem geri alınmaz"
- * ilkesinin denetim karşılığı. Sonuç: testlerde tek bir denetim satırı bile
- * yazılmıyordu ve bunu kimse fark etmiyordu. `clientIp` artık sunucusuz ortamda
- * "unknown" dönüyor; bu testler o yolun açık kalmasını garanti eder.
- */
 import { describe, it, expect, beforeAll } from "bun:test";
-import { and, eq } from "drizzle-orm";
-import { app, login, me } from "./helpers";
-import { db } from "../src/db";
-import { auditLogs } from "../src/db/schema";
+import { data, get, login, me, reqAuth } from "./helpers";
 
-const post = (path: string, token: string, body: unknown) =>
-  app.request(path, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
-
-/** Bu aktörün en yeni denetim kaydı. */
-async function latestLogFor(actorId: string) {
-  const rows = await db
-    .select()
-    .from(auditLogs)
-    .where(eq(auditLogs.actorId, actorId))
-    .orderBy(auditLogs.createdAt);
-  return rows.at(-1);
+/**
+ * Denetim izinin (audit trail) UÇTAN UCA davranışı.
+ *
+ * Bu dosya gerçek bir boşluğu kapatıyor: kanca `core/rbac/audit-hook.ts`'te,
+ * alan türetme `features/audit/audit.sink.ts`'te, okuma `/api/audit`'te — ama
+ * hiçbir test kaydın GERÇEKTEN yazıldığını doğrulamıyordu. Nitekim `clientIp`,
+ * `app.request()` bağlamında `getConnInfo`'nun fırlatması yüzünden sink'i
+ * düşürüyordu: sink hataları bilinçli olarak yutulduğu için (denetim kaydı asıl
+ * işlemin sonucunu değiştirmemeli) testler yeşil kalıyor, kayıt ise HİÇ
+ * yazılmıyordu. Sessiz bozulmayı ancak böyle bir test yakalar.
+ *
+ * KAPSAM: denetim izi yalnızca `guard()` zincirinden geçen rotalarda üretilir
+ * (admin, audit, auth, moderation). Kulüp/etkinlik rotaları kendi üyelik-rolü
+ * kontrolünü kullandığı için denetlenmez — bu yüzden testler admin rotasına dayanır.
+ */
+interface AuditLog {
+  id: string;
+  actorId: string;
+  action: string;
+  method: string;
+  path: string;
+  status: number;
+  targetType: string | null;
+  targetId: string | null;
+  metadata: { params?: Record<string, string>; body?: Record<string, unknown> } | null;
+  ip: string | null;
+  createdAt: string;
 }
 
-describe("denetim izi", () => {
-  let admin: string;
-  let adminId: string;
-  let student: string;
-  let studentId: string;
-  let uni: string;
+describe("Denetim izi (audit trail)", () => {
+  let elif: string; // university_admin (Antalya) — club.update + audit.view
+  let mustafa: string; // öğrenci — admin rotasında YETKİSİZ
+  let antalyaUni: string;
+  let techClubId: string;
+
+  /** Antalya'nın denetim akışı, en yeniden eskiye. */
+  const auditLogs = async () =>
+    (
+      await data<{ items: AuditLog[] }>(
+        await get(`/api/audit/universities/${antalyaUni}?limit=50`, elif)
+      )
+    ).items;
+
+  const clubPath = () => `/api/admin/universities/${antalyaUni}/clubs/${techClubId}`;
 
   beforeAll(async () => {
-    admin = await login("elif.demir@antalya.edu.tr"); // university_admin
-    student = await login("mustafa.kurt@std.antalya.edu.tr"); // yetkisiz
-    const adminMe = await me(admin);
-    adminId = adminMe.userId;
-    uni = adminMe.universityId as string;
-    studentId = (await me(student)).userId;
+    [elif, mustafa] = await Promise.all([
+      login("elif.demir@antalya.edu.tr"),
+      login("mustafa.kurt@std.antalya.edu.tr"),
+    ]);
+
+    antalyaUni = (await me(elif)).universityId as string;
+    expect(antalyaUni).toBeTruthy();
+
+    const clubs = await data<{ id: string; slug: string }[]>(await get("/api/clubs", mustafa));
+    techClubId = clubs.find((c) => c.slug === "yazilim-teknoloji")!.id;
   });
 
-  it("başarılı bir mutasyon denetim izine düşer (aktör, aksiyon, yol, durum)", async () => {
-    const res = await post(
-      `/api/moderation/universities/${uni}/users/${studentId}/ban`,
-      admin,
-      { reason: "Denetim izi testi" }
-    );
+  it("BAŞARILI mutasyon kaydedilir (aktör, yol, hedef, gövde, ip)", async () => {
+    const marker = `denetim-testi-${crypto.randomUUID().slice(0, 8)}`;
+    const res = await reqAuth("PATCH", clubPath(), elif, { description: marker });
     expect(res.status).toBe(200);
 
-    const log = await latestLogFor(adminId);
-    expect(log).toBeTruthy();
-    expect(log!.action).toBe("user.manage");
-    expect(log!.method).toBe("POST");
-    expect(log!.status).toBe(200);
-    expect(log!.path).toContain(studentId);
-    expect(log!.universityId).toBe(uni);
+    const elifId = (await me(elif)).userId;
+    const kayit = (await auditLogs()).find((log) => log.metadata?.body?.description === marker);
 
-    // temizlik: kullanıcıyı geri aç (diğer testler bu hesabı kullanıyor)
-    await post(`/api/moderation/universities/${uni}/users/${studentId}/unban`, admin, {});
+    expect(kayit).toBeDefined();
+    expect(kayit!.actorId).toBe(elifId);
+    expect(kayit!.action).toBe("club.update");
+    expect(kayit!.method).toBe("PATCH");
+    expect(kayit!.path).toBe(clubPath());
+    expect(kayit!.status).toBe(200);
+    expect(kayit!.targetType).toBe("club");
+    expect(kayit!.targetId).toBe(techClubId);
+    // `app.request()` gerçek bir sokete bağlı değildir, yani IP YOKTUR ve `null`
+    // dürüst karşılıktır. Asıl güvence kaydın var olmasıdır: `clientIp` burada
+    // fırlatsaydı sink düşer ve satır HİÇ yazılmazdı (bu testin varlık sebebi).
+    expect(kayit!.ip).toBeNull();
   });
 
-  it("REDDEDİLEN deneme de yazılır (403) — denetimin asıl kıymeti burada", async () => {
-    const res = await post(
-      `/api/moderation/universities/${uni}/users/${adminId}/ban`,
-      student, // yetkisi yok
-      { reason: "Yetkisiz deneme" }
-    );
+  it("REDDEDİLEN deneme de (403) kaydedilir — denetim izinin asıl değeri", async () => {
+    const marker = `yetkisiz-deneme-${crypto.randomUUID().slice(0, 8)}`;
+    const res = await reqAuth("PATCH", clubPath(), mustafa, { description: marker });
     expect(res.status).toBe(403);
 
-    const log = await latestLogFor(studentId);
-    expect(log).toBeTruthy();
-    expect(log!.status).toBe(403);
-    expect(log!.action).toBe("user.manage");
+    const mustafaId = (await me(mustafa)).userId;
+    const kayit = (await auditLogs()).find((log) => log.metadata?.body?.description === marker);
+
+    expect(kayit).toBeDefined();
+    expect(kayit!.actorId).toBe(mustafaId);
+    expect(kayit!.status).toBe(403);
   });
 
-  it("istemci IP'si sunucusuz ortamda kaydı düşürmez", async () => {
-    // Asıl regresyon buydu: IP okunamadığında sink patlıyor ve satır hiç yazılmıyordu.
-    const rows = await db
-      .select()
-      .from(auditLogs)
-      .where(and(eq(auditLogs.actorId, adminId), eq(auditLogs.action, "user.manage")));
-    expect(rows.length).toBeGreaterThan(0);
-    // IP bilinmiyor olabilir ama kayıt VAR — eksik bilgi, kayıp kayıt değil.
-    expect(rows.every((r) => r.ip !== null)).toBe(true);
+  it("OKUMA istekleri (GET) kaydedilmez — gürültü", async () => {
+    await get(`${clubPath()}/advisors`, elif); // guard(club.view) — okuma
+    expect((await auditLogs()).filter((log) => log.method === "GET")).toEqual([]);
+  });
+
+  it("başka üniversitenin yöneticisi Antalya'nın kayıtlarını GÖREMEZ", async () => {
+    const okan = await login("okan.yildiz@egebilim.edu.tr"); // Ege university_admin
+    expect((await get(`/api/audit/universities/${antalyaUni}`, okan)).status).toBe(403);
   });
 });

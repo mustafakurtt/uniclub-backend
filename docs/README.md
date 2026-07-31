@@ -38,6 +38,9 @@ Endpoint contracts and expected client behavior for each surface:
 | [FRONTEND_AUTH_GUARD_GUIDE.md](frontend/FRONTEND_AUTH_GUARD_GUIDE.md) | React route/UI guard mimarisi |
 | [FRONTEND_UNIVERSITY.md](frontend/FRONTEND_UNIVERSITY.md) | Üniversite/fakülte/bölüm/domain (soft delete notu) |
 | [FRONTEND_CLUBS.md](frontend/FRONTEND_CLUBS.md) | Kulüpler, üyelik, danışman, başvurular |
+| [FRONTEND_ACTIVITIES.md](frontend/FRONTEND_ACTIVITIES.md) | **Yeni** — etkinlikler: keşif/RSVP/takvim + kulüp-içi yönetim (M:N host/co-host, cross-university) |
+| [FRONTEND_DASHBOARD.md](frontend/FRONTEND_DASHBOARD.md) | **Yeni** — panel & akış: öğrenci feed/özeti, kulüp paneli, admin paneli |
+| [FRONTEND_MEDIA.md](frontend/FRONTEND_MEDIA.md) | **Yeni** — dosya yükleme: multipart upload → URL → `*Url` alanı; public servis |
 | [FRONTEND_YONETIM.md](frontend/FRONTEND_YONETIM.md) | Yönetim paneli (kullanıcı/kulüp/başvuru) |
 | [FRONTEND_MODERASYON.md](frontend/FRONTEND_MODERASYON.md) | **Yeni** — ban/unban/şifre sıfırla/aktivite/geçmiş |
 | [FRONTEND_BILDIRIM_VE_LIMITLER.md](frontend/FRONTEND_BILDIRIM_VE_LIMITLER.md) | Bildirimler (WS) + rate limit |

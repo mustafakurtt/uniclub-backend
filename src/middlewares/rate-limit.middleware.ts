@@ -48,8 +48,24 @@ const limiter = (options: {
     disabled: () => env.RATE_LIMIT_DISABLED,
   });
 
-/** Ters proxy arkasındaysak gerçek istemci IP'si X-Forwarded-For'un ilk girdisidir. */
-export function clientIp(c: Context): string {
+/**
+ * İstemci IP'si; çözülemezse `null`. Ters proxy arkasındaysak gerçek istemci
+ * X-Forwarded-For'un ilk girdisidir.
+ *
+ * ASLA FIRLATMAZ. `getConnInfo` (hono/bun) soket bilgisini `c.env.server`
+ * üzerinden arar; bu yalnızca `Bun.serve` ile gelen isteklerde vardır. Hono'nun
+ * `app.request()` arayüzünde (testler, iç çağrılar) `c.env` yoktur ve fonksiyon
+ * TypeError atar. Bu, denetim sink'ini her mutasyonda düşürüyordu.
+ *
+ * Neden "unknown" gibi bir yer tutucu DEĞİL de `null`: bu değer hız sınırı
+ * ANAHTARI olarak kullanılıyor (aşağıda). Sabit bir yer tutucu dönmek, IP'si
+ * çözülemeyen HERKESİ tek bir sayaç kovasına toplar — yani tek bir kullanıcı
+ * tüm platformun kayıt kotasını yiyebilir. `null` ise createRateLimiter'ın
+ * "kimlik yok → sınırlama yok" yoluna girer (modülün fail-open ilkesiyle
+ * tutarlı: sınır bir korumadır, doğruluk kaynağı değil). Denetim kaydında da
+ * null, "bilinmiyor"un dürüst karşılığıdır (kolon nullable).
+ */
+export function clientIp(c: Context): string | null {
   if (env.TRUST_PROXY) {
     const forwarded = c.req.header("x-forwarded-for");
     if (forwarded) {
@@ -57,15 +73,10 @@ export function clientIp(c: Context): string {
       if (first) return first;
     }
   }
-  // `getConnInfo` Bun'ın sunucu nesnesini ister; `app.request()` ile (testler,
-  // ileride bir in-process çağrı) çalışırken böyle bir sunucu YOKTUR ve fonksiyon
-  // TypeError fırlatır. Bu, denetim kaydını (audit.sink) sessizce düşürüyordu —
-  // yani denetim izi test ortamında hiç yazılmıyor, dolayısıyla hiç sınanmıyordu.
-  // IP'nin bilinmemesi bir hata değil, bir bilgi eksikliğidir: "unknown" dön.
   try {
-    return getConnInfo(c).remote.address ?? "unknown";
+    return getConnInfo(c).remote.address ?? null;
   } catch {
-    return "unknown";
+    return null;
   }
 }
 
@@ -97,11 +108,14 @@ export const resendVerificationEmailLimit = limiter({
   keyFn: (c) => bodyField(c, "email"),
 });
 
-/** Aynı endpoint için kaba bir sel koruması. Kampüs-güvenli olacak kadar cömert. */
+/**
+ * Aynı endpoint için kaba bir SEL koruması (asıl koruma yukarıdaki e-posta
+ * limitidir). KISA pencere — gerekçe için `registerLimit`'e bakınız.
+ */
 export const resendVerificationIpLimit = limiter({
   keyPrefix: "resend:ip",
-  limit: 30,
-  windowSeconds: 60 * 60,
+  limit: 20,
+  windowSeconds: 60,
   keyFn: (c) => clientIp(c),
 });
 
@@ -118,13 +132,38 @@ export const loginLimit = limiter({
 });
 
 /**
- * Kayıt — IP başına (henüz bir kimlik yok). Cömert bir tavan: kayıt zaten
- * (a) tanınan bir okul domaini ve (b) benzersiz e-posta gerektiriyor, dolayısıyla
- * istismar payı dar. Oryantasyon günü tüm kampüsün kaydolabilmesi gerekir.
+ * Kayıt — IP başına (henüz bir kimlik yok, başka anahtar yok).
+ *
+ * ════════════════════════════════════════════════════════════════════════
+ * Neden UZUN pencere + küçük limit DEĞİL, KISA pencere?
+ * ════════════════════════════════════════════════════════════════════════
+ * Kampüs NAT'ı arkasındaki yüzlerce öğrenci tek bir public IP'den çıkar, yani
+ * bu sayaç bir kişiyi değil TÜM KAMPÜSÜ ölçer. Burası çok kiracılı (SaaS) bir
+ * ürün: üniversitelerin öğrenci sayıları 500 ile 50.000 arasında değişir, o
+ * yüzden "kampüse yetecek" tek bir rakam YOKTUR — her seçim bir okul için fazla,
+ * başkası için az olur.
+ *
+ * Asıl zarar limite takılmak değil, KİLİTLİ KALMA SÜRESİDİR. Sabit pencerede
+ * tavana vuran, pencere kapanana kadar bekler: 1 saatlik pencerede oryantasyon
+ * günü bir kampüs bir SAAT boyunca kaydolamaz. Bu yüzden pencere 1 DAKİKAYA
+ * indirildi — en kötü durumda kullanıcı ~60 sn sonra tekrar dener (cevaptaki
+ * `Retry-After` bunu söyler) ve akış kendini toparlar.
+ *
+ * Böylece sınır KAMPÜS BÜYÜKLÜĞÜNDEN BAĞIMSIZ hale gelir: ayırt edici özellik
+ * toplam hacim değil, İNSAN hızı ile MAKİNE hızı arasındaki farktır. 60 saniyede
+ * aynı NAT'tan 30 kayıt formu gönderen bir insan kalabalığı zaten olağandışıdır
+ * ve takılsa bile saniyeler içinde devam eder; bir script ise saniyede yüzlerce
+ * dener ve burada durur.
+ *
+ * Kalan savunma katmanları (bu limit tek başına değil):
+ *   - kayıt TANINAN bir okul domaini ister (auth.service register)
+ *   - var olan e-posta 400 döner ve MAİL GÖNDERMEZ → bir adresi döngüye alıp
+ *     mail seli yapılamaz; saldırganın her seferinde yeni bir adres uydurması gerekir
+ *   - hesap doğrulanana kadar `pending` — kullanılamaz
  */
 export const registerLimit = limiter({
   keyPrefix: "register:ip",
-  limit: 60,
-  windowSeconds: 60 * 60,
+  limit: 30,
+  windowSeconds: 60,
   keyFn: (c) => clientIp(c),
 });

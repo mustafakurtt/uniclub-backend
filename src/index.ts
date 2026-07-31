@@ -13,6 +13,9 @@ import { adminRoutes } from "./features/admin/admin.routes";
 import { universityRoutes } from "./features/university/university.routes";
 import { usersRoutes } from "./features/users/users.routes";
 import { clubsRoutes } from "./features/clubs/clubs.routes";
+import { activitiesRoutes } from "./features/activities/activities.routes";
+import { feedRoutes } from "./features/dashboard/dashboard.routes";
+import { mediaRoutes, mediaServeRoutes } from "./features/media/media.routes";
 import { notificationsRoutes } from "./features/notifications/notifications.routes";
 import { auditRoutes } from "./features/audit/audit.routes";
 import { moderationRoutes } from "./features/moderation/moderation.routes";
@@ -36,6 +39,7 @@ import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
 import { metrics } from "./shared/metrics/metrics";
 import { createShutdownManager } from "./core/http/shutdown";
+import { createHealth } from "./core/http/health";
 
 const log = logger.child({ module: "bootstrap" });
 
@@ -63,14 +67,19 @@ app.use("*", metrics.middleware);
 // cevaplara (hata dahil) uygulansın diye erken. TLS/HSTS prod'da Caddy'de.
 app.use("*", secureHeaders());
 // Gövde üst sınırı: dev bir payload'a karşı erken kalkan (route'lar body okumadan).
-app.use("*", bodyLimit({
+// Dosya YÜKLEME rotası (`/api/uploads`) bu global JSON sınırından MUAFTIR — kendi
+// (daha büyük) MAX_UPLOAD_BYTES'ını uygular (bkz. features/media/media.routes.ts).
+const globalBodyLimit = bodyLimit({
   maxSize: env.MAX_BODY_BYTES,
   onError: (c) =>
     c.json(
       { success: false, message: "İstek gövdesi çok büyük.", code: "PAYLOAD_TOO_LARGE", requestId: c.get("requestId") },
       413
     ),
-}));
+});
+app.use("*", (c, next) =>
+  c.req.path.startsWith("/api/uploads") ? next() : globalBodyLimit(c, next)
+);
 // Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
 // bu dile çevirir (bkz. core/i18n).
 app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
@@ -112,41 +121,47 @@ app.onError(errorHandler);
 // Yalnızca "süreç ayakta mı" demek yetmez: veritabanı düşükken 200 dönersek
 // load balancer bu instance'a trafik göndermeye devam eder ve kullanıcı 500 alır.
 // Bağımlılıklar yoklanır; biri cevap vermiyorsa 503 döneriz ve LB bizi havuzdan çıkarır.
-const HEALTH_CHECK_TIMEOUT_MS = 2000;
-
-/** Askıda kalan bir bağımlılık, health check'i de askıda bırakmasın. */
-const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error("timeout")), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
-};
+//
+// Mekanizma (zaman aşımı, paralel koşma, drain) core/http/health.ts'te; NEYİN
+// kontrol edileceği ve cevabın ŞEKLİ burada — core proje sözleşmesini bilmez.
+const health = createHealth({
+  checks: [
+    { name: "database", run: async () => void (await db.execute(sql`select 1`)) },
+    { name: "cache", run: async () => void (await redis.ping()) },
+  ],
+  timeoutMs: 2000,
+});
 
 app.get("/health", async (c) => {
-  const [dbCheck, redisCheck] = await Promise.allSettled([
-    withTimeout(db.execute(sql`select 1`), HEALTH_CHECK_TIMEOUT_MS),
-    withTimeout(redis.ping(), HEALTH_CHECK_TIMEOUT_MS),
-  ]);
-
-  const database = dbCheck.status === "fulfilled" ? "up" : "down";
-  const cache = redisCheck.status === "fulfilled" ? "up" : "down";
-  const healthy = database === "up" && cache === "up";
+  const report = await health.report();
+  // Cevap şekli DEĞİŞMEDİ (istemciler/testler bağlı): status ok|degraded ve
+  // checks bir NESNE. core'un ham raporu bu sözleşmeye burada uyarlanır.
+  const checks = Object.fromEntries(report.checks.map((check) => [check.name, check.status]));
+  const healthy = report.status === "up";
 
   if (!healthy) {
-    log.error({ database, cache }, "Health check başarısız — bağımlılık erişilemiyor");
+    log.error({ ...checks, draining: report.draining }, "Health check başarısız — bağımlılık erişilemiyor");
   }
 
   return c.json(
     {
       status: healthy ? "ok" : "degraded",
       environment: env.NODE_ENV,
-      checks: { database, cache },
+      checks,
       timestamp: new Date().toISOString(),
     },
     healthy ? 200 : 503,
   );
 });
+
+/**
+ * LIVENESS — "süreç yaşıyor mu?" Bağımlılıklara BAKMAZ ve kapanış draini
+ * sırasında bile 200 döner. Ayrı bir uç olmasının sebebi: `/health` bağımlılık
+ * yoklar ve orkestratör (Docker HEALTHCHECK / k8s livenessProbe) ona bakarsa,
+ * bir veritabanı kesintisi tüm konteynerlerin yeniden başlatılmasına yol açar —
+ * kesintiyi düzeltmez, büyütür. Yeniden başlatma kararı BUNA bakmalı.
+ */
+app.get("/live", health.live);
 
 // Prometheus metrics exposition — Prometheus periyodik scrape eder.
 // PROD: iç bilgileri sızdırır; Caddy/proxy bunu DIŞARIYA açmamalı (bkz. shared/metrics).
@@ -158,6 +173,11 @@ app.route("/api/admin", adminRoutes);
 app.route("/api/universities", universityRoutes);
 app.route("/api/users", usersRoutes);
 app.route("/api/clubs", clubsRoutes);
+app.route("/api/activities", activitiesRoutes);
+app.route("/api/feed", feedRoutes);
+app.route("/api/uploads", mediaRoutes);
+// Yüklenen dosyaların PUBLIC servisi (auth yok; /api altında DEĞİL).
+app.route("/uploads", mediaServeRoutes);
 app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);
@@ -181,6 +201,12 @@ if (import.meta.main) {
   // bağımlılıkları. Böylece deploy'da yeni istek gelmez, uçuştaki istek biter ve
   // yarım job/bağlantı kalmaz. Kaynaklar core'a değil BURADA (proje) enjekte edilir.
   const shutdown = createShutdownManager({ logger: log, timeoutMs: 10_000 });
+  // DRAIN İLK SIRADA: /health'i 503'e çevirip yük dengeleyicinin bizi havuzdan
+  // çıkarmasını bekler. Bu adım olmadan sunucuyu kapatmak, LB'nin henüz haberi
+  // olmadığı için o sırada yönlendirilen isteklere bağlantı hatası verdirir.
+  // Prod'da varsayılan 5sn; yerelde 0 (Ctrl+C anında çıksın). HEALTH_DRAIN_MS ezer.
+  const drainMs = env.HEALTH_DRAIN_MS ?? (env.NODE_ENV === "production" ? 5_000 : 0);
+  shutdown.register("drain", health.drainTask(drainMs));
   shutdown.register("http-server", () => server.stop()); // yeni bağlantı yok, uçuştakini bekle
   shutdown.register("email-queue", closeEmailQueue); // worker önce (job'u bitir), sonra queue
   shutdown.register("redis-subscriber", async () => void (await redisSubscriber.quit()));

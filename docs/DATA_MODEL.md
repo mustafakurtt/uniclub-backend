@@ -43,6 +43,12 @@ erDiagram
     permissions ||--o{ user_permissions : ""
     universities ||--o{ roles : "NULL = global şablon rol"
 
+    activities ||--o{ activity_clubs : "host / co_host (M:N)"
+    clubs      ||--o{ activity_clubs : ""
+    activities ||--o{ activity_attendees : "RSVP + yoklama"
+    users      ||--o{ activity_attendees : ""
+    users      ||--o{ media : "yükleyen"
+
     users ||--o{ notifications : ""
     users ||--o{ push_subscriptions : ""
     users ||--o{ email_verifications : ""
@@ -103,6 +109,22 @@ Her tablo tenant'a aynı şekilde bağlanmaz; üç kalıp var:
 |---|---|---|
 | `club_applications` | Kulüp kurma başvurusu | Başvuran, başvurduğu tenant'ın kullanıcısı olmak zorunda (bileşik FK) |
 | `club_application_approvals` | Onay zincirinin **her adımı ayrı satır** (`step`) | Bugün yalnızca step 1 (danışman) kullanılıyor; ikinci onay makamı eklemek şema değişikliği DEĞİL, satır eklemektir. `note` = karar gerekçesi, reddederken zorunlu |
+
+### Etkinlikler ve medya
+
+| Tablo | Ne tutar | Notlar |
+|---|---|---|
+| `activities` | Kulüp etkinlikleri | Kulüp ve tenant burada **tutulmaz** — `activity_clubs` üzerinden türetilir. Böylece iki kulüp (ve iki üniversite) aynı etkinliği paylaşabilir. `starts_at`/`ends_at` **timestamptz** |
+| `activity_clubs` | Etkinlik ↔ kulüp (M:N) | `host` / `co_host`; etkinlik başına en fazla bir `host` (kısmi tekillik index'i). Davet akışı: `invited` → `accepted` |
+| `activity_attendees` | RSVP + yoklama | Kulüpten bağımsız, kişisel. `checked_in_at` = gerçekten geldi (RSVP ≠ katılım) |
+| `media` | Yüklenen dosyaların METAsı | Dosyanın kendisi `core/storage` adaptöründe (disk/S3). Mevcut `*Url` alanları hâlâ düz URL taşır — bu tablo sahiplik ve boyut kaydıdır |
+
+> **Bu tablolar tenant kilidi TAŞIMIYOR.** `activity_clubs`/`activity_attendees`
+> bileşik FK ile korunmuyor ve FK'lerinde `onDelete` yok — yani Tier 0.4 ve 1.1
+> kuralları bu dört tabloya henüz uygulanmadı. Sebebi tasarımsal: etkinliğin
+> tenant'ı türetilmiş olduğu için (ve üniversitelerarası turnuva bilinçli olarak
+> destekleniyor) kilit deseni birebir kopyalanamaz, ayrıca düşünülmeli.
+> Yol haritasına eklendi.
 
 ### Bildirim, denetim, moderasyon
 

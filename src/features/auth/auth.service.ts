@@ -12,10 +12,12 @@ import { ClubPermission } from "../clubs/clubs.permissions";
 import { UniversityPermission } from "../university/university.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
+import { ActivityPermission } from "../activities/activities.permissions";
+import { DashboardPermission } from "../dashboard/dashboard.permissions";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
-import { authCache } from "./auth.cache";
+import { authCache, authCatalogEffects } from "./auth.cache";
 
 // Kayıt otomatik rolü + promote/demote hedefi. Not: "admin" rolü kurumsal modelde
 // "university_admin" olarak yeniden adlandırıldı (bkz. docs/design/06).
@@ -35,6 +37,8 @@ const SEED_PERMISSION_KEYS = new Set<string>([
   ...Object.values(AuthPermission),
   ...Object.values(AnnouncementPermission),
   ...Object.values(GalleryPermission),
+  ...Object.values(ActivityPermission),
+  ...Object.values(DashboardPermission),
 ]);
 
 /**
@@ -482,12 +486,12 @@ export const authService = {
       throw badRequest("auth.permissionKeyExists");
     }
     const created = await authRepository.createPermission(data);
-    await authCache.invalidatePermissions();
+    await authCatalogEffects.permissionsChanged.emit();
     return created;
   },
 
   async listPermissions() {
-    return await authCache.permissions(() => authRepository.findAllPermissions());
+    return await authCache.permissions().read(() => authRepository.findAllPermissions());
   },
 
   /**
@@ -500,7 +504,7 @@ export const authService = {
       throw notFound("auth.permissionNotFound");
     }
     const updated = await authRepository.updatePermission(permissionId, data);
-    await authCache.invalidatePermissions();
+    await authCatalogEffects.permissionsChanged.emit();
     return updated;
   },
 
@@ -519,9 +523,8 @@ export const authService = {
     }
     const affectedUserIds = await authRepository.deletePermission(permissionId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidatePermissions();
-    // İzin bir daha roller katalogunda görünmeyecek → rol katalogu da tazelensin.
-    await authCache.invalidateRoles();
+    // Silinen izin rol katalogunda da görünüyordu → tek efekt ikisini birden düşürür.
+    await authCatalogEffects.permissionDeleted.emit();
   },
 
   /** Bir yetkiyi taşıyan roller (ters listeleme — bkz. docs/design/05 #8). */
@@ -550,7 +553,7 @@ export const authService = {
       ? { ...data, rank }
       : { ...data, rank, universityId: actor.universityId };
     const created = await authRepository.createRole(payload);
-    await authCache.invalidateRoles();
+    await authCatalogEffects.rolesChanged.emit();
     return created;
   },
 
@@ -560,7 +563,7 @@ export const authService = {
    */
   async listRoles(actor: RoleAdminActor) {
     // Global liste tek anahtarla cache'lenir; aktör filtresi cache DIŞINDA uygulanır.
-    const roles = await authCache.roles(() => authRepository.findAllRolesWithPermissions());
+    const roles = await authCache.roles().read(() => authRepository.findAllRolesWithPermissions());
     if (actor.isSuperAdmin) return roles;
     return roles.filter((r) => r.universityId === null || r.universityId === actor.universityId);
   },
@@ -584,7 +587,7 @@ export const authService = {
       throw badRequest("auth.roleRankCannotExceedActor");
     }
     const updated = await authRepository.updateRole(roleId, data);
-    await authCache.invalidateRoles();
+    await authCatalogEffects.rolesChanged.emit();
     return updated;
   },
 
@@ -603,7 +606,7 @@ export const authService = {
     }
     const affectedUserIds = await authRepository.deleteRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidateRoles();
+    await authCatalogEffects.rolesChanged.emit();
   },
 
   /** Bir role sahip kullanıcılar (ters listeleme — bkz. docs/design/05 #8). */
@@ -766,7 +769,7 @@ export const authService = {
     await authRepository.attachPermissionToRole(roleId, permissionId);
     const affectedUserIds = await authRepository.findUserIdsByRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidateRoles(); // rolün gömülü izin listesi değişti
+    await authCatalogEffects.rolesChanged.emit(); // rolün gömülü izin listesi değişti
   },
 
   async detachPermissionFromRole(actor: RoleAdminActor, roleId: string, permissionId: string) {
@@ -783,6 +786,6 @@ export const authService = {
     await authRepository.detachPermissionFromRole(roleId, permissionId);
     const affectedUserIds = await authRepository.findUserIdsByRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidateRoles(); // rolün gömülü izin listesi değişti
+    await authCatalogEffects.rolesChanged.emit(); // rolün gömülü izin listesi değişti
   },
 };

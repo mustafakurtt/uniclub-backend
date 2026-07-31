@@ -26,6 +26,9 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Moderation (kullanıcı yönetimi)](#8-moderation--apimoderation)
   - [Notifications (bildirimler)](#9-notifications--apinotifications)
   - [Audit (denetim izi)](#10-audit--apiaudit)
+  - [Activities (etkinlikler)](#11-activities--apiactivities)
+  - [Dashboard & Feed](#12-dashboard--feed--apifeed)
+  - [Media (dosya yükleme)](#13-media--apiuploads)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -33,7 +36,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/notifications`, `/api/audit`, `/api/moderation`. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -188,6 +191,8 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 | GET | `/api/users/me/clubs` | Bearer | Üye olduğum kulüpler (pending istekler dahil) |
 | GET | `/api/users/me/applications` | Bearer | Kulüp kurma başvurularım |
 | GET | `/api/users/me/advised-clubs` | Bearer | Danışmanı olduğum kulüpler (advisor rolü) |
+| GET | `/api/users/me/activities` | Bearer | Katılım bildirdiğim etkinlikler (takvimim) — bkz. [Activities](#11-activities--apiactivities) |
+| GET | `/api/users/me/dashboard` | Bearer | Öğrenci panel özeti (kulüp/etkinlik/istek sayaçları) — bkz. [Dashboard](#12-dashboard--feed) |
 
 **PATCH /api/users/me** body (en az bir alan zorunlu):
 ```jsonc
@@ -356,7 +361,7 @@ Body şemaları:
 
 **POST** body: `{ "imageUrl": "url (max 512)", "caption": "string (max 256, opsiyonel)" }`
 
-> Not: Dosya upload endpoint'i yok — `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Görsel yükleme (S3/Cloudinary vb.) frontend veya ayrı bir servis tarafından yapılıp URL buraya verilmelidir.
+> Not: `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Bu URL'yi **`POST /api/uploads`** ile (gerçek dosya yükleyip) üretebilirsiniz — bkz. [Media](#13-media--dosya-yükleme). Alternatif olarak harici bir servisin (S3/Cloudinary) URL'si de verilebilir.
 
 ---
 
@@ -502,6 +507,73 @@ Query parametreleri:
 ```
 
 `audit.view` yetkisi: `auditor`, `university_admin`, `platform_support`, `super_admin`.
+### 11) Activities — `/api/activities`
+
+Kulüp etkinlikleri: keşif, katılım (RSVP), takvim ve kulüp-içi yönetim.
+**Tam derinlemesine referans (kavramsal model, co-host/cross-university, tüm
+request/response örnekleri): [`docs/frontend/FRONTEND_ACTIVITIES.md`](frontend/FRONTEND_ACTIVITIES.md).**
+
+Kilit tasarım: etkinlik ↔ kulüp **M:N** (`activity_clubs`, host/co_host). Bir etkinliğin
+tek bir `universityId`'si **yoktur** — tenant'ı katılan kulüplerden türetilir; co-hosted
+etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva senaryosu).
+
+**Keşif + RSVP** (Bearer; tenant JWT'den):
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/activities?scope=upcoming\|past\|all&search=` | Üniversite geneli yayınlanmış + `university` görünürlüklü etkinlikler |
+| GET | `/api/activities/:activityId` | Detay (görünürlük/tenant/yayın kuralları uygulanır) |
+| POST | `/api/activities/:activityId/rsvp` | Katılım bildir — `{ status: "going"\|"interested" }` (vars. `going`, kapasite kontrollü) |
+| DELETE | `/api/activities/:activityId/rsvp` | Katılımı geri al (idempotent) |
+
+**Kulüp-içi yönetim** — `/api/clubs/:clubId/activities` (kulüp alt-kaynağı; yazma = host staff):
+
+| Method | Path | Kim |
+|---|---|---|
+| GET | `/api/clubs/:clubId/activities` | Bearer (herkes; `members` yalnızca üyeye, taslak yalnızca staff'a) |
+| POST | `/api/clubs/:clubId/activities` | host staff (bu kulüp host; `publish:false` → taslak) |
+| PATCH | `/api/clubs/:clubId/activities/:activityId` | host staff |
+| POST | `.../:activityId/publish` | host staff (taslağı yayınla) |
+| POST | `.../:activityId/cancel` | host staff (katılımcılara bildirim) |
+| GET | `.../:activityId/attendees` | host staff |
+| POST\|DELETE | `.../:activityId/attendees/:userId/check-in` | host staff (yoklama işaretle/geri al) |
+| POST\|GET | `.../:activityId/co-hosts` | host staff (kulüp davet et `{clubId}` / listele) |
+| DELETE | `.../:activityId/co-hosts/:coClubId` | host staff (co-host kaldır) |
+| POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
+| POST | `/api/admin/universities/:uid/activities/:activityId/cancel` | `activity.moderate` (tenant) | **Moderasyon:** tenant'taki herhangi bir kulübün etkinliğini iptal etme |
+
+Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true) }`; `PATCH` aynı alanlar opsiyonel (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
+
+---
+
+### 12) Dashboard & Feed — `/api/feed`
+
+Rollere göre özet/akış (okuma modeli — mevcut veriyi birleştirir).
+**Tam referans: [`docs/frontend/FRONTEND_DASHBOARD.md`](frontend/FRONTEND_DASHBOARD.md).**
+
+| Method | Path | Yetki | Açıklama |
+|---|---|---|---|
+| GET | `/api/feed?limit=&cursor=` | Bearer | Öğrenci akışı: kulüplerimin duyuru+etkinlikleri (keyset) |
+| GET | `/api/users/me/dashboard` | Bearer | Öğrenci özeti (kulüp/etkinlik/istek sayaçları + en yakın etkinlik) |
+| GET | `/api/clubs/:clubId/dashboard` | kulüp staff | Kulüp özeti (üye/istek/etkinlik/duyuru sayaçları) |
+| GET | `/api/admin/universities/:universityId/dashboard` | `dashboard.view` (tenant) | Tenant özeti (kulüp/kullanıcı durum dağılımı + bekleyen başvuru + yaklaşan etkinlik) |
+
+Feed öğesi: `{ type: "announcement"|"activity", at (ISO), club, item }`. `nextCursor` doluysa `?cursor=` ile devam.
+
+---
+
+### 13) Media — `/api/uploads`
+
+Gerçek dosya yükleme. **Tam referans: [`docs/frontend/FRONTEND_MEDIA.md`](frontend/FRONTEND_MEDIA.md).**
+Akış: **yükle → dönen URL'yi mevcut `*Url` alanına yaz** (endpoint'ler hâlâ URL string alır).
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| POST | `/api/uploads` | Bearer | multipart `file` + `purpose` → `{ id, url }`. Yalnızca görsel (magic-byte doğrulaması), ≤ `MAX_UPLOAD_BYTES` (5MB) |
+| DELETE | `/api/uploads/:mediaId` | Bearer | Sil (yalnızca yükleyen) |
+| GET | `/uploads/:key` | Public | Servis (`Cache-Control: immutable`) |
+
+`purpose`: `avatar\|club_logo\|club_cover\|gallery\|other`. Boyut aşımı → `413`; görsel değil → `400`.
 
 ---
 
@@ -510,6 +582,11 @@ Query parametreleri:
 | Enum | Değerler |
 |---|---|
 | `user.status` | `pending`, `active`, `suspended` |
+| `activity_status` | `draft`, `published`, `cancelled` |
+| `activity_visibility` | `university`, `members` |
+| `activity_club_role` | `host`, `co_host` |
+| `activity_club_status` | `invited`, `accepted` |
+| `rsvp_status` | `going`, `interested`, `waitlist` |
 | `club.status` | `pending`, `approved`, `rejected`, `archived` |
 | `join_policy` | `open`, `approval_required` |
 | `club_role` (kulüp içi) | `member`, `officer`, `president` |
@@ -518,7 +595,7 @@ Query parametreleri:
 | `contact_platform` | `whatsapp`, `instagram`, `discord`, `telegram`, `twitter`, `website`, `email`, `other` |
 | `domain_type` | `student`, `staff` |
 | Global roller (seed — 9 rol) | `super_admin`, `platform_support`, `university_admin`, `student_affairs`, `academic_affairs`, `content_moderator`, `auditor`, `advisor`, `student` |
-| Global permission'lar (seed) | `user.view`, `user.manage`, `audit.view`, `club.approve`, `club.update`, `club.advisor.manage`, `club.delete`, `announcement.moderate`, `gallery.moderate`, `role.manage`, `permission.manage`, `university.create`, `university.update`, `university.delete`, `university.domain.create`, `university.domain.update`, `university.domain.delete`, `university.faculty.create`, `university.faculty.update`, `university.faculty.delete`, `university.department.create`, `university.department.update`, `university.department.delete` (**kapalı küme değil** — `permission.manage` ile runtime'da genişletilebilir) |
+| Global permission'lar (seed) | `user.view`, `user.manage`, `audit.view`, `club.approve`, `club.update`, `club.advisor.manage`, `club.delete`, `announcement.moderate`, `gallery.moderate`, `activity.moderate`, `dashboard.view`, `role.manage`, `permission.manage`, `university.create`, `university.update`, `university.delete`, `university.domain.create`, `university.domain.update`, `university.domain.delete`, `university.faculty.create`, `university.faculty.update`, `university.faculty.delete`, `university.department.create`, `university.department.update`, `university.department.delete` (**kapalı küme değil** — `permission.manage` ile runtime'da genişletilebilir) |
 
 ---
 

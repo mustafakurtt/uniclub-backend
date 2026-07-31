@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
+import { invalidates, fromParams } from "../../../core/cache";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
+import { universityEffects } from "../university.cache";
 import {
   listUniversitiesQuerySchema,
   createUniversitySchema,
@@ -23,6 +25,10 @@ import { universityService } from "../university.service";
  * (veya düz iş hatası) fırlatır; bunları `app.onError` (core/http/error-handler)
  * tek noktadan status + gövdeye çevirir. Başarılı cevaplar da core zarf
  * yardımcıları (`ok`/`created`/`done`) ile üretilir. Rotada yalnızca iş akışı görünür.
+ *
+ * CACHE: yazma rotaları hangi cache EFEKTİNİ tetiklediklerini `invalidates(...)`
+ * ile bildirir (yalnızca 2xx'te koşar). Hangi anahtarların düştüğü university.cache.ts
+ * içindeki efekt tanımındadır; servis katmanı cache'i hiç bilmez.
  */
 export const universitiesRoutes = new Hono<{ Variables: RbacVariables }>();
 
@@ -31,6 +37,7 @@ export const universitiesRoutes = new Hono<{ Variables: RbacVariables }>();
 universitiesRoutes.post(
   "/",
   ...guard(UniversityPermission.CREATE),
+  invalidates(universityEffects.universityCreated),
   validate("json", createUniversitySchema),
   async (c) => {
     const body = c.req.valid("json");
@@ -61,6 +68,7 @@ universitiesRoutes.get("/:universityId", async (c) => {
 universitiesRoutes.patch(
   "/:universityId",
   ...guard(UniversityPermission.UPDATE, { tenantScoped: true }),
+  invalidates(universityEffects.universityUpdated, fromParams("universityId")),
   validate("json", updateUniversitySchema),
   async (c) => {
     const { universityId } = c.req.param();
@@ -74,6 +82,7 @@ universitiesRoutes.patch(
 universitiesRoutes.delete(
   "/:universityId",
   ...guard(UniversityPermission.DELETE, { tenantScoped: true }),
+  invalidates(universityEffects.universityDeleted, fromParams("universityId")),
   async (c) => {
     const { universityId } = c.req.param();
     await universityService.deleteUniversity(universityId);

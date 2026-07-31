@@ -67,3 +67,17 @@ usersRoutes.get("/me/advised-clubs", async (c) => {
   const clubs = await usersService.listMyAdvisedClubs(actor.userId);
   return ok(c, clubs, "user.advisedClubsListed");
 });
+
+// 7. KATILDIĞIM ETKİNLİKLER (takvimim / RSVP'lerim)
+usersRoutes.get("/me/activities", async (c) => {
+  const actor = c.get("user");
+  const activities = await usersService.listMyActivities(actor.userId);
+  return ok(c, activities, "activity.listed");
+});
+
+// 8. PANEL ÖZETİM (kulüp/etkinlik/istek sayaçları + en yakın etkinlik)
+usersRoutes.get("/me/dashboard", async (c) => {
+  const actor = c.get("user");
+  const summary = await usersService.getDashboard(actor.userId);
+  return ok(c, summary, "dashboard.summaryLoaded");
+});
