@@ -22,8 +22,8 @@ Güvenlik/core ekseni: [security-core.md](security-core.md).
 
 | Madde | Durum | Not |
 |---|---|---|
-| Tier 0.4 `onDelete` | Açık | `activities`, `activity_clubs`, `activity_attendees`, `media` FK'lerinde politika yok |
-| Tier 1.1 çapraz-tenant | Açık | `activity_attendees` için özel kural gerekli — üniversitelerarası co-host bilinçli; kulüp üyeliği desenini kopyalamayın |
+| Tier 0.4 `onDelete` | Tasarım notu | [activities-schema-fk-debt.md](activities-schema-fk-debt.md) — onay bekliyor |
+| Tier 1.1 çapraz-tenant | Tasarım notu | Aynı not — attendee kuralı servis katmanında önerildi |
 
 Entegrasyon: [integration/activities.md](../integration/activities.md).
 

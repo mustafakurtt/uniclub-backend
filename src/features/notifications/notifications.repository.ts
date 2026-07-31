@@ -24,6 +24,30 @@ class NotificationsRepository extends BaseRepository<typeof notifications, typeo
     });
   }
 
+  /** Çok kullanıcıya tek payload — INSERT parçalı (ölçek). */
+  async addMany(userIds: string[], payload: CreateNotificationPayload): Promise<Notification[]> {
+    if (userIds.length === 0) return [];
+    const INSERT_CHUNK = 500;
+    const rows: Notification[] = [];
+    for (let i = 0; i < userIds.length; i += INSERT_CHUNK) {
+      const slice = userIds.slice(i, i + INSERT_CHUNK);
+      const inserted = await db
+        .insert(notifications)
+        .values(
+          slice.map((userId) => ({
+            userId,
+            type: payload.type,
+            title: payload.title,
+            body: payload.body ?? null,
+            data: payload.data ?? null,
+          }))
+        )
+        .returning();
+      rows.push(...inserted);
+    }
+    return rows;
+  }
+
   /**
    * Kullanıcının bildirim akışı, en yeniden eskiye — keyset (cursor) sayfalama
    * (`createdAt`'e göre). OFFSET yerine keyset: derin sayfada yavaşlamaz ve iki sayfa

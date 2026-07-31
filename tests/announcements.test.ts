@@ -90,7 +90,7 @@ describe("duyurular (/api/clubs/:clubId/announcements)", () => {
   });
 
   it("yayın bildirimi yalnızca ilk publish'te gider", async () => {
-    const notifySpy = spyOn(notificationsServiceModule.notificationsService, "notifySafe");
+    const notifySpy = spyOn(notificationsServiceModule.notificationsService, "notifyManySafe");
 
     const title = `Notify once ${Date.now()}`;
     const createRes = await reqAuth("POST", `/api/clubs/${techClubId}/announcements`, mustafa, {

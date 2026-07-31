@@ -10,6 +10,9 @@ import { activityStatusEnum, activityVisibilityEnum } from "./activities";
 // ═══════════════════════════════════════════════
 // ANNOUNCEMENTS (şimdilik sadece kulüp bazlı)
 // ═══════════════════════════════════════════════
+// Etkinliklerle aynı PG enum'ları paylaşır (`activity_status` / `activity_visibility`).
+// İsim `activity_*` olsa da duyuru yaşam döngüsü aynı değer kümesini kullanır;
+// etkinliğe yeni enum değeri eklenirse duyuru tarafını da değerlendir.
 export const announcements = table("announcements", {
   id: t.uuid().primaryKey().defaultRandom(),
   universityId: t.uuid("university_id")

@@ -18,6 +18,11 @@ import { clubs } from "./clubs";
 // tenant'ı host/co_host kulüplerinden TÜRETİLİR (departments'ın university'yi
 // faculty üzerinden türetmesiyle aynı normalizasyon felsefesi) — böylece
 // cross-university etkinlikte "tek tenant" yalanına düşmeyiz.
+//
+// PAYLAŞILAN PG ENUM'LAR (bilinçli kuplaj):
+// `activity_status` ve `activity_visibility` duyurular (`announcements`) ile de
+// kullanılır — aynı semantik, tek tip yüzeyi. Yeni değer eklendiğinde DUYURULARI
+// da düşün (duyuruda `cancelled` kullanılmaz; servis draft/published ile sınırlı).
 export const activityStatusEnum = pgEnum("activity_status", ["draft", "published", "cancelled"]);
 // university = tenant'taki herkes görür+katılır (keşif); members = yalnızca host
 // kulübün onaylı üyeleri.

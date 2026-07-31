@@ -2,7 +2,11 @@ import { dashboardRepository } from "./dashboard.repository";
 import { dashboardCache } from "./dashboard.cache";
 import { badRequest } from "../../shared/utils/errors";
 import { FeedQueryDTO } from "./dashboard.schema";
+import { decodeFeedCursor, encodeFeedCursor, type FeedPageCursor } from "./feed-cursor";
 import type { AdminDashboard, ClubDashboard, FeedPage, StudentSummary } from "./dashboard.types";
+
+/** Feed birleşim sırası: at DESC, kind DESC (activity önce), id DESC. */
+const FEED_KIND_ORDER = { announcement: 0, activity: 1 } as const;
 
 /** Feed/özet kartlarında dönen kompakt kulüp gösterimi. */
 function compactClub(club: any) {
@@ -16,44 +20,77 @@ function stripClub<T extends { club?: unknown }>(row: T): Omit<T, "club"> {
   return rest;
 }
 
+function feedSortKey(
+  at: Date,
+  kind: "announcement" | "activity",
+  id: string
+): [number, number, string] {
+  return [at.getTime(), FEED_KIND_ORDER[kind], id];
+}
+
+function compareFeedKeys(a: [number, number, string], b: [number, number, string]): number {
+  if (a[0] !== b[0]) return b[0] - a[0];
+  if (a[1] !== b[1]) return b[1] - a[1];
+  return b[2].localeCompare(a[2]);
+}
+
 /**
  * dashboard iş kuralları — okuma modeli üstünde DTO montajı. Yazma yoktur.
- * Feed heterojen bir birleşimdir (duyuru + etkinlik): her iki kaynaktan `limit`
- * kadar çekilip zamanına (createdAt) göre birleştirilir ve tepe `limit` alınır
- * (k-yollu birleştirme; keyset cursor iki kaynakta da aynı createdAt eksenini kullanır).
+ * Feed heterojen birleşimdir (duyuru + etkinlik): her kaynaktan `limit+1` çekilip
+ * (at, kind, id) tie-break ile birleştirilir; opak cursor son öğenin üçlüsünü taşır.
  */
 export const dashboardService = {
   // ── Öğrenci feed ──────────────────────────────────────────────────────────
   async getFeed(userId: string, query: FeedQueryDTO): Promise<FeedPage> {
-    const cursor = query.cursor ? new Date(query.cursor) : undefined;
-    if (cursor && Number.isNaN(cursor.getTime())) {
-      throw badRequest("feed.invalidCursor");
+    let cursor: FeedPageCursor | undefined;
+    if (query.cursor) {
+      const decoded = decodeFeedCursor(query.cursor);
+      if (!decoded) {
+        throw badRequest("feed.invalidCursor");
+      }
+      cursor = decoded;
     }
 
     const clubIds = await dashboardRepository.approvedClubIds(userId);
     if (clubIds.length === 0) return { items: [], nextCursor: null };
 
-    const [anns, acts] = await Promise.all([
-      dashboardRepository.feedAnnouncements(clubIds, cursor, query.limit),
-      dashboardRepository.feedActivities(clubIds, cursor, query.limit),
+    const fetchLimit = query.limit + 1;
+    const [annPage, actPage] = await Promise.all([
+      dashboardRepository.feedAnnouncements(clubIds, cursor, fetchLimit),
+      dashboardRepository.feedActivities(clubIds, cursor, fetchLimit),
     ]);
 
     const merged = [
-      ...anns.map((a) => ({
+      ...annPage.rows.map((a) => ({
         type: "announcement" as const,
         at: a.publishedAt ?? a.createdAt,
+        id: a.id,
         club: compactClub(a.club),
         item: stripClub(a),
       })),
-      ...acts.map(({ activity, hostClub }) => ({ type: "activity" as const, at: activity.createdAt, club: compactClub(hostClub), item: activity })),
-    ]
-      .sort((x, y) => y.at.getTime() - x.at.getTime())
-      .slice(0, query.limit);
+      ...actPage.rows.map(({ activity, hostClub }) => ({
+        type: "activity" as const,
+        at: activity.createdAt,
+        id: activity.id,
+        club: compactClub(hostClub),
+        item: activity,
+      })),
+    ].sort((x, y) =>
+      compareFeedKeys(
+        feedSortKey(x.at, x.type, x.id),
+        feedSortKey(y.at, y.type, y.id)
+      )
+    );
 
-    // Sayfa dolduysa devam imleci = son öğenin zamanı; dolmadıysa son sayfadayız.
-    const nextCursor = merged.length === query.limit ? merged[merged.length - 1].at.toISOString() : null;
+    const page = merged.slice(0, query.limit);
+    const hasMore =
+      merged.length > query.limit || annPage.hasMore || actPage.hasMore;
+    const last = page[page.length - 1];
+    const nextCursor =
+      hasMore && last ? encodeFeedCursor(last.at, last.type, last.id) : null;
+
     return {
-      items: merged.map((i) => ({ ...i, at: i.at.toISOString() })),
+      items: page.map((i) => ({ ...i, at: i.at.toISOString() })),
       nextCursor,
     };
   },

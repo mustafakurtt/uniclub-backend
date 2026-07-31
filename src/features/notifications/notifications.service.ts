@@ -9,6 +9,21 @@ import type { WebPushPayload, WebPushSubscription } from "../../core/notificatio
 
 const log = logger.child({ module: "notifications.service" });
 
+const DELIVERY_CHUNK = 50;
+
+/** Tek bildirimin WS + push teslimatı — hata yutulur (fan-out parçasında). */
+async function deliverNotificationSafe(notification: Notification): Promise<void> {
+  void deliverPushSafe(notification.userId, notification);
+  try {
+    await publish(notification.userId, notification);
+  } catch (error) {
+    log.warn(
+      { err: error, userId: notification.userId, type: notification.type },
+      "gerçek zamanlı bildirim gönderilemedi"
+    );
+  }
+}
+
 /** Kalıcı bildirimi küçük bir push yüküne indirger. `tag`=id → WS ile de-dup. */
 function toPushPayload(n: Notification): WebPushPayload {
   return {
@@ -74,6 +89,26 @@ export const notificationsService = {
       await notificationsService.notify(userId, payload);
     } catch (error) {
       log.warn({ err: error, userId, type: payload.type }, "bildirim gönderilemedi");
+    }
+  },
+
+  /**
+   * Çok alıcıya aynı bildirim — tek (parçalı) INSERT + teslimat parçaları.
+   * `notifySafe` ile aynı swallowing ilkesi.
+   */
+  async notifyManySafe(userIds: string[], payload: CreateNotificationPayload): Promise<void> {
+    if (userIds.length === 0) return;
+    try {
+      const rows = await notificationsRepository.addMany(userIds, payload);
+      for (let i = 0; i < rows.length; i += DELIVERY_CHUNK) {
+        const chunk = rows.slice(i, i + DELIVERY_CHUNK);
+        await Promise.all(chunk.map((notification) => deliverNotificationSafe(notification)));
+      }
+    } catch (error) {
+      log.warn(
+        { err: error, recipientCount: userIds.length, type: payload.type },
+        "toplu bildirim gönderilemedi"
+      );
     }
   },
 

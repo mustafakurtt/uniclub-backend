@@ -5,7 +5,6 @@ import { badRequest, notFound } from "../../shared/utils/errors";
 import { announcementsCache, announcementEffects } from "./announcements.cache";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
-import { db } from "../../db";
 import type { Announcement } from "./announcements.types";
 
 /** Kulüp başına sabitlenen duyuru üst sınırı — vitrin alanını korur, pin özelliğini anlamsız kılmaz. */
@@ -39,26 +38,16 @@ export const announcementsService = {
       await assertPinnedCapacity(clubId);
     }
 
-    const afterCommits: Array<() => Promise<void>> = [];
-
-    const announcement = await db.transaction(async () => {
-      const created = await announcementsRepository.add(universityId, clubId, authorId, {
-        title: data.title,
-        content: data.content,
-        visibility: data.visibility,
-        pinned: data.pinned,
-        publish: data.publish,
-      });
-
-      if (data.publish) {
-        afterCommits.push(() => notifyClubMembersPublished(clubId, created, authorId));
-      }
-
-      return created;
+    const announcement = await announcementsRepository.add(universityId, clubId, authorId, {
+      title: data.title,
+      content: data.content,
+      visibility: data.visibility,
+      pinned: data.pinned,
+      publish: data.publish,
     });
 
-    for (const runAfterCommit of afterCommits) {
-      await runAfterCommit();
+    if (data.publish) {
+      await notifyClubMembersPublished(clubId, announcement, authorId);
     }
 
     await announcementEffects.changed.emit(clubId);
@@ -75,21 +64,14 @@ export const announcementsService = {
     }
 
     const firstPublish = existing.publishedAt == null;
-    const afterCommits: Array<() => Promise<void>> = [];
+    const rows = await announcementsRepository.publishAnnouncement(announcementId);
+    if (rows.length === 0) {
+      throw badRequest("announcement.notDraft");
+    }
+    const published = rows[0];
 
-    const [published] = await db.transaction(async () => {
-      const rows = await announcementsRepository.publishAnnouncement(announcementId);
-      if (rows.length === 0) {
-        throw badRequest("announcement.notDraft");
-      }
-      if (firstPublish) {
-        afterCommits.push(() => notifyClubMembersPublished(clubId, rows[0], actorUserId));
-      }
-      return rows;
-    });
-
-    for (const runAfterCommit of afterCommits) {
-      await runAfterCommit();
+    if (firstPublish) {
+      await notifyClubMembersPublished(clubId, published, actorUserId);
     }
 
     await announcementEffects.changed.emit(clubId);
@@ -153,16 +135,11 @@ async function notifyClubMembersPublished(
   authorId: string
 ) {
   const memberIds = await announcementsRepository.getApprovedMemberIds(clubId);
-  await Promise.all(
-    memberIds
-      .filter((id) => id !== authorId)
-      .map((userId) =>
-        notificationsService.notifySafe(userId, {
-          type: NotificationType.ANNOUNCEMENT_PUBLISHED,
-          title: "Yeni duyuru",
-          body: announcement.title,
-          data: { announcementId: announcement.id, clubId },
-        })
-      )
-  );
+  const recipients = memberIds.filter((id) => id !== authorId);
+  await notificationsService.notifyManySafe(recipients, {
+    type: NotificationType.ANNOUNCEMENT_PUBLISHED,
+    title: "Yeni duyuru",
+    body: announcement.title,
+    data: { announcementId: announcement.id, clubId },
+  });
 }

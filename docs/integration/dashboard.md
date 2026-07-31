@@ -8,10 +8,13 @@ kaynak/tablo yoktur, yazma yapmaz.
 
 ## 1. Öğrenci akışı — `GET /api/feed`
 
-Giriş yapmış kullanıcının **ONAYLI üye olduğu** kulüplerin duyuruları + **yayınlanmış**
-etkinlikleri, zamanına göre (createdAt, en yeni önce) tek akışta birleştirilir.
+Giriş yapmış kullanıcının **ONAYLI üye olduğu** kulüplerin **yayınlanmış** duyuruları +
+etkinlikleri, zamanına göre (duyuru: `publishedAt`, etkinlik: `createdAt`; en yeni önce)
+tek akışta birleştirilir. Aynı zamanda tie-break: etkinlik önce, sonra `id` azalan.
 
-`?limit=1-50 (vars. 20)&cursor=<ISO createdAt>` — keyset sayfalama.
+`?limit=1-50 (vars. 20)&cursor=<opak>` — keyset sayfalama (`at` + `kind` + `id` tie-break;
+cursor base64url JSON, istemci içeriği parse etmez — yanıttaki `nextCursor`'ı geri verir).
+Eski ISO `cursor` değerleri kısmi imleç olarak kabul edilir (yalnızca zaman ekseni).
 
 ```jsonc
 {
@@ -25,7 +28,7 @@ etkinlikleri, zamanına göre (createdAt, en yeni önce) tek akışta birleştir
         "item": { /* duyuru VEYA etkinlik satırı (type'a göre) */ }
       }
     ],
-    "nextCursor": "2026-07-17T16:59:52.542Z" | null   // null → son sayfa
+    "nextCursor": "eyJ2IjoxLCJ0Ijox..." | null   // null → son sayfa (opak; geri ver)
   }
 }
 ```

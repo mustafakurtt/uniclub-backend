@@ -399,18 +399,13 @@ function stripJoins<T extends { activityClubs?: unknown; creator?: unknown }>(ro
 /** Yayın bildirimi: host kulübün onaylı üyelerine (yan etki, hataları yutulur). */
 async function notifyMembersPublished(hostClubId: string, activity: Activity) {
   const memberIds = await activitiesRepository.getApprovedMemberIds(hostClubId);
-  await Promise.all(
-    memberIds
-      .filter((id) => id !== activity.createdBy) // oluşturana kendi etkinliğini bildirme
-      .map((userId) =>
-        notificationsService.notifySafe(userId, {
-          type: NotificationType.ACTIVITY_PUBLISHED,
-          title: "Yeni etkinlik",
-          body: activity.title,
-          data: { activityId: activity.id, clubId: hostClubId },
-        })
-      )
-  );
+  const recipients = memberIds.filter((id) => id !== activity.createdBy);
+  await notificationsService.notifyManySafe(recipients, {
+    type: NotificationType.ACTIVITY_PUBLISHED,
+    title: "Yeni etkinlik",
+    body: activity.title,
+    data: { activityId: activity.id, clubId: hostClubId },
+  });
 }
 
 /** Co-host daveti bildirimi: hedef kulübün staff'ına (officer/president + danışman). */

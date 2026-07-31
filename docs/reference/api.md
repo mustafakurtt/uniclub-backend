@@ -584,7 +584,8 @@ Rollere göre özet/akış (okuma modeli — mevcut veriyi birleştirir).
 | GET | `/api/clubs/:clubId/dashboard` | kulüp staff | Kulüp özeti (üye/istek/etkinlik/duyuru sayaçları) |
 | GET | `/api/admin/universities/:universityId/dashboard` | `dashboard.view` (tenant) | Tenant özeti (kulüp/kullanıcı durum dağılımı + bekleyen başvuru + yaklaşan etkinlik) |
 
-Feed öğesi: `{ type: "announcement"|"activity", at (ISO), club, item }`. `nextCursor` doluysa `?cursor=` ile devam.
+Feed öğesi: `{ type: "announcement"|"activity", at (ISO), club, item }`. Keyset cursor opak
+(`at`+`kind`+`id` tie-break); `nextCursor` doluysa `?cursor=` ile devam (ISO legacy kabul).
 
 ---
 
