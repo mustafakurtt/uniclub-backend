@@ -1,65 +1,50 @@
 # Tenant askısı — ölçeklenebilir invalidation tasarım notu
 
-**Durum:** Değerlendirme bekliyor (2026-07-31)  
+**Durum:** Uygulandı (2026-07-31)  
 **İlgili:** [ADR 0009](../adr/0009-tenant-status-in-authz-cache.md)
 
 ## Problem
 
 `PATCH /api/platform/tenants/:id/status` askıya aldığında `updateTenantStatus`
 tenant'ın **tüm** kullanıcı kimliklerini çekip `invalidateUsersPermissions` ile
-tek tek Redis anahtarını siliyor. 50.000 öğrencili bir tenant'ta tek operatör
+tek tek Redis anahtarını siliyordu. 50.000 öğrencili bir tenant'ta tek operatör
 isteği ≈ 50.000 `DEL` — panel yanıt süresi ve Redis yükü ölçekle ters orantılı.
 
-Bugünkü ADR 0009 kararı: tenant `status` **kullanıcı authz cache'ine gömülü**
-(`AuthzContext.tenantStatus`); değişince kullanıcı bazlı invalidate şart.
-
-## Önerilen mekanizma
-
-Tenant durumunu kullanıcı cache'inden **ayırmak**:
+## Uygulanan mekanizma
 
 1. **Kullanıcı cache** (`rbac:permissions:<userId>`) yalnızca rol/yetki/hesap
-   `status` taşır — tenant `status` alanı kaldırılır veya her okumada doğrulanmaz.
+   `status` taşır — tenant `status` kaldırıldı.
 2. **Tenant durum cache** — tek anahtar: `rbac:tenant-status:<universityId>` →
-   `{ status, deletedAt? }`, kısa TTL (öneri: **60 sn**).
+   `{ status, deleted }`, TTL **60 sn**.
 3. `enforceAuthzPolicy` ve login/register yolları tenant kontrolünü bu anahtardan
-   okur; miss'te `findStatusById` (soft-delete filtreli) ile doldurur.
-4. Tenant status PATCH veya soft-delete sonrası yalnızca **bir** `DEL` (veya
-   `SET` ile anında güncelleme) — kullanıcı bazlı invalidate **gerekmez**.
+   okur; miss'te `findTenantStatusSnapshot` ile doldurur.
+4. Tenant status PATCH sonrası `setTenantStatusCache` (**SET**, anında kesim) —
+   kullanıcı bazlı invalidate **kaldırıldı**.
 
 ## Askı hâlâ “bir sonraki istekte” etkili mi?
 
-**Evet, pratikte.** Invalidate anında tenant-status anahtarı düşer veya güncellenir;
-sonraki istekte (cache miss veya güncel değer) askı uygulanır. TTL penceresi
-boyunca eski `active` değeri tutulabilir — bu **bilinçli tutarsızlık penceresi**.
+**PATCH yolunda evet, anında.** `SET` ile tenant-status anahtarı güncellenir;
+sonraki istek askıyı görür. Yalnızca cache miss + TTL yolunda ≤60 sn eski değer
+tutulabilir — bilinçli tutarsızlık penceresi (bkz. ADR 0009 revizyon notu).
 
 | TTL | Tutarsızlık penceresi | Redis yükü |
 |---|---|---|
 | 0 (her istekte DB) | Yok | Yüksek |
-| 60 sn | Askı sonrası ≤60 sn erişim devam edebilir | Düşük |
+| 60 sn | PATCH dışı yollarda ≤60 sn | Düşük |
 | 300 sn | ≤5 dk | Çok düşük |
 
-Öneri: **60 sn** — operatör askısı kampüs ölçeğinde saniyeler içinde yayılmalı;
-tam anlık kesim gerekiyorsa PATCH sonrası anahtarı `SET suspended` ile güncelle
-(TTL beklemeden).
+Seçilen: **60 sn** + PATCH sonrası **SET** (TTL beklemeden kesim).
 
-## ADR 0009'da değişecek maddeler
+## Uygulama öncesi doğrulanacaklar (cevaplar)
 
-| Mevcut ADR 0009 maddesi | Değişiklik |
-|---|---|
-| Karar §2: Redis cache tenant `status` **gömer** | Tenant status ayrı anahtarda; kullanıcı cache'inde değil |
-| Karar §2: tenant durumu değişince `invalidateUsersPermissions` | Tenant-status anahtarını güncelle/sil; kullanıcı invalidate kaldırılır |
-| Sonuçlar: PATCH sonrası ilgili tenant kullanıcılarının cache'i temizlenir | PATCH sonrası yalnızca tenant-status anahtarı |
-| Elenen: her istekte DB sorgusu | Hâlâ elenmiş değil — kısa TTL + tek anahtar DB'yi her istekte çağırmaz |
-
-`enforceAuthzPolicy` tek nokta kalır; yalnızca tenant status **kaynağı** değişir.
-
-## Uygulama öncesi doğrulanacaklar
-
-- `past_due` ve `trial` politikası aynı tenant-status anahtarında mı?
-- Soft-delete: tenant-status `suspended` veya ayrı `deleted` bayrağı?
-- Platform operatörleri (`universityId = null`) tenant-status okumasından muaf.
+- **`past_due` ve `trial`:** Aynı tenant-status anahtarında; `tenantBlocksAccess`
+  yalnızca `suspended` ve soft-delete'i reddeder — `trial`/`active`/`past_due` serbest.
+- **Soft-delete:** Ayrı `deleted: boolean` bayrağı; `status` null + `deleted: true`
+  → erişim/kayıt reddi (suspended ile aynı politika yüzeyi).
+- **Platform operatörleri:** `universityId = null` → `enforceTenantStatus` erken çıkış;
+  tenant-status okunmaz.
 
 ## Bu notun kapsamı
 
 Yalnızca **4b** (askı invalidation ölçeği). Tenant listesi keyset sayfalama (4a)
-bu notun dışında, ayrı uygulandı.
+ayrı uygulandı — `(createdAt DESC, id DESC)` bileşik opak cursor.

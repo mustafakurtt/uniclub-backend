@@ -33,7 +33,7 @@ Public kabul uçunda kimlik yok — IP başına kaba tavan rate limit uygulanır
 
 Tenant listesi + özet istatistikler. Yetki: `platform.tenant.view`. Keyset sayfalama.
 
-Query: `limit` (varsayılan 50, max 100), `cursor` (ISO 8601 `createdAt`), opsiyonel `search`.
+Query: `limit` (varsayılan 50, max 100), `cursor` (opak keyset — önceki yanıttaki `nextCursor`), opsiyonel `search`.
 
 ```jsonc
 {
@@ -54,7 +54,7 @@ Query: `limit` (varsayılan 50, max 100), `cursor` (ISO 8601 `createdAt`), opsiy
         "pendingApplications": 1
       }
     ],
-    "nextCursor": "2026-07-31T12:00:00.000Z" // veya null (son sayfa)
+    "nextCursor": "<opak cursor>" // veya null (son sayfa)
   }
 }
 ```

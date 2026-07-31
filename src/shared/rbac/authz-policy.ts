@@ -1,6 +1,7 @@
 import { ForbiddenError } from "../../core/http/errors";
 import type { AuthzContext } from "../../core/rbac/rbac.types";
 import "./authz"; // AuthzContext'e status alanını ekleyen declaration merging
+import { resolveTenantStatus, tenantBlocksAccess } from "./tenant-status.cache";
 
 /**
  * Bu projenin resolve-sonrası authz politikası. core/rbac'a `configureRbac.enforce`
@@ -19,11 +20,13 @@ export const enforceAccountStatus = (authz: AuthzContext): void => {
 
 /**
  * Tenant askıya alındığında o üniversitenin kullanıcılarının erişimini keser.
- * Platform hesapları (`universityId` yok) ve bypass rolleri etkilenmez — tenant
- * durumu authz cache'e gömülür (bkz. rbac.repository).
+ * Platform hesapları (`universityId` yok) tenant-status okumasından muaf.
+ * Tenant durumu `rbac:tenant-status:<universityId>` anahtarından okunur (bkz. ADR 0009 rev.).
  */
-export const enforceTenantStatus = (authz: AuthzContext): void => {
-  if (authz.universityId && authz.tenantStatus === "suspended") {
+export const enforceTenantStatus = async (authz: AuthzContext): Promise<void> => {
+  if (!authz.universityId) return;
+  const snapshot = await resolveTenantStatus(authz.universityId);
+  if (tenantBlocksAccess(snapshot)) {
     throw new ForbiddenError("rbac.tenantSuspended");
   }
 };
@@ -33,7 +36,7 @@ export const enforceTenantStatus = (authz: AuthzContext): void => {
  * `requireActiveUser` bu fonksiyonu paylaşır; tenant askısı / hesap durumu tek
  * noktadan zorlanır.
  */
-export const enforceAuthzPolicy = (authz: AuthzContext): void => {
+export const enforceAuthzPolicy = async (authz: AuthzContext): Promise<void> => {
   enforceAccountStatus(authz);
-  enforceTenantStatus(authz);
+  await enforceTenantStatus(authz);
 };

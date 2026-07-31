@@ -43,7 +43,11 @@ export const universityService = {
   },
 
   /** Operatör tenant listesi — keyset sayfalama; cache'lenmez (cursor anahtarları çok). */
-  async listUniversitiesPaginated(limit: number, cursor?: Date, search?: string) {
+  async listUniversitiesPaginated(
+    limit: number,
+    cursor?: { createdAt: Date; id: string },
+    search?: string
+  ) {
     return await universityRepository.listOperatorPage(limit, cursor, search);
   },
 

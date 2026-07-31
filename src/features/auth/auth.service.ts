@@ -24,7 +24,7 @@ import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
 import { authCache, authCatalogEffects } from "./auth.cache";
-import { universityRepository } from "../university/repositories/university.repository";
+import { resolveTenantStatus, tenantBlocksAccess } from "../../shared/rbac/tenant-status.cache";
 
 // Kayıt otomatik rolü + promote/demote hedefi. Not: "admin" rolü kurumsal modelde
 // "university_admin" olarak yeniden adlandırıldı (bkz. docs/design/06).
@@ -286,8 +286,8 @@ function assertInvitationAcceptable(invitation: {
 
 /** Kayıt ve davet kabulü aynı tenant yaşam döngüsü kuralını paylaşır. */
 async function assertTenantAcceptsNewUsers(universityId: string) {
-  const university = await universityRepository.findByIdSummary(universityId);
-  if (!university || university.status === "suspended") {
+  const snapshot = await resolveTenantStatus(universityId);
+  if (tenantBlocksAccess(snapshot)) {
     throw badRequest("auth.tenantRegistrationDisabled");
   }
 }
@@ -366,8 +366,8 @@ export const authService = {
       throw badRequest("auth.emailDomainNotRegistered");
     }
 
-    const tenantStatus = await universityRepository.findStatusById(universityDomain.universityId);
-    if (!tenantStatus || tenantStatus === "suspended") {
+    const snapshot = await resolveTenantStatus(universityDomain.universityId);
+    if (tenantBlocksAccess(snapshot)) {
       throw badRequest("auth.tenantRegistrationDisabled");
     }
 
@@ -726,8 +726,8 @@ export const authService = {
     }
 
     if (user.universityId) {
-      const tenantStatus = await universityRepository.findStatusById(user.universityId);
-      if (!tenantStatus || tenantStatus === "suspended") {
+      const snapshot = await resolveTenantStatus(user.universityId);
+      if (tenantBlocksAccess(snapshot)) {
         throw unauthorized("auth.loginTenantSuspended");
       }
     }

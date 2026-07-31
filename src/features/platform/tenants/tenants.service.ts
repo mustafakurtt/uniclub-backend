@@ -7,24 +7,32 @@ import {
 } from "./tenants.schema";
 import type { OnboardTenantResult, TenantListItem, UniversityStatus } from "./tenants.types";
 import { notFound, badRequest } from "../../../shared/utils/errors";
-import { invalidateUsersPermissions } from "../../../shared/rbac/rbac.cache";
+import { setTenantStatusCache } from "../../../shared/rbac/tenant-status.cache";
 import { universityEffects } from "../../university/university.cache";
 import { universityService } from "../../university/university.service";
 import { authService } from "../../auth/auth.service";
 import { tenantsRepository } from "./tenants.repository";
+import {
+  decodeTenantListCursor,
+  encodeTenantListCursor,
+} from "./tenant-list-cursor";
 
 const UNIVERSITY_ADMIN_ROLE = "university_admin";
 
 export const tenantsService = {
   async listTenants(query: ListTenantsQuery): Promise<{ items: TenantListItem[]; nextCursor: string | null }> {
-    const cursorDate = query.cursor ? new Date(query.cursor) : undefined;
-    if (cursorDate && Number.isNaN(cursorDate.getTime())) {
-      throw badRequest("platform.invalidTenantListCursor");
+    let pageCursor: { createdAt: Date; id: string } | undefined;
+    if (query.cursor) {
+      const decoded = decodeTenantListCursor(query.cursor);
+      if (!decoded) {
+        throw badRequest("platform.invalidTenantListCursor");
+      }
+      pageCursor = decoded;
     }
 
-    const tenants = await universityService.listUniversitiesPaginated(
+    const { items: tenants, hasMore } = await universityService.listUniversitiesPaginated(
       query.limit,
-      cursorDate,
+      pageCursor,
       query.search
     );
     const ids = tenants.map((t) => t.id);
@@ -44,7 +52,9 @@ export const tenantsService = {
     }));
 
     const nextCursor =
-      items.length === query.limit ? items[items.length - 1].createdAt.toISOString() : null;
+      hasMore && items.length > 0
+        ? encodeTenantListCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
+        : null;
 
     return { items, nextCursor };
   },
@@ -72,8 +82,7 @@ export const tenantsService = {
 
     await universityEffects.universityUpdated.emit(universityId);
 
-    const userIds = await tenantsRepository.findUserIdsByUniversity(universityId);
-    await invalidateUsersPermissions(userIds);
+    await setTenantStatusCache(universityId, { status: data.status, deleted: false });
 
     return updated;
   },

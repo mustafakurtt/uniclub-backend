@@ -9,12 +9,12 @@ import { enforceAuthzPolicy } from "../shared/rbac/authz-policy";
  * self-service / kulüp rotalarında kullanılır — `enforceAuthzPolicy` attachAuthz ile
  * paylaşılır; tenant askısı burada da geçerli olur.
  *
- * Durum, RBAC cache'inden (resolveAuthz) okunur; hesap/tenant durumu değiştiğinde
- * ilgili servis cache'i invalidate ettiği için ekstra DB sorgusu çoğu istekte yapılmaz.
+ * Durum RBAC cache'inden (resolveAuthz) okunur; tenant durumu ayrı tenant-status
+ * cache anahtarından (bkz. tenant-status.cache.ts).
  */
 export const requireActiveUser = async (c: Context<{ Variables: Variables }>, next: Next) => {
   const user = c.get("user");
   const authz = await resolveAuthz(user.userId);
-  enforceAuthzPolicy(authz);
+  await enforceAuthzPolicy(authz);
   await next();
 };

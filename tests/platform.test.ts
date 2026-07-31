@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, spyOn } from "bun:test";
 import { data, get, login, me, reqAuth, app } from "./helpers";
 import { SEED_PASSWORD } from "./config";
 import { db } from "../src/db";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { universities, tenantAdminInvitations } from "../src/db/schema";
 import { emailQueue, type TenantAdminInvitationEmailJob } from "../src/features/auth/auth.queue";
 import { generateOneTimeToken, hashToken } from "../src/core/auth/token";
+import * as rbacCache from "../src/shared/rbac/rbac.cache";
+import { resolveTenantStatus } from "../src/shared/rbac/tenant-status.cache";
 
 async function getInvitationTokenForEmail(email: string): Promise<string> {
   const jobs = await emailQueue.getJobs(["waiting", "delayed", "active", "completed"]);
@@ -79,6 +81,44 @@ describe("platform operasyonları (/api/platform)", () => {
     expect(antalya!.domainCount).toBeGreaterThan(0);
   });
 
+  it("tenant listesi keyset sayfalama eşit createdAt'te satır atlamaz", async () => {
+    const seedSlugs = ["antalya-bilim", "ege-bilim", "karadeniz-teknoloji"];
+    const allRows = await db
+      .select({ id: universities.id, slug: universities.slug })
+      .from(universities)
+      .where(isNull(universities.deletedAt));
+    const totalCount = allRows.length;
+
+    const collectedIds: string[] = [];
+    const collectedSlugs: string[] = [];
+    let cursor: string | null = null;
+    const limit = 2;
+
+    do {
+      const path =
+        cursor === null
+          ? `/api/platform/tenants?limit=${limit}`
+          : `/api/platform/tenants?limit=${limit}&cursor=${encodeURIComponent(cursor)}`;
+      const res = await get(path, superAdmin);
+      expect(res.status).toBe(200);
+      const page = await data<{
+        items: Array<{ id: string; slug: string }>;
+        nextCursor: string | null;
+      }>(res);
+      for (const item of page.items) {
+        collectedIds.push(item.id);
+        collectedSlugs.push(item.slug);
+      }
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+
+    expect(collectedIds.length).toBe(totalCount);
+    expect(new Set(collectedIds).size).toBe(totalCount);
+    for (const slug of seedSlugs) {
+      expect(collectedSlugs).toContain(slug);
+    }
+  });
+
   it("platform_support listeyi görür ama durum değiştiremez", async () => {
     const listRes = await get("/api/platform/tenants", platformSupport);
     expect(listRes.status).toBe(200);
@@ -123,6 +163,43 @@ describe("platform operasyonları (/api/platform)", () => {
     expect((await reactivateRes.json()).data.status).toBe("active");
 
     expect((await get("/api/clubs", student)).status).toBe(200);
+  });
+
+  it("askı sonrası yalnızca tenant-status cache güncellenir, kullanıcı invalidate yok", async () => {
+    const egeUni = (
+      await db.query.universities.findFirst({
+        where: { slug: "ege-bilim" },
+        columns: { id: true },
+      })
+    )!.id;
+    const egeStudent = await login("cem.arslan@std.egebilim.edu.tr");
+    const egeStudentId = (await me(egeStudent)).userId;
+    await rbacCache.resolveAuthz(egeStudentId);
+
+    const invalidateSpy = spyOn(rbacCache, "invalidateUsersPermissions");
+
+    const suspendRes = await reqAuth(
+      "PATCH",
+      `/api/platform/tenants/${egeUni}/status`,
+      superAdmin,
+      { status: "suspended", reason: "Invalidate maliyeti testi" }
+    );
+    expect(suspendRes.status).toBe(200);
+    expect(invalidateSpy.mock.calls.length).toBe(0);
+
+    const snapshot = await resolveTenantStatus(egeUni);
+    expect(snapshot?.status).toBe("suspended");
+
+    expect((await get("/api/clubs", egeStudent)).status).toBe(403);
+
+    invalidateSpy.mockRestore();
+
+    await reqAuth(
+      "PATCH",
+      `/api/platform/tenants/${egeUni}/status`,
+      superAdmin,
+      { status: "active", reason: "Invalidate maliyeti testi temizliği" }
+    );
   });
 
   it("suspended tenant doğrudan trial'a geçemez", async () => {

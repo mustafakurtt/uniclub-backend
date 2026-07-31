@@ -51,8 +51,8 @@ export type OnboardTenantDTO = z.infer<typeof onboardTenantSchema>;
 
 export const listTenantsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
-  /** Son görülen tenant'ın `createdAt`'i (ISO 8601). Keyset sayfalama. */
-  cursor: z.string().datetime().optional(),
+  /** Opak keyset cursor — `(createdAt, id)` bileşik; istemci içeriği bilmez. */
+  cursor: z.string().min(1).optional(),
   search: z.string().trim().min(1).max(256).optional(),
 });
 export type ListTenantsQuery = z.infer<typeof listTenantsQuerySchema>;

@@ -13,7 +13,6 @@ export const rbacRepository = {
     const user = await db.query.users.findFirst({
       where: { id: userId },
       with: {
-        university: { columns: { status: true, deletedAt: true } },
         roles: {
           with: { permissions: true },
         },
@@ -39,15 +38,12 @@ export const rbacRepository = {
         status: "suspended",
         maxRank: 0,
         universityId: user.universityId,
-        tenantStatus: null,
       };
     }
 
     const roleNames = user.roles.map((role) => role.name);
     const status = user.status;
     const universityId = user.universityId;
-    const tenantStatus =
-      user.university?.deletedAt != null ? "suspended" : (user.university?.status ?? null);
     // Rolsüz kullanıcıda Math.max(...[]) === -Infinity olurdu; 0 tabanı bunu engeller.
     const maxRank = Math.max(0, ...user.roles.map((role) => role.rank));
     const permissionSet = new Set(
@@ -69,7 +65,6 @@ export const rbacRepository = {
       status,
       maxRank,
       universityId,
-      tenantStatus,
     };
   },
 };

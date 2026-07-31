@@ -30,7 +30,7 @@ export interface RbacConfig {
    * erişim reddediliyorsa FIRLATIR (ör. suspended hesabı kesmek). Verilmezse
    * politika uygulanmaz — core "suspended" gibi bir kavramı bilmez.
    */
-  enforce?: (authz: AuthzContext) => void;
+  enforce?: (authz: AuthzContext) => void | Promise<void>;
 }
 
 let config: RbacConfig | null = null;
@@ -51,7 +51,7 @@ function cfg(): RbacConfig {
  */
 export const attachAuthz = async (c: Context<{ Variables: RbacVariables }>, next: Next) => {
   const authz = await cfg().resolveAuthz(cfg().getSubjectId(c.get("user")));
-  cfg().enforce?.(authz);
+  await cfg().enforce?.(authz);
   c.set("authz", authz);
   await next();
 };

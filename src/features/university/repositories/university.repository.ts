@@ -1,4 +1,4 @@
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, desc, ilike, sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { universities, universityDomains, faculties, departments, users, clubs } from "../../../db/schema";
 import type { DbExecutor } from "../../../db/executor";
@@ -52,31 +52,58 @@ class UniversityRepository extends BaseRepository<typeof universities, typeof db
     });
   }
 
-  /** Operatör tenant listesi — keyset sayfalama (createdAt azalan). */
-  listOperatorPage(limit: number, cursor?: Date, search?: string) {
-    const where: Record<string, unknown> = { deletedAt: { isNull: true } };
+  /** Operatör tenant listesi — keyset sayfalama (createdAt DESC, id DESC tie-break). */
+  async listOperatorPage(
+    limit: number,
+    cursor?: { createdAt: Date; id: string },
+    search?: string
+  ) {
+    const conditions = [isNull(universities.deletedAt)];
     if (search) {
-      where.name = { ilike: `%${search}%` };
+      conditions.push(ilike(universities.name, `%${search}%`));
     }
     if (cursor) {
-      where.createdAt = { lt: cursor };
+      // Alt sorgu — cursor'daki JS Date mikrosaniye kaybını önler; tuple tam DB değerleriyle kıyaslanır.
+      conditions.push(
+        sql`(${universities.createdAt}, ${universities.id}) < (
+          SELECT u.created_at, u.id FROM universities u WHERE u.id = ${cursor.id}
+        )`
+      );
     }
-    return this.query!.findMany({
-      where,
-      columns: {
-        id: true,
-        name: true,
-        slug: true,
-        status: true,
-        statusReason: true,
-        statusChangedAt: true,
-        statusChangedBy: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-      limit,
+
+    const rows = await db
+      .select({
+        id: universities.id,
+        name: universities.name,
+        slug: universities.slug,
+        status: universities.status,
+        statusReason: universities.statusReason,
+        statusChangedAt: universities.statusChangedAt,
+        statusChangedBy: universities.statusChangedBy,
+        createdAt: universities.createdAt,
+        updatedAt: universities.updatedAt,
+      })
+      .from(universities)
+      .where(and(...conditions))
+      .orderBy(desc(universities.createdAt), desc(universities.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    return { items, hasMore };
+  }
+
+  /** Tenant durum cache'i — soft-delete filtreli snapshot (silinmiş = `deleted: true`). */
+  async findTenantStatusSnapshot(universityId: string) {
+    const row = await this.query!.findFirst({
+      where: { id: universityId },
+      columns: { status: true, deletedAt: true },
     });
+    if (!row) return null;
+    return {
+      status: row.deletedAt != null ? null : row.status,
+      deleted: row.deletedAt != null,
+    };
   }
 
   findByIdSummary(id: string) {
