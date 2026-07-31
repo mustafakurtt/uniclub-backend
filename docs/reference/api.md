@@ -349,11 +349,13 @@ Body şemaları:
 
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
-| GET | `/api/clubs/:clubId/announcements` | Bearer (herkes) | Kulübün duyurularını listele |
+| GET | `/api/clubs/:clubId/announcements` | Bearer | Kulübün duyurularını listele (görünürlük serviste) |
 | POST | `/api/clubs/:clubId/announcements` | staff (danışman/officer/president) | Duyuru oluştur |
+| POST | `/api/clubs/:clubId/announcements/:announcementId/publish` | staff | Taslak duyuruyu yayınla |
+| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff | Sabitleme / görünürlük güncelle |
 | DELETE | `/api/clubs/:clubId/announcements/:announcementId` | staff (danışman/officer/president) | Duyuru sil |
 
-**POST** body: `{ "title": "string (3-256)", "content": "string (1-5000)" }`
+**POST** body: `{ "title": "string (3-256)", "content": "string (1-5000)", "visibility?": "university"|"members", "pinned?": bool, "publish?": bool (vars. true) }`. Ayrıntı: [integration/announcements.md](../integration/announcements.md).
 
 ---
 

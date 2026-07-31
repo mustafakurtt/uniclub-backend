@@ -5,6 +5,7 @@ import { universities } from "./university";
 import { users } from "./users";
 import { clubs } from "./clubs";
 import { compositeForeignKey } from "./helpers";
+import { activityStatusEnum, activityVisibilityEnum } from "./activities";
 
 // ═══════════════════════════════════════════════
 // ANNOUNCEMENTS (şimdilik sadece kulüp bazlı)
@@ -19,6 +20,14 @@ export const announcements = table("announcements", {
   authorId: t.uuid("author_id").references(() => users.id, { onDelete: "restrict" }).notNull(),
   title: t.varchar({ length: 256 }).notNull(),
   content: t.text().notNull(),
+
+  // Etkinliklerle aynı enum'lar (activity_status / activity_visibility) — frontend tek model.
+  // Duyuruda `cancelled` kullanılmaz; servis yalnızca draft/published geçişlerini kabul eder.
+  status: activityStatusEnum().default("draft").notNull(),
+  publishedAt: t.timestamp("published_at", { withTimezone: true }),
+  pinned: t.boolean().notNull().default(false),
+  visibility: activityVisibilityEnum().default("university").notNull(),
+
   ...timestamps,
 }, (cols) => [
   // Denormalize `university_id` kulübünkiyle SAPABİLİRDİ (iki ayrı tekil FK
@@ -29,6 +38,11 @@ export const announcements = table("announcements", {
     foreignColumns: [clubs.id, clubs.universityId],
     name: "announcements_club_tenant_fkey",
   }).onDelete("cascade"),
-  // Kulüp detay sayfasının duyuru akışı (en yeniden eskiye) — en sık çağrılan okuma.
-  t.index("announcements_club_created_idx").on(cols.clubId, cols.createdAt.desc()),
+  // Kulüp detay sayfasının duyuru akışı (sabitlenen üstte, yayın zamanı azalan).
+  t.index("announcements_club_published_idx").on(
+    cols.clubId,
+    cols.status,
+    cols.pinned.desc(),
+    cols.publishedAt.desc()
+  ),
 ]);

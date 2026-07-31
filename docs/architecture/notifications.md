@@ -105,6 +105,10 @@ gerektirmez. Katalog bir **typo güvenliği** katmanıdır, kapalı küme değil
 | `club.application.decided` | Kulüp kurma başvurusu onay/red | `{ applicationId, status, clubId }` |
 | `club.membership.decided` | Katılma isteği onay/red | `{ clubId, status }` |
 | `role.assigned` | Global rol atandı | `{ roleId, roleName }` |
+| `activity.published` | Host kulüp etkinlik yayınladı → onaylı üyelere | `{ activityId, clubId }` |
+| `activity.cancelled` | Katılım bildirilen etkinlik iptal | `{ activityId }` |
+| `activity.coHostInvited` | Kulüp co-host daveti | `{ activityId, hostClubId, clubId }` |
+| `announcement.published` | Kulüp duyuru yayınladı → onaylı üyelere (görünürlükten bağımsız) | `{ announcementId, clubId }` |
 
 ---
 

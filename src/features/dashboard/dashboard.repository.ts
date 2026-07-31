@@ -40,15 +40,16 @@ export const dashboardRepository = {
   // ═══════════════════════════════════════════════
   // ÖĞRENCİ FEED (kulüplerimden yeni içerik)
   // ═══════════════════════════════════════════════
-  /** Kulüplerimin duyuruları (en yeni), keyset cursor (createdAt < cursor). */
+  /** Kulüplerimin YAYINLANMIŞ duyuruları; keyset cursor (publishedAt < cursor). */
   feedAnnouncements(clubIds: string[], cursor: Date | undefined, limit: number) {
     return db.query.announcements.findMany({
       where: {
         clubId: { in: clubIds },
-        ...(cursor ? { createdAt: { lt: cursor } } : {}),
+        status: "published",
+        ...(cursor ? { publishedAt: { lt: cursor } } : {}),
       },
       with: { club: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { publishedAt: "desc" },
       limit,
     });
   },

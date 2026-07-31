@@ -62,7 +62,7 @@ Bugün yalnızca yönetici sıfırlaması (`/api/moderation/.../reset-password`)
 
 ### 3.2 Duyuru yaşam döngüsü
 
-`status` (draft/published), `publishedAt`, `pinned`, `visibility` (public/members_only).
+**Durum:** Uygulandı (`/api/clubs/:clubId/announcements`). `status`, `publishedAt`, `pinned`, `visibility` — etkinliklerle aynı enum'lar (`activity_status` / `activity_visibility`; duyuruda `cancelled` kullanılmaz). Mevcut satırlar migration'da `published` + `publishedAt = createdAt` backfill.
 
 ### 3.3 Akademik dönem
 

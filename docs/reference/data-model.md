@@ -101,7 +101,7 @@ Her tablo tenant'a aynı şekilde bağlanmaz; üç kalıp var:
 | `club_advisors` | Danışman hocalar (çoklu) | Bileşik FK gereği danışman **aynı üniversiteden** olmak zorunda |
 | `club_contact_links` | Sosyal medya/iletişim | `platform` varchar + kod tarafı katalog — yeni platform migration istemez |
 | `club_gallery` | Görseller | Kulüp tarafı tenant-kilitli; **yükleyen** tarafı bilinçli serbest |
-| `announcements` | Kulüp duyuruları | Denormalize `university_id` kulübünkiyle bileşik FK ile kilitli. Yaşam döngüsü (taslak/yayın/sabitleme/görünürlük) **henüz yok** (3.2) |
+| `announcements` | Kulüp duyuruları | `status` (`draft`/`published`), `publishedAt`, `pinned` (kulüp başına ≤3), `visibility` (`university`/`members` — etkinlik enum'ları). Denormalize `university_id` bileşik FK ile kilitli |
 
 ### Başvuru ve onay
 

@@ -261,13 +261,17 @@ Hata: `400/404 "Bekleyen bir üyelik isteği bulunamadı."` (istek yok veya `pen
 
 ### 9.1 Duyurular — `/api/clubs/:clubId/announcements`
 
+Ayrıntılı yaşam döngüsü, görünürlük ve bildirim kuralları: [announcements.md](announcements.md).
+
 | Method | Path | Kim |
 |---|---|---|
-| GET | `/api/clubs/:clubId/announcements` | Bearer (herkes) |
-| POST | `/api/clubs/:clubId/announcements` | staff (danışman/officer/başkan) |
+| GET | `/api/clubs/:clubId/announcements` | Bearer (görünürlük serviste) |
+| POST | `/api/clubs/:clubId/announcements` | staff |
+| POST | `/api/clubs/:clubId/announcements/:announcementId/publish` | staff |
+| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff |
 | DELETE | `/api/clubs/:clubId/announcements/:announcementId` | staff |
 
-`POST` body: `{ "title": "string (3-256)", "content": "string (1-5000)" }`. Liste `createdAt` azalan sırada, gömülü `author`.
+`POST` body: `{ title, content, visibility? ("university"|"members"), pinned? (bool), publish? (bool, vars. true) }`. Liste: `pinned` önce, sonra `publishedAt` azalan. Kulüp başına en fazla **3** sabitlenmiş duyuru.
 
 ### 9.2 Galeri — `/api/clubs/:clubId/gallery`
 

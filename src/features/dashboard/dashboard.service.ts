@@ -39,7 +39,12 @@ export const dashboardService = {
     ]);
 
     const merged = [
-      ...anns.map((a) => ({ type: "announcement" as const, at: a.createdAt, club: compactClub(a.club), item: stripClub(a) })),
+      ...anns.map((a) => ({
+        type: "announcement" as const,
+        at: a.publishedAt ?? a.createdAt,
+        club: compactClub(a.club),
+        item: stripClub(a),
+      })),
       ...acts.map(({ activity, hostClub }) => ({ type: "activity" as const, at: activity.createdAt, club: compactClub(hostClub), item: activity })),
     ]
       .sort((x, y) => y.at.getTime() - x.at.getTime())

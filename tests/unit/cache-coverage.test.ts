@@ -59,9 +59,9 @@ describe("cache kapsam denetimi — her girdiyi düşüren bir efekt var mı?", 
   });
 
   it("announcements", () => {
-    expect(uncoveredEntries(announcementsCache, [announcementEffects.changed.entries(C)])).toEqual(
-      []
-    );
+    expect(
+      uncoveredEntries(announcementsCache, [announcementEffects.changed.entries(C)])
+    ).toEqual([]);
   });
 
   it("gallery", () => {

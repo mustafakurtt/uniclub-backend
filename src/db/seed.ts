@@ -378,10 +378,50 @@ async function main() {
 
     // --- Duyurular & Galeri (yalnızca aktif kulüplerde) ---
     await tx.insert(schema.announcements).values([
-      { universityId: antalya.id, clubId: techClub.id, authorId: mustafa, title: "Kulübümüze Hoş Geldiniz!", content: "Bu dönem düzenli buluşmalar ve atölyeler yapacağız, herkesi bekleriz." },
-      { universityId: antalya.id, clubId: techClub.id, authorId: can, title: "Bu Hafta Sonu Hackathon Var!", content: "Cumartesi 10:00'da kulüp odasında buluşuyoruz, takım kurmayı unutmayın." },
-      { universityId: antalya.id, clubId: photographyClub.id, authorId: ayse, title: "İlk Fotoğraf Gezimiz Yaklaşıyor", content: "Kaleiçi'nde bir gezi planlıyoruz, fotoğraf makinenizi/telefonunuzu almayı unutmayın." },
-      { universityId: antalya.id, clubId: musicClub.id, authorId: can, title: "Akustik Gece: Kayıtlar Açıldı", content: "Perşembe akşamı amfide buluşuyoruz, sahne almak isteyenler DM." },
+      {
+        universityId: antalya.id,
+        clubId: techClub.id,
+        authorId: mustafa,
+        title: "Kulübümüze Hoş Geldiniz!",
+        content: "Bu dönem düzenli buluşmalar ve atölyeler yapacağız, herkesi bekleriz.",
+        status: "published",
+        publishedAt: new Date(),
+        visibility: "university",
+        pinned: false,
+      },
+      {
+        universityId: antalya.id,
+        clubId: techClub.id,
+        authorId: can,
+        title: "Bu Hafta Sonu Hackathon Var!",
+        content: "Cumartesi 10:00'da kulüp odasında buluşuyoruz, takım kurmayı unutmayın.",
+        status: "published",
+        publishedAt: new Date(),
+        visibility: "university",
+        pinned: false,
+      },
+      {
+        universityId: antalya.id,
+        clubId: photographyClub.id,
+        authorId: ayse,
+        title: "İlk Fotoğraf Gezimiz Yaklaşıyor",
+        content: "Kaleiçi'nde bir gezi planlıyoruz, fotoğraf makinenizi/telefonunuzu almayı unutmayın.",
+        status: "published",
+        publishedAt: new Date(),
+        visibility: "university",
+        pinned: false,
+      },
+      {
+        universityId: antalya.id,
+        clubId: musicClub.id,
+        authorId: can,
+        title: "Akustik Gece: Kayıtlar Açıldı",
+        content: "Perşembe akşamı amfide buluşuyoruz, sahne almak isteyenler DM.",
+        status: "published",
+        publishedAt: new Date(),
+        visibility: "university",
+        pinned: false,
+      },
     ]);
     await tx.insert(schema.clubGallery).values([
       { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: mustafa, imageUrl: "https://picsum.photos/seed/tech-meetup-1/800/600", caption: "Haftalık buluşmamızdan bir kare" },
@@ -441,7 +481,17 @@ async function main() {
       { clubId: egeTechClub.id, universityId: egeTechClub.universityId, userId: tolga, role: "member", status: "approved" },
     ]);
     await tx.insert(schema.clubContactLinks).values({ clubId: egeTechClub.id, platform: "instagram", url: "https://instagram.com/yazilim-egebilim" });
-    await tx.insert(schema.announcements).values({ universityId: ege.id, clubId: egeTechClub.id, authorId: cem, title: "Tanışma Toplantısı", content: "Dönemin ilk buluşması çarşamba 18:00'de B blok amfide." });
+    await tx.insert(schema.announcements).values({
+      universityId: ege.id,
+      clubId: egeTechClub.id,
+      authorId: cem,
+      title: "Tanışma Toplantısı",
+      content: "Dönemin ilk buluşması çarşamba 18:00'de B blok amfide.",
+      status: "published",
+      publishedAt: new Date(),
+      visibility: "university",
+      pinned: false,
+    });
     await tx.insert(schema.clubGallery).values({ clubId: egeTechClub.id, universityId: egeTechClub.universityId, uploadedBy: gizem, imageUrl: "https://picsum.photos/seed/ege-tech-1/800/600", caption: "Tanışma toplantısından" });
 
     // approval_required + danışmansız + bekleyen istek
@@ -504,7 +554,17 @@ async function main() {
       { clubId: mechClub.id, universityId: mechClub.universityId, userId: esra, role: "member", status: "pending" }, // bekleyen istek
     ]);
     await tx.insert(schema.clubContactLinks).values({ clubId: mechClub.id, platform: "telegram", url: "https://t.me/kartek-robotik" });
-    await tx.insert(schema.announcements).values({ universityId: kartek.id, clubId: mechClub.id, authorId: merve, title: "Teknofest Takım Seçmeleri", content: "Bu cuma laboratuvar 2'de seçmeler var, CV'nizi getirin." });
+    await tx.insert(schema.announcements).values({
+      universityId: kartek.id,
+      clubId: mechClub.id,
+      authorId: merve,
+      title: "Teknofest Takım Seçmeleri",
+      content: "Bu cuma laboratuvar 2'de seçmeler var, CV'nizi getirin.",
+      status: "published",
+      publishedAt: new Date(),
+      visibility: "university",
+      pinned: false,
+    });
     await tx.insert(schema.clubGallery).values({ clubId: mechClub.id, universityId: mechClub.universityId, uploadedBy: yusuf, imageUrl: "https://picsum.photos/seed/kartek-robot-1/800/600", caption: "Geçen yılın yarışma robotu" });
 
     // Aynı kullanıcı (Merve) başka kulüpte PRESIDENT — çapraz rol senaryosu

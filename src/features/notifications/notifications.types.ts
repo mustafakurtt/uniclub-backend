@@ -26,8 +26,10 @@ export const NotificationType = {
   CLUB_MEMBERSHIP_DECIDED: "club.membership.decided",
   /** Kullanıcıya global bir rol atandı. data: { roleId, roleName } */
   ROLE_ASSIGNED: "role.assigned",
-  /** Üye olunan kulüp yeni bir etkinlik yayınladı. data: { activityId, clubId } */
+  /** Yayınlanan etkinlik. data: { activityId, clubId } */
   ACTIVITY_PUBLISHED: "activity.published",
+  /** Kulüp yeni duyuru yayınladı. data: { announcementId, clubId } */
+  ANNOUNCEMENT_PUBLISHED: "announcement.published",
   /** Katılım bildirilen bir etkinlik iptal edildi. data: { activityId } */
   ACTIVITY_CANCELLED: "activity.cancelled",
   /** Kulüp bir etkinliğe co-host olarak davet edildi. data: { activityId, hostClubId, clubId } */
