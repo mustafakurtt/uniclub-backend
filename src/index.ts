@@ -19,6 +19,7 @@ import { mediaRoutes, mediaServeRoutes } from "./features/media/media.routes";
 import { notificationsRoutes } from "./features/notifications/notifications.routes";
 import { auditRoutes } from "./features/audit/audit.routes";
 import { moderationRoutes } from "./features/moderation/moderation.routes";
+import { platformRoutes } from "./features/platform/platform.routes";
 import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
@@ -27,7 +28,7 @@ import { configureRbac } from "./core/rbac/rbac.middleware";
 import { configureTenantScope } from "./core/rbac/tenant-scope";
 import { verifyToken } from "./shared/utils/jwt.util";
 import { resolveAuthz } from "./shared/rbac/rbac.cache";
-import { enforceAccountStatus } from "./shared/rbac/authz-policy";
+import { enforceAuthzPolicy } from "./shared/rbac/authz-policy";
 import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim şekli)
 import "./shared/rbac/authz"; // AuthzContext declaration merging (proje authz alanları)
 import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
@@ -98,7 +99,7 @@ setTokenVerifier(verifyToken);
 configureRbac({
   getSubjectId: (user) => user.userId,
   resolveAuthz,
-  enforce: enforceAccountStatus,
+  enforce: enforceAuthzPolicy,
 });
 
 // Tenant-scope AYRI opsiyonel eksen (core/rbac/tenant-scope): alan/param/bypass
@@ -181,6 +182,7 @@ app.route("/uploads", mediaServeRoutes);
 app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);
+app.route("/api/platform", platformRoutes);
 
 // Sunucuyu başlat + graceful shutdown — YALNIZCA bu dosya doğrudan entrypoint
 // iken (import.meta.main). Testler `app`'i import eder (import.meta.main false),

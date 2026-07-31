@@ -149,7 +149,52 @@ if (missingInApiMd.length === 0 && extraInApiMd.length === 0) {
   }
 }
 
-// ── 4. Bilinen ölü path referansları ────────────────────────────────────────
+// ── 4. reference/api.md içindekiler ↔ bölüm numaralandırması ───────────────
+
+const sectionHeaders = [...apiMd.matchAll(/^### (\d+)\) .+ — `(\/api\/[^`]+)`/gm)].map((m) => ({
+  num: Number(m[1]),
+  path: m[2],
+}));
+
+if (sectionHeaders.length === 0) {
+  fail("reference/api.md içinde `### N) ... — `/api/...`` bölüm başlığı bulunamadı");
+} else {
+  const nums = sectionHeaders.map((h) => h.num);
+  const expected = Array.from({ length: nums.length }, (_, i) => i + 1);
+  const dupes = nums.filter((n, i) => nums.indexOf(n) !== i);
+  const missingSeq = expected.filter((n) => !nums.includes(n));
+  const extraSeq = nums.filter((n) => n < 1 || n > nums.length);
+
+  if (dupes.length > 0) {
+    fail(`reference/api.md bölüm numaraları çakışıyor: ${[...new Set(dupes)].join(", ")}`);
+  } else if (missingSeq.length > 0 || extraSeq.length > 0) {
+    fail(
+      `reference/api.md bölüm numaralandırması kırık — beklenen 1..${nums.length}, bulunan: ${nums.join(", ")}`
+    );
+  } else {
+    ok(`reference/api.md bölüm numaralandırması — ${nums.length} bölüm, 1..${nums.length} ardışık`);
+  }
+}
+
+// İçindekiler TOC satırları ↔ bölüm anchor'ları (Notifications'tan itibaren kayma yakalanır)
+const tocSectionLinks = [...apiMd.matchAll(/^\s+- \[.+?\]\(#(\d+)-[^)]+\)/gm)].map((m) => Number(m[1]));
+const tocNums = tocSectionLinks.filter((n) => n >= 1);
+if (tocNums.length > 0) {
+  const tocDupes = tocNums.filter((n, i) => tocNums.indexOf(n) !== i);
+  const tocExpected = Array.from({ length: tocNums.length }, (_, i) => i + 1);
+  const tocBroken =
+    tocDupes.length > 0 ||
+    tocExpected.some((n) => !tocNums.includes(n)) ||
+    tocNums.some((n) => n < 1 || n > tocNums.length);
+
+  if (tocBroken) {
+    fail(`reference/api.md İçindekiler numaralandırması kırık: ${tocNums.join(", ")}`);
+  } else {
+    ok(`reference/api.md İçindekiler — ${tocNums.length} endpoint bölümü, anchor numaraları ardışık`);
+  }
+}
+
+// ── 5. Bilinen ölü path referansları ────────────────────────────────────────
 
 const DEAD_PATH_PATTERNS = [
   /docs\/yonetim\//,

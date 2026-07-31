@@ -1,4 +1,4 @@
-import { pgTable as table } from "drizzle-orm/pg-core";
+import { pgTable as table, pgEnum } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
 import { timestamps, softDeleteColumn } from "../../core/db/base.entity";
@@ -6,10 +6,20 @@ import { timestamps, softDeleteColumn } from "../../core/db/base.entity";
 // ═══════════════════════════════════════════════
 // UNIVERSITIES & DOMAINS (Tenant + çoklu domain desteği)
 // ═══════════════════════════════════════════════
+
+/** SaaS tenant yaşam döngüsü (bkz. docs/planning/schema-product.md §2.1). */
+export const universityStatusEnum = pgEnum("university_status", [
+  "trial",
+  "active",
+  "past_due",
+  "suspended",
+]);
+
 export const universities = table("universities", {
   id: t.uuid().primaryKey().defaultRandom(),
   name: t.varchar({ length: 256 }).notNull(),
   slug: t.varchar({ length: 256 }).notNull().unique(), // ileride SaaS subdomain için: xyz-universitesi.uygulaman.com
+  status: universityStatusEnum().default("active").notNull(),
   ...timestamps,
   ...softDeleteColumn,
 });

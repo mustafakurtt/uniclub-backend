@@ -10,6 +10,7 @@ import { AuthPermission } from "./auth.permissions";
 import { AdminPermission } from "../admin/admin.permissions";
 import { ClubPermission } from "../clubs/clubs.permissions";
 import { UniversityPermission } from "../university/university.permissions";
+import { PlatformPermission } from "../platform/platform.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
 import { ActivityPermission } from "../activities/activities.permissions";
@@ -18,6 +19,7 @@ import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
 import { authCache, authCatalogEffects } from "./auth.cache";
+import { universityRepository } from "../university/repositories/university.repository";
 
 // Kayıt otomatik rolü + promote/demote hedefi. Not: "admin" rolü kurumsal modelde
 // "university_admin" olarak yeniden adlandırıldı (bkz. docs/design/06).
@@ -70,6 +72,10 @@ const PLATFORM_PERMISSION_KEYS = new Set<string>([
   UniversityPermission.DELETE,
   AuthPermission.ROLE_MANAGE,
   AuthPermission.PERMISSION_MANAGE,
+  PlatformPermission.TENANT_VIEW,
+  PlatformPermission.TENANT_MANAGE,
+  PlatformPermission.TENANT_INVITE,
+  PlatformPermission.USER_VIEW,
 ]);
 
 /**
@@ -315,6 +321,11 @@ export const authService = {
       throw badRequest("auth.emailDomainNotRegistered");
     }
 
+    const tenantStatus = await universityRepository.findStatusById(universityDomain.universityId);
+    if (!tenantStatus || tenantStatus === "suspended") {
+      throw badRequest("auth.tenantRegistrationDisabled");
+    }
+
     // 3. İş Kuralı: E-posta müsait mi?
     const existingUser = await authRepository.findUserByEmailAndTenant(
       data.email,
@@ -380,6 +391,13 @@ export const authService = {
     }
     if (user.status === "suspended") {
       throw unauthorized("auth.loginAccountSuspended");
+    }
+
+    if (user.universityId) {
+      const tenantStatus = await universityRepository.findStatusById(user.universityId);
+      if (!tenantStatus || tenantStatus === "suspended") {
+        throw unauthorized("auth.loginTenantSuspended");
+      }
     }
 
     // Not: user.status === "pending" olanlar (henüz mail onaylamamış olanlar)

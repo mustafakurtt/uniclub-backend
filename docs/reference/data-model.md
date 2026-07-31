@@ -77,7 +77,7 @@ Her tablo tenant'a aynı şekilde bağlanmaz; üç kalıp var:
 
 | Tablo | Ne tutar | Notlar |
 |---|---|---|
-| `universities` | Satılan birim | Soft delete var. Bugün yalnızca `name`/`slug` taşıyor — yaşam döngüsü, saat dilimi, marka ve ayarlar henüz **yok** (yol haritası 2.1) |
+| `universities` | Satılan birim | Soft delete var. `status`: `trial` / `active` / `past_due` / `suspended` (varsayılan `active`). Saat dilimi, marka ve `tenant_settings` henüz yok (yol haritası 2.1) |
 | `university_domains` | Bir üniversitenin e-posta domainleri, `student`/`staff` etiketiyle | Kayıt akışı tenant'ı VE rolü buradan çıkarır ([ADR 0007](../adr/0007-email-domain-tenant-inference.md)). `domain = lower(domain)` CHECK'i var |
 | `faculties` → `departments` | Akademik yapı | `departments`'ta bilinçli olarak `university_id` **yok**: fakülte zinciriyle ulaşılır |
 

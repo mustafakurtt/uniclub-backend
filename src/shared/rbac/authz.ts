@@ -10,6 +10,16 @@ import type { AuthzContext } from "../../core/rbac/rbac.types";
 declare module "../../core/rbac/rbac.types" {
   interface AuthzContext {
     /**
+     * Kullanıcının tenant'ı — platform hesaplarında `null`.
+     * Tenant durum kontrolü için authz'a gömülür.
+     */
+    universityId?: string | null;
+    /**
+     * Bağlı tenant'ın SaaS durumu — yalnızca `universityId` dolu hesaplarda.
+     * `suspended` → tenant kullanıcıları bir sonraki istekte 403 (politika: authz-policy).
+     */
+    tenantStatus?: "trial" | "active" | "past_due" | "suspended" | null;
+    /**
      * Hesap durumu — askıya alınan kullanıcının erişimini bir sonraki istekte
      * ANINDA kesmek için authz'a gömülür (politika: shared/rbac/authz-policy.ts).
      * Kullanıcı bulunamazsa undefined.

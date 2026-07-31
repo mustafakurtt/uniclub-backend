@@ -20,11 +20,21 @@ export const authRepository = {
    * Domain adresine göre üniversiteyi ve domain tipini bulur.
    */
   async findUniversityByDomain(domain: string): Promise<UniversityDomain | undefined> {
-    return await db.query.universityDomains.findFirst({
-      where: { 
-        domain: domain 
+    const row = await db.query.universityDomains.findFirst({
+      where: {
+        domain,
+        deletedAt: { isNull: true },
       },
     });
+    if (!row) return undefined;
+
+    const university = await db.query.universities.findFirst({
+      where: { id: row.universityId, deletedAt: { isNull: true } },
+      columns: { id: true },
+    });
+    if (!university) return undefined;
+
+    return row;
   },
 
   /**

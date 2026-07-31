@@ -9,6 +9,7 @@ import { UNIVERSITY_PERMISSION_CATALOG } from "../features/university/university
 import { ANNOUNCEMENT_PERMISSION_CATALOG } from "../features/announcements/announcements.permissions";
 import { GALLERY_PERMISSION_CATALOG } from "../features/gallery/gallery.permissions";
 import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/audit.permissions";
+import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
 
 /**
  * Yetki kataloğu senkronizasyonu — VERİYİ SIFIRLAMADAN çalışır (db:reset'in aksine).
@@ -40,6 +41,7 @@ const PERMISSION_CATALOG: { key: string; description: string }[] = [
   ...ANNOUNCEMENT_PERMISSION_CATALOG,
   ...GALLERY_PERMISSION_CATALOG,
   ...AUDIT_PERMISSION_CATALOG,
+  ...PLATFORM_PERMISSION_CATALOG,
   { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
   { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
 ];
@@ -77,7 +79,7 @@ const ROLE_GRANTS: Record<string, string[]> = {
   // db:reset olmadan yeni yetkiyi alabilmesi için buraya da işlenir.
   university_admin: [AuditPermission.VIEW],
   auditor: [AuditPermission.VIEW],
-  platform_support: [AuditPermission.VIEW],
+  platform_support: [AuditPermission.VIEW, PlatformPermission.TENANT_VIEW],
 };
 
 async function main() {

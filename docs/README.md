@@ -45,6 +45,8 @@ Changelog: [CHANGELOG.md](../CHANGELOG.md).
 | Doc | Covers |
 | --- | --- |
 | [schema-product.md](planning/schema-product.md) | Active schema/product backlog |
+| [platform-ops-roadmap.md](planning/platform-ops-roadmap.md) | SaaS platform panel roadmap (phases, backend gaps) |
+| [platform-rbac.md](planning/platform-rbac.md) | Platform rol/yetki modeli (kaç rol, permission demetleri) |
 | [security-core.md](planning/security-core.md) | Security + `core/` gaps |
 | [archive/](planning/archive/) | Completed tier history |
 

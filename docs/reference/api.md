@@ -23,12 +23,13 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Announcements (kulüp alt-kaynağı)](#5-announcements--apiclubsclubidannouncements)
   - [Gallery (kulüp alt-kaynağı)](#6-gallery--apiclubsclubidgallery)
   - [Admin (okul yöneticisi)](#7-admin--apiadmin)
-  - [Moderation (kullanıcı yönetimi)](#8-moderation--apimoderation)
-  - [Notifications (bildirimler)](#9-notifications--apinotifications)
-  - [Audit (denetim izi)](#10-audit--apiaudit)
-  - [Activities (etkinlikler)](#11-activities--apiactivities)
-  - [Dashboard & Feed](#12-dashboard--feed--apifeed)
-  - [Media (dosya yükleme)](#13-media--apiuploads)
+  - [Platform (SaaS operatörü)](#8-platform--apiplatform)
+  - [Moderation (kullanıcı yönetimi)](#9-moderation--apimoderation)
+  - [Notifications (bildirimler)](#10-notifications--apinotifications)
+  - [Audit (denetim izi)](#11-audit--apiaudit)
+  - [Activities (etkinlikler)](#12-activities--apiactivities)
+  - [Dashboard & Feed](#13-dashboard--feed--apifeed)
+  - [Media (dosya yükleme)](#14-media--apiuploads)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -36,7 +37,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -168,7 +169,7 @@ Ayrıntılı request/response örnekleri için [auth.md](../integration/auth.md)
 | DELETE | `/api/auth/roles/:roleId/permissions/:permissionId` | `role.manage` | Rolden permission kaldır |
 
 Body şemaları:
-- `POST /register`: `{ firstName (2-100), lastName (2-100), email, studentNumber?, password (min 6) }`
+- `POST /register`: `{ firstName (2-100), lastName (2-100), email, studentNumber?, password (min 12) }`
 - `POST /login`: `{ email, password }`
 - Promote/demote rotaları body almaz.
 - `POST /permissions`: `{ key (3-100), description? (max 256) }`
@@ -207,7 +208,7 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 
 **PATCH /api/users/me/password**
 ```jsonc
-{ "currentPassword": "string", "newPassword": "string (min 6)" }
+{ "currentPassword": "string", "newPassword": "string (min 12)" }
 ```
 
 **GET /api/users/me/clubs** → `data`: `clubMembers` satırları, `club` objesi gömülü (`clubId`, `role`, `status`, `club.{name, slug, ...}`). `status: "pending"` satırlar da gelir — yetki kararında `status === "approved"` filtresi şart.
@@ -399,7 +400,23 @@ Body şemaları:
 
 ---
 
-### 8) Moderation — `/api/moderation`
+### 8) Platform — `/api/platform`
+
+SaaS operatör paneli: tenant listesi (stats) ve durum yönetimi. Tenant-scoped **değil**.
+Ayrıntı: `docs/integration/platform-panel.md`.
+
+| Method | Path | Permission | Açıklama |
+|---|---|---|---|
+| GET | `/api/platform/tenants` | `platform.tenant.view` | Tenant listesi + özet istatistikler |
+| POST | `/api/platform/tenants/onboard` | `university.create` (+ `platform.tenant.invite` if `initialAdmin`) | Atomik tenant açma |
+| POST | `/api/platform/tenants/:universityId/invite-admin` | `platform.tenant.invite` | Tenant yöneticisi provision |
+| PATCH | `/api/platform/tenants/:universityId/status` | `platform.tenant.manage` | Tenant durumu (`reason` zorunlu) |
+| GET | `/api/platform/users` | `platform.user.view` | Platform hesap listesi |
+| POST | `/api/platform/users` | `super_admin` rolü | Platform hesabı oluştur |
+
+---
+
+### 9) Moderation — `/api/moderation`
 
 Kullanıcı yönetimi/moderasyon yüzeyi: ban/unban (sebepli), admin şifre sıfırlama,
 kullanıcının denetim aktivitesi ve moderasyon geçmişi. Tüm rotalar
@@ -423,7 +440,7 @@ Body / dönüş:
 
 ---
 
-### 9) Notifications — `/api/notifications`
+### 10) Notifications — `/api/notifications`
 
 Kalıcı bildirimler + gerçek zamanlı WebSocket teslimatı. Tüm REST rotaları
 `authMiddleware` + `requireActiveUser` ister (`pending` kullanıcı bildirimleri
@@ -469,7 +486,7 @@ Body şemaları:
 
 ---
 
-### 10) Audit — `/api/audit`
+### 11) Audit — `/api/audit`
 
 Append-only denetim izi — **salt-okunur**; yazma/silme endpoint'i yoktur (kayıtlar
 `guard()` zincirindeki `auditTrail` tarafından otomatik üretilir).
@@ -508,7 +525,7 @@ Query parametreleri:
 ```
 
 `audit.view` yetkisi: `auditor`, `university_admin`, `platform_support`, `super_admin`.
-### 11) Activities — `/api/activities`
+### 12) Activities — `/api/activities`
 
 Kulüp etkinlikleri: keşif, katılım (RSVP), takvim ve kulüp-içi yönetim.
 **Tam derinlemesine referans (kavramsal model, co-host/cross-university, tüm
@@ -547,7 +564,7 @@ Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, st
 
 ---
 
-### 12) Dashboard & Feed — `/api/feed`
+### 13) Dashboard & Feed — `/api/feed`
 
 Rollere göre özet/akış (okuma modeli — mevcut veriyi birleştirir).
 **Tam referans: [`docs/integration/dashboard.md`](../integration/dashboard.md).**
@@ -563,7 +580,7 @@ Feed öğesi: `{ type: "announcement"|"activity", at (ISO), club, item }`. `next
 
 ---
 
-### 13) Media — `/api/uploads`
+### 14) Media — `/api/uploads`
 
 Gerçek dosya yükleme. **Tam referans: [`docs/integration/media.md`](../integration/media.md).**
 Akış: **yükle → dönen URL'yi mevcut `*Url` alanına yaz** (endpoint'ler hâlâ URL string alır).

@@ -16,3 +16,24 @@ export const enforceAccountStatus = (authz: AuthzContext): void => {
     throw new ForbiddenError("rbac.accountSuspended");
   }
 };
+
+/**
+ * Tenant askıya alındığında o üniversitenin kullanıcılarının erişimini keser.
+ * Platform hesapları (`universityId` yok) ve bypass rolleri etkilenmez — tenant
+ * durumu authz cache'e gömülür (bkz. rbac.repository).
+ */
+export const enforceTenantStatus = (authz: AuthzContext): void => {
+  if (authz.universityId && authz.tenantStatus === "suspended") {
+    throw new ForbiddenError("rbac.tenantSuspended");
+  }
+};
+
+/**
+ * Resolve sonrası tüm proje authz politikaları — `configureRbac.enforce` ve
+ * `requireActiveUser` bu fonksiyonu paylaşır; tenant askısı / hesap durumu tek
+ * noktadan zorlanır.
+ */
+export const enforceAuthzPolicy = (authz: AuthzContext): void => {
+  enforceAccountStatus(authz);
+  enforceTenantStatus(authz);
+};

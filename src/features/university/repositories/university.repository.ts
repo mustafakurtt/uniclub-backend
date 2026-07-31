@@ -31,7 +31,7 @@ class UniversityRepository extends BaseRepository<typeof universities, typeof db
       where: search
         ? { deletedAt: { isNull: true }, name: { ilike: `%${search}%` } }
         : { deletedAt: { isNull: true } },
-      columns: { id: true, name: true, slug: true, createdAt: true },
+      columns: { id: true, name: true, slug: true, status: true, createdAt: true },
     });
   }
 
@@ -46,6 +46,15 @@ class UniversityRepository extends BaseRepository<typeof universities, typeof db
   /** Benzersizlik kontrolü — silinmiş satırlar DAHİL (unique kısıt hepsini kapsar). */
   findBySlugIncludingDeleted(slug: string) {
     return this.query!.findFirst({ where: { slug } });
+  }
+
+  /** Tenant yaşam döngüsü / login kontrolü için hafif status okuması. */
+  async findStatusById(universityId: string) {
+    const row = await this.query!.findFirst({
+      where: { id: universityId, deletedAt: { isNull: true } },
+      columns: { status: true },
+    });
+    return row?.status;
   }
 
   /** Üniversite + domainlerini tek transaction'da oluşturur. */

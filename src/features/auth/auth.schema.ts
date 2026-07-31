@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { passwordSchema } from "../../shared/schemas/password.schema";
 
 /**
  * E-posta alanı — kırpılır ve HER ZAMAN küçük harfe indirgenir.
@@ -23,7 +24,7 @@ export const registerSchema = z.object({
   lastName: z.string().min(2, "Soyad en az 2 karakter olmalıdır.").max(100),
   email: emailField,
   studentNumber: z.string().optional(),
-  password: z.string().min(6, "Şifre en az 6 karakter olmalıdır."),
+  password: passwordSchema,
 });
 
 export type RegisterDTO = z.infer<typeof registerSchema>;

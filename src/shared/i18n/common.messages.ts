@@ -15,6 +15,7 @@ export const commonMessages = defineCatalog({
     "auth.tokenInvalid": "Oturum süreniz dolmuş veya token geçersiz. Lütfen tekrar giriş yapın.",
     // yetkilendirme (core/rbac/rbac.middleware)
     "rbac.accountSuspended": "Hesabınız askıya alınmıştır. Lütfen SKS birimiyle iletişime geçin.",
+    "rbac.tenantSuspended": "Üniversitenizin platform erişimi askıya alınmıştır. Lütfen üniversite yönetimiyle iletişime geçin.",
     "rbac.forbidden": "Bu işlem için yetkiniz bulunmamaktadır.",
     "rbac.tenantForbidden": "Bu üniversiteye ait kaynaklara erişim yetkiniz bulunmamaktadır.",
     // hız sınırı (core/ratelimit) — {minutes}/{seconds} limiter tarafından geçilir
@@ -37,6 +38,7 @@ export const commonMessages = defineCatalog({
     "auth.tokenInvalid": "Your session has expired or the token is invalid. Please sign in again.",
     // authorization (core/rbac/rbac.middleware)
     "rbac.accountSuspended": "Your account has been suspended. Please contact the student affairs office.",
+    "rbac.tenantSuspended": "Your university's platform access has been suspended. Please contact your university administration.",
     "rbac.forbidden": "You do not have permission for this action.",
     "rbac.tenantForbidden": "You do not have access to resources of this university.",
     // rate limiting (core/ratelimit) — {minutes}/{seconds} passed by the limiter

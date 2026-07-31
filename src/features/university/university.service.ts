@@ -58,15 +58,21 @@ export const universityService = {
    * 2. Verilen domainlerin hiçbiri (istekte ve DB'de) daha önce kayıtlı olmamalı.
    */
   async createUniversity(data: CreateUniversityDTO) {
-    // 1
-    const existingSlug = await universityRepository.findBySlugIncludingDeleted(data.slug);
+    await universityService.validateSlugAndDomains(data.slug, data.domains);
+    return await universityRepository.createWithDomains(data);
+  },
+
+  /**
+   * Slug ve domain benzersizlik kontrolleri — `createUniversity` ve platform onboard ortak.
+   */
+  async validateSlugAndDomains(slug: string, domains: CreateUniversityDTO["domains"]) {
+    const existingSlug = await universityRepository.findBySlugIncludingDeleted(slug);
     if (existingSlug) {
       throw badRequest("university.slugTaken");
     }
 
-    // 2
     const seen = new Set<string>();
-    for (const d of data.domains) {
+    for (const d of domains) {
       if (seen.has(d.domain)) {
         throw badRequest("university.domainDuplicateInRequest", { params: { domain: d.domain } });
       }
@@ -77,8 +83,6 @@ export const universityService = {
         throw badRequest("university.domainAlreadyRegistered", { params: { domain: d.domain } });
       }
     }
-
-    return await universityRepository.createWithDomains(data);
   },
 
   async updateUniversity(universityId: string, data: UpdateUniversityDTO) {

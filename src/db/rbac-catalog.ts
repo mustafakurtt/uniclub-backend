@@ -10,6 +10,7 @@ import { GalleryPermission, GALLERY_PERMISSION_CATALOG } from "../features/galle
 import { ActivityPermission, ACTIVITY_PERMISSION_CATALOG } from "../features/activities/activities.permissions";
 import { DashboardPermission, DASHBOARD_PERMISSION_CATALOG } from "../features/dashboard/dashboard.permissions";
 import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/audit.permissions";
+import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
 
 /**
  * Global RBAC kataloğunun TEK KAYNAĞI (roller, yetkiler, rol→yetki demetleri).
@@ -46,6 +47,7 @@ export const PERMISSION_CATALOG: { key: string; description: string }[] = [
   ...ACTIVITY_PERMISSION_CATALOG,
   ...DASHBOARD_PERMISSION_CATALOG,
   ...AUDIT_PERMISSION_CATALOG,
+  ...PLATFORM_PERMISSION_CATALOG,
   { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
   { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
 ];
@@ -100,6 +102,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     AdminPermission.USER_VIEW, ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW,
     DashboardPermission.VIEW,
     AuditPermission.VIEW,
+    PlatformPermission.TENANT_VIEW,
   ],
 };
 
