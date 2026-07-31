@@ -1,4 +1,4 @@
-import { cache } from "../architecture/cache/cache.client";
+import { cache } from "../cache/cache.client";
 import { rbacRepository } from "./rbac.repository";
 import { AuthzContext } from "../../core/rbac/rbac.types";
 import "./authz"; // AuthzContext'e status/maxRank ekleyen declaration merging

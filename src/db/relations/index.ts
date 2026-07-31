@@ -1,0 +1,23 @@
+import { defineRelations } from "drizzle-orm";
+import * as schema from "../schema";
+import { universityRelations } from "./university";
+import { usersRelations } from "./users";
+import { rbacRelations } from "./rbac";
+import { clubsRelations } from "./clubs";
+import { announcementsRelations } from "./announcements";
+import { notificationsRelations } from "./notifications";
+import { applicationsRelations } from "./applications";
+import { activitiesRelations } from "./activities";
+import { mediaRelations } from "./media";
+
+export const relations = defineRelations(schema, (r) => ({
+  ...universityRelations(r),
+  ...usersRelations(r),
+  ...rbacRelations(r),
+  ...clubsRelations(r),
+  ...announcementsRelations(r),
+  ...notificationsRelations(r),
+  ...applicationsRelations(r),
+  ...activitiesRelations(r),
+  ...mediaRelations(r),
+}));
