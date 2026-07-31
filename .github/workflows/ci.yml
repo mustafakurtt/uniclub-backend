@@ -30,6 +30,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Docs check
+        run: bun run docs:check
+
   # ── Duman testi: gerçek Postgres + Redis ile uçtan uca ────
   # Migration'lar temiz bir veritabanında uygulanıyor mu, seed çalışıyor mu,
   # uygulama gerçekten ayağa kalkıp /health dönüyor mu?

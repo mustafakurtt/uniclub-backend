@@ -9,7 +9,7 @@ RBAC modeline göre yazıldı.
 > göre döner (`Accept-Language: tr|en`, varsayılan `tr`) ve UI'da doğrudan
 > gösterilebilir; kalıcı mantık için mesaj metnine değil `code`/HTTP status'a
 > bakın (bkz. `docs/DENETIM_VE_HATA.md`). Tasarım gerekçeleri için:
-> [docs/yonetim/](yonetim/) (özellikle `06-rol-mimarisi-yeniden-tasarim.md`).
+> [docs/design/](../design/) (özellikle `06-rol-mimarisi-yeniden-tasarim.md`).
 > Auth/kayıt/self-service temeli için: [FRONTEND_AUTH_RBAC.md](FRONTEND_AUTH_RBAC.md)
 > (dikkat: o doküman eski 4-rollük modele göre yazıldı; roller/permission'lar için
 > bu doküman esas alınmalıdır).

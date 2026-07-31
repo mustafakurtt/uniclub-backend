@@ -54,7 +54,7 @@ export const usersService = {
 
   /**
    * Giriş yapmış kullanıcının effective (etkin) rol ve yetkileri — UI'ın
-   * göster/gizle guard'ları için tek kaynak (bkz. docs/yonetim/05 #1).
+   * göster/gizle guard'ları için tek kaynak (bkz. docs/design/05 #1).
    */
   async getMyPermissions(userId: string) {
     return await resolveAuthz(userId);

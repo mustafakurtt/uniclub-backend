@@ -37,7 +37,7 @@ export const adminRepository = {
 
   /**
    * Üniversitedeki kullanıcıları listeler. İsteğe bağlı `status` ve `roleName`
-   * filtreleri; her satırda global rolleri (`roles`) da döner (bkz. docs/yonetim/05 #4).
+   * filtreleri; her satırda global rolleri (`roles`) da döner (bkz. docs/design/05 #4).
    */
   async findUsersByUniversity(universityId: string, status?: User["status"], roleName?: string) {
     let idFilter: { in: string[] } | undefined;
@@ -125,7 +125,8 @@ export const adminRepository = {
     universityId: string,
     applicationId: string,
     actorUserId: string,
-    decision: "approved" | "rejected"
+    decision: "approved" | "rejected",
+    note: string | null
   ): Promise<DecideClubApplicationResult> {
     return await db.transaction(async (tx) => {
       const application = await tx.query.clubApplications.findFirst({
@@ -148,7 +149,8 @@ export const adminRepository = {
 
       await tx
         .update(schema.clubApplicationApprovals)
-        .set({ status: decision, approverId: actorUserId, reviewedAt: new Date() })
+        // note: reddederken zorunlu (servis katmanında doğrulanır), onayda opsiyonel.
+        .set({ status: decision, approverId: actorUserId, reviewedAt: new Date(), note })
         .where(and(
           eq(schema.clubApplicationApprovals.applicationId, applicationId),
           eq(schema.clubApplicationApprovals.step, 1)
@@ -187,6 +189,7 @@ export const adminRepository = {
       await tx.insert(schema.clubMembers).values({
         clubId: club.id,
         userId: application.applicantId,
+        universityId: club.universityId, // bileşik FK: kulüp == satır == kullanıcı tenant'ı
         role: "president",
         status: "approved",
       });
@@ -256,8 +259,14 @@ export const adminRepository = {
     });
   },
 
-  async addAdvisor(clubId: string, userId: string) {
-    const [inserted] = await db.insert(schema.clubAdvisors).values({ clubId, userId }).returning();
+  // universityId zorunlu: satır hem kulübe hem danışmana BİLEŞİK FK ile bağlı —
+  // "başka okulun hocasını danışman yapma" artık DB'de de imkânsız
+  // (servis katmanındaki kontrolün ikizi, bkz. adminService.addAdvisor).
+  async addAdvisor(clubId: string, userId: string, universityId: string) {
+    const [inserted] = await db
+      .insert(schema.clubAdvisors)
+      .values({ clubId, userId, universityId })
+      .returning();
     return inserted;
   },
 
@@ -268,7 +277,7 @@ export const adminRepository = {
   },
 
   // ═══════════════════════════════════════════════
-  // TENANT MODERASYON (bkz. docs/yonetim/06 §A6)
+  // TENANT MODERASYON (bkz. docs/design/06 §A6)
   // ═══════════════════════════════════════════════
   async findMembersByClub(clubId: string) {
     return await db.query.clubMembers.findMany({

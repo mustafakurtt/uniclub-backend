@@ -4,7 +4,7 @@ import { resolveAuthz } from "../shared/rbac/rbac.cache";
 
 /**
  * authMiddleware'den SONRA çalışır. Askıya alınan (suspended) kullanıcının
- * erişimini ANINDA keser (bkz. docs/yonetim/05 #7). guard() zinciri olmayan
+ * erişimini ANINDA keser (bkz. docs/design/05 #7). guard() zinciri olmayan
  * self-service / kulüp rotalarında kullanılır — guard'lı rotalar aynı kontrolü
  * attachAuthz içinde yapar.
  *

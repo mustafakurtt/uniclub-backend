@@ -120,16 +120,26 @@ export const adminService = {
    * Onaylama akışında repository, başvuruyu gerçek bir kulübe dönüştürür
    * (bkz. admin.repository.decideClubApplication).
    */
-  async approveClubApplication(universityId: string, applicationId: string, actorUserId: string) {
-    const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved");
+  async approveClubApplication(universityId: string, applicationId: string, actorUserId: string, note?: string) {
+    const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved", note ?? null);
     await notifyApplicationDecision(result, "approved");
     // Yeni onaylı kulüp public listeye girer.
     await clubsCache.invalidateList(universityId);
     return result;
   },
 
-  async rejectClubApplication(universityId: string, applicationId: string, actorUserId: string) {
-    const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "rejected");
+  /**
+   * Ret GEREKÇESİZ yapılamaz: öğrenci neyi düzelteceğini bilmeden yeniden
+   * başvuramaz ve gerekçesiz bir ret denetlenebilir bir karar değildir.
+   * Zorunluluk zod şemasında (rejectApplicationSchema) da var; burası servis
+   * katmanının kendi sözleşmesi — repository'den doğrudan çağıran bir yol
+   * açılırsa kural yine tutar.
+   */
+  async rejectClubApplication(universityId: string, applicationId: string, actorUserId: string, note: string) {
+    if (!note?.trim()) {
+      throw badRequest("admin.rejectionNoteRequired");
+    }
+    const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "rejected", note.trim());
     await notifyApplicationDecision(result, "rejected");
     return result;
   },
@@ -216,7 +226,7 @@ export const adminService = {
     if (existing) {
       throw badRequest("admin.advisorAlreadyAssigned");
     }
-    const result = await adminRepository.addAdvisor(clubId, userId);
+    const result = await adminRepository.addAdvisor(clubId, userId, club.universityId);
     await clubsCache.invalidateDetail(clubId); // danışmanlar profile gömülü
     return result;
   },
@@ -235,7 +245,7 @@ export const adminService = {
   },
 
   // ═══════════════════════════════════════════════
-  // TENANT MODERASYON (bkz. docs/yonetim/06 §A6)
+  // TENANT MODERASYON (bkz. docs/design/06 §A6)
   // Her işlem önce kulübün bu üniversiteye ait olduğunu doğrular; içerik de
   // gerçekten o kulübe ait olmalı (çapraz-kulüp silme engellenir).
   // ═══════════════════════════════════════════════

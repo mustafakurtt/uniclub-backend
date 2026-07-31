@@ -4,7 +4,7 @@
  * Kulüp-içi katman (officer/president/advisor) kendi kulübünün galerisini
  * yönetir (club.middleware). Buradaki `gallery.moderate` TENANT seviyesi bir
  * override'dır: bir okul yöneticisi/moderatörü, HERHANGİ bir kulübün uygunsuz
- * görselini kaldırabilir (bkz. docs/yonetim/06 §A6).
+ * görselini kaldırabilir (bkz. docs/design/06 §A6).
  */
 export const GalleryPermission = {
   MODERATE: "gallery.moderate",

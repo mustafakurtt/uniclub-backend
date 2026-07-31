@@ -1,26 +1,13 @@
 # Yönetim Paneli — Kullanıcı / Rol / Yetki (Claim) Senaryoları
 
-**Kapsam:** Yönetim sayfasının (super_admin + admin panelleri) kullanıcı yönetimi,
+**Kapsam:** Yönetim sayfasının (platform + tenant panelleri) kullanıcı yönetimi,
 rol yönetimi ve yetki (claim/permission) yönetimi işlevlerinin **tamamının**
 senaryolarla, ilişki yapıları göz önünde bulundurularak dökümante edilmesi.
 
 > Bu doküman kod tabanından birebir doğrulanmıştır (`schema.ts`, `relations.ts`,
-> `seed.ts`, `auth.*`, `admin.*`, `core/rbac/*`, `shared/rbac/*` — Temmuz 2026).
-> Tüm backend mesajları **Türkçedir** ve UI'da doğrudan gösterilebilir.
-
-> ⚠️ **GÜNCEL MODEL (Temmuz 2026):** Rol/yetki mimarisi kurumsal **9 rollük**
-> modele geçirildi (`admin` → `university_admin`; + `platform_support`,
-> `student_affairs`, `academic_affairs`, `content_moderator`, `auditor`).
-> Bu dosyanın §2/§3'ündeki 4-rollük matris **eskidir** — güncel ve otoritatif
-> kaynak: [06-rol-mimarisi-yeniden-tasarim.md](06-rol-mimarisi-yeniden-tasarim.md)
-> (§ "✅ UYGULANDI"). Guard'lar da düzeltildi: okuma route'ları artık `*.view`
-> yetkileri ister.
->
-> ⚠️ **DAHA DA GÜNCEL:** Rollere **rütbe (`roles.rank`)** eklendi ve
-> `users.universityId` **nullable** yapıldı (tenant'sız platform hesapları).
-> Bu, §2'deki "rol hiyerarşisi" ve §5'teki "her kullanıcı bir universityId'ye
-> bağlıdır" ifadelerini **geçersiz kılar**. Otoritatif kaynak:
-> [07-rutbe-ve-kapsam.md](07-rutbe-ve-kapsam.md).
+> `seed.ts`, `auth.*`, `admin.*`, `moderation.*`, `core/rbac/*`, `shared/rbac/*`
+> — Temmuz 2026). Tüm backend mesajları **Türkçedir** ve UI'da doğrudan
+> gösterilebilir.
 
 Bu klasör uzun olduğu için dosyalara bölünmüştür:
 
@@ -28,12 +15,13 @@ Bu klasör uzun olduğu için dosyalara bölünmüştür:
 |---|---|
 | **README.md** (bu dosya) | Genel model, rol hiyerarşisi, iki katman, effective permission, tenant scope, rol→yetki matrisi, sayfa mimarisi, mevcut vs eksik özeti |
 | [01-kullanici-yonetimi.md](01-kullanici-yonetimi.md) | Kullanıcı listeleme/görüntüleme, durum (pending/active/suspended) yaşam döngüsü, bölüm atama, silme neden yok — senaryolar |
-| [02-rol-yonetimi.md](02-rol-yonetimi.md) | Rol CRUD, kullanıcıya rol atama/kaldırma, admin/super_admin promote-demote, tenant'a özel roller — senaryolar |
+| [02-rol-yonetimi.md](02-rol-yonetimi.md) | Rol CRUD, kullanıcıya rol atama/kaldırma, promote/demote, tenant'a özel roller — senaryolar |
 | [03-yetki-ve-claim-yonetimi.md](03-yetki-ve-claim-yonetimi.md) | Permission CRUD, rol↔yetki matrisi, kullanıcı bazlı override (`userPermissions.granted`), effective permission hesabı, cache — senaryolar |
 | [04-senaryolar.md](04-senaryolar.md) | Uçtan uca birleşik senaryolar (yeni admin atama, başkanı askıya alma, tek seferlik yetki verme, rolden yetki geri çekme, tenant izolasyonu ihlali…) |
-| [05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md) | Bu sayfayı tam yapabilmek için backend'de **henüz olmayan** ama gereken endpoint'ler + öneri şemaları |
+| [05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md) | Tarihsel: paneli tamamlamak için önerilen endpoint'ler (çoğu uygulandı) |
 | [06-rol-mimarisi-yeniden-tasarim.md](06-rol-mimarisi-yeniden-tasarim.md) | Kurumsal 9 rollük model, `admin` → `university_admin`, salt-okunur `*.view` yetkileri, tenant moderasyonu |
 | [07-rutbe-ve-kapsam.md](07-rutbe-ve-kapsam.md) | **Rol rütbesi (`roles.rank`) + hiyerarşi kuralları**, self-demotion / son-admin / escalation korumaları, tenant'sız platform hesapları, kapsam-farkında `GET /admin/universities` |
+| [archive/](archive/) | Eski 4-rollük README bölümlerinin tarihsel kaydı |
 
 ---
 
@@ -45,8 +33,8 @@ Bu doküman **yalnızca KATMAN A** (global RBAC) ile ilgilenir. Kulüp içi roll
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │ KATMAN A — Global RBAC  →  YÖNETİM PANELİNİN KONUSU                │
-│   Roller     : student, advisor, admin, super_admin (+ özel roller) │
-│   Yetkiler   : user.manage, club.*, university.*, role.manage, …    │
+│   Roller     : 9 kurumsal rol (+ tenant'a özel özel roller)       │
+│   Yetkiler   : user.*, club.*, university.*, audit.view, …        │
 │   Kaynak     : userRoles + rolePermissions + userPermissions        │
 └────────────────────────────────────────────────────────────────────┘
 
@@ -58,77 +46,87 @@ Bu doküman **yalnızca KATMAN A** (global RBAC) ile ilgilenir. Kulüp içi roll
 
 **Kritik ilişki:** Bir kullanıcının KATMAN A rolü ile KATMAN B rolü birbirinden
 **tamamen bağımsızdır**. `mustafa.kurt` global olarak `student`'tır ama Yazılım
-Kulübü'nde `president`'tir. Yönetim panelinde bir kullanıcıyı "admin" yapmak,
-onun kulüp başkanlığını etkilemez; askıya almak da kulüp başkanlığı satırını
-silmez (bkz. [01](01-kullanici-yonetimi.md) ve [04](04-senaryolar.md)).
+Kulübü'nde `president`'tir. Yönetim panelinde bir kullanıcıyı `university_admin`
+yapmak, onun kulüp başkanlığını etkilemez; askıya almak da kulüp başkanlığı
+satırını silmez (bkz. [01](01-kullanici-yonetimi.md) ve [04](04-senaryolar.md)).
 
 ---
 
 ## 2. Rol hiyerarşisi ve kaynağı
 
-Roller `roles` tablosunda tutulur ve **kapalı bir liste değildir** —
-`role.manage` yetkisine sahip biri runtime'da yeni rol ekleyebilir. Seed ile
-gelen 4 başlangıç rolü:
+Roller `roles` tablosunda tutulur; **kapalı bir liste değildir** — uygun
+`role.manage` yetkisine sahip biri runtime'da yeni rol ekleyebilir (platform
+veya tenant kapsamında). Seed ile gelen **9 kurumsal rol** ve rütbeleri:
 
-| Rol | `roles.universityId` | Nasıl atanır | Tenant kapsamı |
-|---|---|---|---|
-| `student` | `NULL` (global) | Kayıt anında `student` domainli e-posta ile **otomatik** | — |
-| `advisor` | `NULL` (global) | Kayıt anında `staff` domainli e-posta ile **otomatik** | — |
-| `admin` | `NULL` (global) | `POST promote-admin` ile **manuel** | Kendi üniversitesi (tenant scope) |
-| `super_admin` | `NULL` (global) | `POST promote-super-admin` ile **manuel** | **Sınırsız** (tenant scope bypass) |
+| Rol | `rank` | `roles.universityId` | Kapsam |
+|---|---:|---|---|
+| `super_admin` | 100 | `NULL` (global) | Platform — tüm yetkiler |
+| `platform_support` | 90 | `NULL` (global) | Platform — salt-okunur (`*.view`) |
+| `university_admin` | 60 | global şablon | Tenant — tam yönetim |
+| `academic_affairs` | 45 | global şablon | Tenant — akademik yapı + bölüm |
+| `student_affairs` | 45 | global şablon | Tenant — kulüp/başvuru moderasyonu |
+| `content_moderator` | 30 | global şablon | Tenant — içerik moderasyonu |
+| `auditor` | 30 | global şablon | Tenant — salt-okunur denetim |
+| `advisor` | 20 | global şablon | Tenant — danışmanlık etiketi |
+| `student` | 10 | global şablon | Tenant — temel öğrenci rolü |
 
-> Seed'deki 4 rolün hepsi `universityId: NULL` yani **global**'dir. Şema
-> `roles.universityId`'yi nullable bırakır → ileride "sadece Ege'de geçerli"
-> bir özel rol tanımlanabilir. Bunun senaryosu ve eksik doğrulaması için
-> bkz. [02-rol-yonetimi.md](02-rol-yonetimi.md).
+Kaynak: `db/seed.ts` `roleDefs`. Rütbe kuralları ve escalation korumaları:
+[07-rutbe-ve-kapsam.md](07-rutbe-ve-kapsam.md).
+
+**Nasıl atanır:**
+- `student` / `advisor` → kayıt anında e-posta domain tipine göre **otomatik**
+  (`student` / `staff` domain).
+- Diğer roller → `POST /api/auth/users/:userId/roles` veya promote/demote
+  sarmalayıcıları (`promote-admin` → `university_admin` atar; geriye uyumluluk
+  için endpoint adı korunur).
+- Tenant'a özel roller → `roles.universityId = <tenant>` ile oluşturulur;
+  `university_admin` kendi tenant'ının rollerini yönetebilir (bkz. [02](02-rol-yonetimi.md)).
 
 **Rol ≠ Yetki.** Guard'lar rol adına değil **yetki (permission) anahtarına**
-bakar. Örn. kullanıcı yönetimi endpoint'i `admin` rolünü değil `user.manage`
-yetkisini arar. "admin" sadece seed'de o yetkileri taşıyan bir rol adıdır;
+bakar. "university_admin" sadece seed'de belirli yetkileri taşıyan bir rol adıdır;
 yetkileri runtime'da değişebilir.
+
+> Eski 4-rollük model (`admin`/`super_admin` matrisi) arşivde:
+> [archive/README-eskimiş-bölümler.md](archive/README-eskimiş-bölümler.md).
 
 ---
 
 ## 3. Seed rol → yetki matrisi (başlangıç durumu)
 
-`seed.ts`'ten birebir çıkarılmıştır. **Runtime'da değişebilir**, UI'da
-hardcode edilmemelidir.
+`seed.ts` `ROLE_BUNDLES`'dan çıkarılmıştır. **Runtime'da değişebilir**, UI'da
+hardcode edilmemelidir. Tam liste ve uygulama notları: [06 §B4](06-rol-mimarisi-yeniden-tasarim.md).
 
-| Yetki anahtarı | `student` | `advisor` | `admin` | `super_admin` |
-|---|:---:|:---:|:---:|:---:|
-| `user.manage` | — | — | ✅ | ✅ |
-| `club.approve` | — | — | ✅ | ✅ |
-| `club.update` | — | — | ✅ | ✅ |
-| `club.advisor.manage` | — | — | ✅ | ✅ |
-| `club.delete` | — | — | ✅ | ✅ |
-| `university.create` | — | — | — | ✅ |
-| `university.update` | — | — | — | ✅ |
-| `university.delete` | — | — | — | ✅ |
-| `university.domain.create` | — | — | — | ✅ |
-| `university.domain.update` | — | — | — | ✅ |
-| `university.domain.delete` | — | — | — | ✅ |
-| `university.faculty.create` | — | — | — | ✅ |
-| `university.faculty.update` | — | — | — | ✅ |
-| `university.faculty.delete` | — | — | — | ✅ |
-| `university.department.create` | — | — | — | ✅ |
-| `university.department.update` | — | — | — | ✅ |
-| `university.department.delete` | — | — | — | ✅ |
-| `role.manage` | — | — | — | ✅ |
-| `permission.manage` | — | — | — | ✅ |
+| Yetki | super_admin | platform_support | university_admin | student_affairs | academic_affairs | content_moderator | auditor |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| `university.create` / `delete` | ✅ | — | — | — | — | — | — |
+| `role.manage` / `permission.manage` | ✅ | — | (tenant) | — | — | — | — |
+| `university.update` | ✅ | — | ✅ | — | — | — | — |
+| `university.faculty.*` / `department.*` / `domain.*` | ✅ | — | ✅ | — | ✅ | — | — |
+| `user.view` | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| `user.manage` | ✅ | — | ✅ | — | ✅ | — | — |
+| `audit.view` | ✅ | ✅ | ✅ | — | — | — | ✅ |
+| `club.view` / `application.view` | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| `club.approve` / `update` / `advisor.manage` | ✅ | — | ✅ | ✅ | — | — | — |
+| `club.member.manage` | ✅ | — | ✅ | ✅ | — | — | — |
+| `club.delete` | ✅ | — | ✅ | — | — | — | — |
+| `announcement.moderate` / `gallery.moderate` | ✅ | — | ✅ | ✅ | — | ✅ | — |
 
-**Bu matristen çıkan çok kritik sonuçlar (panelin mimarisini belirler):**
+`student` ve `advisor` seed'de ek global yetki taşımaz (`advisor` danışman atama
+şartı için etiket rolüdür). `advisor`/`student` satırları tabloda yer kazanmak
+için gösterilmemiştir.
 
-1. **Rol ve yetki yönetimi (KATMAN A'nın kendisi) yalnızca `super_admin`
-   işidir.** `role.manage` / `permission.manage` yetkilerini seed'de sadece
-   `super_admin` taşır. Yani "Roller" ve "Yetkiler" sekmeleri **admin'e
-   gösterilmez**, sadece sistem yönetim panelinde yer alır.
-2. **Üniversite/fakülte/bölüm/domain yönetimi de yalnızca `super_admin`
-   işidir** (admin'de `university.*` yetkisi yok).
-3. **`admin` yalnızca kendi üniversitesinde** kullanıcı + kulüp + başvuru +
-   danışman yönetebilir (5 yetki, hepsi tenant-scoped rotalarda).
-4. Bir `admin`'e üniversite yönetimi de vermek istenirse: ya `admin` rolüne
-   `university.*` yetkileri eklenir (o zaman **tüm** admin'ler kazanır), ya da
-   o kullanıcıya kişi bazlı override verilir (bkz. [03](03-yetki-ve-claim-yonetimi.md)).
+**Bu matristen çıkan kritik sonuçlar (panelin mimarisini belirler):**
+
+1. **Platform rol/katalog yönetimi** (`role.manage` / `permission.manage` global
+   anlamda) yalnızca `super_admin` işidir. Tenant yöneticisi kendi tenant'ının
+   rollerini yönetir ama platform yetkilerini role bağlayamaz.
+2. **Salt-okunur roller mümkündür** (`auditor`, `platform_support`) — GET
+   route'ları `*.view` ister, yazma `*.manage` ister (bkz. [06 §A1](06-rol-mimarisi-yeniden-tasarim.md)).
+3. **`university_admin` kendi tenant'ında** kullanıcı + kulüp + başvuru +
+   akademik yapı + moderasyon yönetebilir; üniversite onboard/offboard yalnızca
+   platform seviyesindedir.
+4. Granüler yetki vermek için rol matrisi **veya** kişi bazlı override
+   (`userPermissions`) kullanılır — bkz. [03](03-yetki-ve-claim-yonetimi.md).
 
 ---
 
@@ -151,98 +149,103 @@ users ──userPermissions(granted:true/false)──> permissions     (kişiye 
 ```
 
 - Bir kullanıcı **birden fazla role** sahip olabilir (`userRoles` M:N). Yetkiler
-  birleşir (union). Örn. hem `advisor` hem `admin` olan biri her ikisinin
-  yetkilerini toplar.
-- `userPermissions` **kişiye özel istisna** katmanıdır:
-  - `granted: true` → role bakılmaksızın o kullanıcıya bir yetki **ekler**
-    (örn. bir admin'e istisnai olarak `university.faculty.create`).
-  - `granted: false` → rolünden gelen bir yetkiyi o kullanıcıda **iptal eder**
-    (örn. bir admin'den `club.delete`'i geri al).
+  birleşir (union).
+- `userPermissions` **kişiye özel istisna** katmanıdır (`granted: true` ekler,
+  `granted: false` rolden geleni iptal eder).
 - Sonuç **Redis'te 5 dakika (300s) cache'lenir** (`shared/rbac/rbac.cache.ts`).
-  Rol/yetki değiştiren her servis, etkilenen kullanıcı(lar)ın cache'ini
-  **anında** temizler (`invalidateUserPermissions` / `invalidateUsersPermissions`).
-  Yani promote/demote, role yetki ekleme/çıkarma değişiklikleri bir sonraki
-  istekte geçerli olur — 5 dakika beklenmez.
+  Cache'e `status` ve `maxRank` da gömülür. Rol/yetki/durum değiştiren her servis
+  etkilenen kullanıcı(lar)ın cache'ini **anında** temizler
+  (`invalidateUserPermissions` / `invalidateUsersPermissions`).
 
-> **UYARI (mevcut kısıt):** `userPermissions`'ı okuyan motor VAR ama onu
-> **yazan bir endpoint YOK**. Yani "kullanıcıya tek seferlik yetki ver/al"
-> özelliği bugün API'de mevcut değildir. Kişi bazlı claim yönetimi bu panelin
-> ana eksiğidir — bkz. [05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md).
+**Dışa veren endpoint'ler:**
+- Self: `GET /api/users/me/permissions` → `{ roles, permissions, status }`
+- Yönetici: `GET /api/admin/universities/:uid/users/:userId/effective-permissions`
+- Kişisel override yazma: `POST|DELETE /api/auth/users/:userId/permissions`
 
 ---
 
 ## 5. Tenant scope (çok kiracılı izolasyon)
 
-- Her kullanıcı bir `universityId`'ye bağlıdır (`users.universityId`, denormalize).
-- **Admin rotaları** (`/api/admin/universities/:universityId/...`) `enforceTenantScope`
-  ile korunur: path'teki `:universityId` ≠ çağıranın kendi üniversitesi ise `403`.
-  **`super_admin` bu kontrolü bypass eder** ve herhangi bir üniversiteyi hedefler.
-- **Auth/RBAC rotaları** (`/api/auth/roles`, `/permissions`, `/users/:id/promote-*`)
-  **tenant-scoped DEĞİLDİR** — yalnızca `role.manage`/`permission.manage` yetkisi
-  arar. Bu yetki seed'de sadece `super_admin`'de olduğu için pratikte bunlar
-  **sistem geneli, super_admin'e özel** işlemlerdir.
+İki kullanıcı türü vardır (`users.universityId`):
 
-**İlişkisel dikkat (mevcut açık):** `promote-admin` bir kullanıcıya global
-`admin` rolü verir ama **hangi üniversitede** admin olacağını sormaz — kullanıcı
-zaten kendi `users.universityId`'sinde admin olur (tenant scope o kullanıcının
-kendi üniversitesini baz alır). Yani "Ege'nin bir kullanıcısını Antalya'ya admin
-yap" gibi bir şey **mümkün değildir**; admin daima kendi tenant'ının admini olur.
-super_admin ise tenant'sızdır (her yeri yönetir). Senaryosu için bkz.
-[02-rol-yonetimi.md](02-rol-yonetimi.md) ve [04](04-senaryolar.md).
+| `universityId` | Tür | Davranış |
+|---|---|---|
+| `NULL` | **Platform hesabı** | Şirket çalışanı; tenant'a bağlı değil. `super_admin` / `platform_support` tenant scope'u **rolüyle** bypass eder (`TENANT_SCOPE_BYPASS_ROLES`). |
+| dolu | **Tenant kullanıcısı** | Öğrenci/personel. Kayıt akışı tenant'ı e-posta domain'inden çıkarır. |
+
+**Tenant-scoped rotalar** (`/api/admin/universities/:universityId/...`,
+`/api/moderation/universities/:universityId/...`, `/api/audit/universities/:universityId`)
+`enforceTenantScope` ile korunur: path'teki `:universityId` ≠ çağıranın kendi
+üniversitesi ise `403`. **`super_admin` ve `platform_support` bypass eder.**
+
+**Kapsam-farkında üniversite listesi:** Panel, global `GET /api/universities`
+(kayıt formu, public) yerine `GET /api/admin/universities` kullanmalıdır —
+aktörün yönetim bağlamında görebildiği üniversiteleri döner (platform rolü →
+hepsi; tenant kullanıcısı → yalnızca kendi; bypass'sız platform hesabı → hiçbiri).
+Ayrıntı: [07 §C](07-rutbe-ve-kapsam.md).
+
+**Auth/RBAC rotaları** (`/api/auth/roles`, `/permissions`, `/users/:id/roles`)
+çoğunlukla **tenant-scoped değildir** — `role.manage` / `permission.manage`
+arar. `university_admin` kendi tenant'ının rollerini yönetirken `auth.service.ts`
+çapraz-tenant ve yetki-yükseltme deliklerini kapatır (`assertRole*`,
+`assertUserInTenant`).
+
+**Askıya alma ve anlık erişim:** `status` authz cache'ine gömülüdür.
+`attachAuthz` (guard zinciri) ve `requireActiveUser` (self-service/kulüp rotaları)
+`suspended` hesabı **bir sonraki istekte** `403` ile keser. JWT hâlâ 7 günlük
+stateless'tır; logout/şifre değişimi diğer oturumları öldürmez — bkz.
+[GUVENLIK_YOL_HARITASI.md §1.3](../GUVENLIK_YOL_HARITASI.md).
 
 ---
 
 ## 6. Yönetim panelinin bilgi mimarisi (önerilen)
 
-Rol matrisine göre panel **iki farklı yetki seviyesinde** iki farklı yüz gösterir:
+Rol matrisine göre panel **üç yüz** gösterir:
 
-### A) Sistem Yönetim Paneli — `super_admin`
-- **Üniversiteler** — üniversite/domain/fakülte/bölüm CRUD (`university.*`)
-- **Roller** — rol CRUD + rol↔yetki matrisi (`role.manage`)
-- **Yetkiler (Claims)** — permission kataloğu CRUD (`permission.manage`)
-- **Kullanıcılar (global)** — herhangi bir tenant'taki kullanıcı; rol atama,
-  admin/super_admin yapma
-- (+ admin'in gördüğü her şey, tüm üniversiteler için)
+### A) Platform Yönetim Paneli — `super_admin`
+- **Üniversiteler** — onboard/offboard (`university.create`/`delete`)
+- **Global rol/katalog** — `role.manage`, `permission.manage`
+- **Kullanıcılar (global)** — herhangi bir tenant + platform hesapları
+- Tüm tenant panellerinin içeriği (çapraz-tenant)
 
-### B) Okul Yönetim Paneli — `admin` (yalnızca kendi üniversitesi)
-- **Kullanıcılar** — listele/filtrele, durum değiştir, bölüm ata (`user.manage`)
-- **Kulüpler** — durum/profil/silme (`club.update`, `club.delete`)
-- **Başvurular** — kulüp kurma başvurularını onayla/reddet (`club.approve`)
-- **Danışmanlar** — kulüplere danışman ata/kaldır (`club.advisor.manage`)
+### B) Platform Destek — `platform_support`
+- Salt-okunur: tüm `*.view` + `audit.view`, yazma yok
+- Çapraz-tenant görünürlük (bypass)
 
-> UI göster/gizle kararı: mümkünse **yetki anahtarına** bakın. Etkin permission
-> listesini dışarı veren endpoint henüz olmadığından, o gelene kadar geçici
-> olarak **rol adına** bakılır (`super_admin` → sistem paneli, `admin` → okul
-> paneli). Bunu tek bir yardımcıda toplayın — bkz.
-> [05](05-eksikler-ve-onerilen-endpointler.md) (öneri #1).
+### C) Okul Yönetim Paneli — tenant rolleri (`university_admin`, `student_affairs`, …)
+- **Kullanıcılar** — listele (`user.view`), bölüm (`user.manage`), ban/unban
+  (`/api/moderation`)
+- **Kulüpler / başvurular / danışmanlar** — yetki demetine göre
+- **Akademik yapı** — `academic_affairs` / `university_admin`
+- **Denetim izi** — `audit.view` (`GET /api/audit/universities/:uid`)
+
+> UI göster/gizle kararı: **`GET /api/users/me/permissions`** ile gelen
+> `permissions` dizisine bakın (`permissions.includes("<key>")`). Rol adına
+> yalnızca tenant seçici gibi az sayıda kararda bakılır (`super_admin` /
+> `platform_support` → çapraz-tenant). Frontend rehberi:
+> [FRONTEND_YONETIM.md](../frontend/FRONTEND_YONETIM.md).
 
 ---
 
 ## 7. Mevcut vs Eksik — hızlı özet
 
-> **GÜNCELLEME (Temmuz 2026):** [05](05-eksikler-ve-onerilen-endpointler.md)'te
-> önerilen 8 maddenin **#7 hariç 7'si uygulandı ve canlı sunucuda doğrulandı.**
-> Aşağıdaki tablo güncel durumu yansıtır. Yeni endpoint'lerin tam referansı için
-> bkz. [05 — "Uygulanan endpoint'ler"](05-eksikler-ve-onerilen-endpointler.md).
-
 | İşlev | Durum | Endpoint / Not |
 |---|:---:|---|
-| Kullanıcıları listele/filtrele (tenant) | ✅ | `GET /api/admin/universities/:uid/users?status=&role=` (artık `role` filtresi + her satırda `roles`) |
-| Tek kullanıcı detayı (tenant) | ✅ | `GET .../users/:userId` → roller + kulüp üyelikleri + `permissionOverrides` + `effectivePermissions` |
-| Kullanıcı durumu değiştir | ✅ | `PATCH .../users/:userId/status` (kendini askıya alma engelli) |
+| Kullanıcıları listele/filtrele (tenant) | ✅ | `GET /api/admin/universities/:uid/users?status=&role=` (`user.view`; satırda `roles`) |
+| Tek kullanıcı detayı (tenant) | ✅ | `GET .../users/:userId` → roller, kulüp üyelikleri, override'lar, effective |
+| Kullanıcı ban / unban (sebepli) | ✅ | `POST /api/moderation/universities/:uid/users/:userId/ban\|unban` (`user.manage`) |
 | Kullanıcı bölümü değiştir | ✅ | `PATCH .../users/:userId/department` |
-| Kullanıcıyı admin yap / geri al | ✅ | `PATCH /api/auth/users/:userId/promote-admin` … |
-| Kullanıcıyı super_admin yap / geri al | ✅ | `PATCH /api/auth/users/:userId/promote-super-admin` … (son super_admin korumalı) |
-| Rol oluştur / listele / güncelle | ✅ | `POST\|GET\|PATCH /api/auth/roles` (çekirdek rol adı değişmez) |
-| Role yetki ekle / kaldır | ✅ | `POST\|DELETE /api/auth/roles/:roleId/permissions` |
-| Yetki (permission) oluştur / listele / güncelle | ✅ | `POST\|GET\|PATCH /api/auth/permissions` |
-| **Kullanıcıya genel rol ata / kaldır / listele** | ✅ **YENİ** | `POST\|DELETE\|GET /api/auth/users/:userId/roles` |
-| **Kişi bazlı yetki ver/al/listele** (`userPermissions`) | ✅ **YENİ** | `POST\|DELETE\|GET /api/auth/users/:userId/permissions` |
-| **Effective yetkileri görme** (self + yönetici) | ✅ **YENİ** | `GET /api/users/me/permissions` · `GET /api/admin/.../users/:userId/effective-permissions` |
-| **Rol silme / yetki silme** | ✅ **YENİ** | `DELETE /api/auth/roles/:roleId` · `DELETE /api/auth/permissions/:permissionId` (çekirdekler korumalı) |
-| **Role/yetkiye sahip olanları listeleme** | ✅ **YENİ** | `GET /api/auth/roles/:roleId/users` · `GET /api/auth/permissions/:permissionId/roles` |
-| Askıya alma → **anlık** erişim kesme (JWT) | ❌ (#7) | Hâlâ eksik — mimari karar; token süresi dolana dek erişim sürer |
-| Kullanıcı **silme** | ❌ (kasıtlı) | FK ağı nedeniyle desteklenmez → askıya al |
+| Şifre sıfırlama (geçici şifre) | ✅ | `POST /api/moderation/.../reset-password` |
+| Kullanıcıyı university_admin yap / geri al | ✅ | `PATCH /api/auth/users/:userId/promote-admin` / `demote-admin` |
+| Kullanıcıyı super_admin yap / geri al | ✅ | `PATCH /api/auth/users/:userId/promote-super-admin` / `demote-super-admin` |
+| Genel rol ata / kaldır / listele | ✅ | `POST\|DELETE\|GET /api/auth/users/:userId/roles` |
+| Kişi bazlı yetki ver/al/listele | ✅ | `POST\|DELETE\|GET /api/auth/users/:userId/permissions` |
+| Effective yetkileri görme | ✅ | `GET /api/users/me/permissions` · `GET .../effective-permissions` |
+| Rol / yetki CRUD + silme | ✅ | `/api/auth/roles`, `/api/auth/permissions` (+ DELETE, çekirdekler korumalı) |
+| Denetim izi görüntüleme | ✅ | `GET /api/audit/universities/:uid` (`audit.view`, cursor sayfalama) |
+| Askıya alma → anlık erişim kesme | ✅ | `attachAuthz` + `requireActiveUser` (authz cache'deki `status`) |
+| Kullanıcı **silme** | ❌ (kasıtlı) | FK ağı nedeniyle desteklenmez → ban/askı |
+| Logout / token revocation (tüm oturumlar) | ❌ | JWT stateless — bkz. GUVENLIK_YOL_HARITASI §1.3 |
 
-Kalan tek madde (#7) ve tüm uygulanan endpoint'lerin referansı:
+Uygulanan endpoint'lerin tarihsel öneri metinleri:
 [05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md).

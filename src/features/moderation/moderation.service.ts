@@ -1,6 +1,6 @@
 import { moderationRepository } from "./moderation.repository";
 import { ModerationAction } from "./moderation.types";
-import { BanUserDTO } from "./moderation.schema";
+import { BanUserDTO, AnonymizeUserDTO } from "./moderation.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
 import { invalidateUserPermissions } from "../../shared/rbac/rbac.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
@@ -17,7 +17,7 @@ import type { User } from "../admin/admin.types";
  *
  * Not: durum (status) authz cache'ine gömülüdür; her değişimden sonra
  * `invalidateUserPermissions` çağrılır ki askı/geri-alma bir sonraki istekte etkili
- * olsun (bkz. docs/yonetim/05 #7). Bildirimler notifySafe ile gönderilir: bildirim
+ * olsun (bkz. docs/design/05 #7). Bildirimler notifySafe ile gönderilir: bildirim
  * gidemedi diye moderasyon işlemi geri alınmaz.
  */
 export const moderationService = {
@@ -99,6 +99,52 @@ export const moderationService = {
     });
 
     return { temporaryPassword };
+  },
+
+  /**
+   * KVKK silme talebi → ANONİMLEŞTİRME. **Geri alınamaz.**
+   *
+   * Neden gerçek silme değil: kullanıcı satırı `auditLogs`, `announcements`,
+   * `clubGallery` ve moderasyon geçmişi tarafından aktör olarak referanslanır ve
+   * o FK'ler bilinçli olarak `restrict` — denetim izi, ilgilisinin talebiyle
+   * yok edilemez. Kimliği tanımlayan alanlar maskelenir, kayıtların bütünlüğü kalır.
+   *
+   * Maskeleme e-postası `.invalid` uzantısını kullanır (RFC 2606: asla gerçek bir
+   * alan adı olamaz), kullanıcı id'siyle tekilleştirilir ve küçük harflidir —
+   * `users_email_lowercase` CHECK'i ve tenant-başına tekillik index'i korunur.
+   *
+   * Şifre rastgele bir değere çevrilir: `deletedAt` kontrolünü bir gün biri
+   * atlarsa bile o hesaba girilebilecek bir parola kalmasın.
+   */
+  async anonymizeUser(universityId: string, userId: string, data: AnonymizeUserDTO, actorId: string) {
+    const user = await moderationRepository.findUserInTenant(universityId, userId);
+    if (!user) throw notFound("moderation.userNotFound");
+    if (actorId === userId) throw badRequest("moderation.cannotModerateSelf");
+    if (user.deletedAt) throw badRequest("moderation.alreadyAnonymized");
+
+    const updated = await moderationRepository.anonymize(userId, {
+      email: `silinmis-${userId}@anonim.invalid`,
+      passwordHash: await hashPassword(generatePassword(32)),
+      firstName: "Silinmiş",
+      lastName: "Kullanıcı",
+    });
+
+    // Geçmiş kaydı, maskeleme ÖNCESİ durumu değil talebin kendisini tutar:
+    // "kim, ne zaman, hangi gerekçeyle" — silinen kişisel veriyi burada yeniden
+    // saklamak anonimleştirmeyi anlamsız kılardı.
+    await moderationRepository.create({
+      userId,
+      actorId,
+      action: ModerationAction.ANONYMIZE,
+      reason: data.reason,
+      previousStatus: user.status,
+      newStatus: "suspended",
+    });
+    // Yetki cache'i: bu çağrı olmadan hesap 300 saniye daha yetkili kalırdı.
+    await invalidateUserPermissions(userId);
+
+    // Bildirim YOK: gidecek bir adres kalmadı ve hesap zaten kapatıldı.
+    return toSafeUser(updated as User);
   },
 
   /** Kullanıcının denetim (audit) aktivitesi — mevcut audit altyapısını yeniden kullanır. */

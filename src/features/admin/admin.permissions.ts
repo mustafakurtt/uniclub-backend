@@ -22,7 +22,7 @@ export type AdminPermission = (typeof AdminPermission)[keyof typeof AdminPermiss
 /**
  * Seed ve "tüm user yetkileri" gerektiren yerler için düz katalog. Okuma (view)
  * ile yazma (manage) bilinçli olarak ayrıldı ki salt-okunur roller (auditor)
- * tanımlanabilsin (bkz. docs/yonetim/06).
+ * tanımlanabilsin (bkz. docs/design/06).
  */
 export const ADMIN_PERMISSION_CATALOG: { key: AdminPermission; description: string }[] = [
   { key: AdminPermission.USER_VIEW, description: "Kullanıcıları görüntüleme (salt-okunur)" },

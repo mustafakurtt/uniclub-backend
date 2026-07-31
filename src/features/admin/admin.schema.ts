@@ -21,6 +21,22 @@ export const listClubsQuerySchema = z.object({
 });
 export type ListClubsQueryDTO = z.infer<typeof listClubsQuerySchema>;
 
+/**
+ * Kulüp kurma başvurusunun REDDİ — gerekçe zorunlu. Öğrenci neyi düzelteceğini
+ * bilmeden yeniden başvuramaz; gerekçesiz ret denetlenebilir bir karar değildir.
+ * Gerekçe `clubApplicationApprovals.note`'a yazılır.
+ */
+export const rejectApplicationSchema = z.object({
+  note: z.string().trim().min(10, "Ret gerekçesi en az 10 karakter olmalıdır.").max(1000),
+});
+export type RejectApplicationDTO = z.infer<typeof rejectApplicationSchema>;
+
+/** Onayda not opsiyoneldir (bilgi amaçlı). */
+export const approveApplicationSchema = z.object({
+  note: z.string().trim().max(1000).optional(),
+});
+export type ApproveApplicationDTO = z.infer<typeof approveApplicationSchema>;
+
 export const addAdvisorSchema = z.object({
   userId: z.string().uuid(),
 });

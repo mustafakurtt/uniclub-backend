@@ -12,8 +12,10 @@ export const moderationMessages = defineCatalog({
     "moderation.cannotModerateSelf": "Kendi hesabınız üzerinde bu işlemi yapamazsınız.",
     "moderation.alreadyBanned": "Kullanıcı zaten askıya alınmış.",
     "moderation.notBanned": "Kullanıcı askıda değil.",
+    "moderation.alreadyAnonymized": "Bu hesap zaten anonimleştirilmiş.",
     // başarı
     "moderation.banned": "Kullanıcı askıya alındı.",
+    "moderation.anonymized": "Hesap anonimleştirildi. Bu işlem geri alınamaz.",
     "moderation.unbanned": "Kullanıcının askısı kaldırıldı.",
     "moderation.passwordReset": "Kullanıcının şifresi sıfırlandı.",
     "moderation.activityListed": "Kullanıcı aktivitesi listelendi.",
@@ -25,8 +27,10 @@ export const moderationMessages = defineCatalog({
     "moderation.cannotModerateSelf": "You cannot perform this action on your own account.",
     "moderation.alreadyBanned": "User is already suspended.",
     "moderation.notBanned": "User is not suspended.",
+    "moderation.alreadyAnonymized": "This account has already been anonymized.",
     // success
     "moderation.banned": "User has been suspended.",
+    "moderation.anonymized": "Account anonymized. This action cannot be undone.",
     "moderation.unbanned": "User's suspension has been lifted.",
     "moderation.passwordReset": "User's password has been reset.",
     "moderation.activityListed": "User activity listed.",

@@ -96,40 +96,72 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
   }
 
   // ── clubMembers (bileşik anahtar → ham Drizzle) ──────────────────────────
-  /** Kulübün onaylı üyeleri (rol bilgisiyle) — dedike üye listesi endpoint'i için. */
+  /**
+   * Kulübün onaylı ve HÂLÂ ÜYE olanları. `leftAt: null` filtresi şart: ayrılma
+   * artık satırı silmiyor, işaretliyor (bkz. schema → clubMembers.leftAt).
+   * Bu filtreyi unutmak, ayrılmış üyeleri listede göstermek demektir.
+   */
   findApprovedMembers(clubId: string) {
     return db.query.clubMembers.findMany({
-      where: { clubId, status: "approved" },
+      where: { clubId, status: "approved", leftAt: { isNull: true } },
       with: { user: true },
       orderBy: { joinedAt: "asc" },
     });
   }
 
+  /** AKTİF üyelik (ayrılmışlar hariç) — yetki ve "zaten üyesin" kontrolleri için. */
   findMembership(clubId: string, userId: string) {
+    return db.query.clubMembers.findFirst({
+      where: { clubId, userId, leftAt: { isNull: true } },
+    });
+  }
+
+  /** Ayrılmışlar dahil ham satır — yeniden katılımda satırı geri diriltmek için. */
+  findMembershipRow(clubId: string, userId: string) {
     return db.query.clubMembers.findFirst({
       where: { clubId, userId },
     });
   }
 
-  async addMembership(clubId: string, userId: string, status: "approved" | "pending") {
-    const [inserted] = await db.insert(clubMembers).values({
-      clubId,
-      userId,
-      role: "member",
-      status,
-    }).returning();
-    return inserted;
+  // universityId zorunlu: satır hem kulübe hem kullanıcıya BİLEŞİK FK ile bağlı
+  // (bkz. db/schema.ts → clubMembers). Yanlış tenant verilirse DB reddeder.
+  async addMembership(
+    clubId: string,
+    userId: string,
+    universityId: string,
+    status: "approved" | "pending"
+  ) {
+    // Birincil anahtar (club_id, user_id) olduğu için daha önce ayrılmış bir üye
+    // için İKİNCİ satır açılamaz — o satır yeniden kullanılır (leftAt sıfırlanır,
+    // joinedAt yenilenir). Çoklu giriş-çıkış tarihçesinin neden tutulamadığı ve
+    // ne zaman çözüleceği için bkz. schema → clubMembers.leftAt.
+    const [row] = await db
+      .insert(clubMembers)
+      .values({ clubId, userId, universityId, role: "member", status })
+      .onConflictDoUpdate({
+        target: [clubMembers.clubId, clubMembers.userId],
+        set: { status, role: "member", leftAt: null, joinedAt: new Date() },
+      })
+      .returning();
+    return row;
   }
 
+  /**
+   * Üyelikten ayrılma. Satırı SİLMEZ, `leftAt` damgalar — geçmiş kaybolmasın
+   * (bkz. schema → clubMembers.leftAt). Reddedilen katılım isteklerinde de aynı
+   * yol kullanılır: "istek reddedildi" bilgisi de bir kayıttır.
+   */
   async removeMembership(clubId: string, userId: string) {
-    await db.delete(clubMembers).where(
-      and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, userId))
-    );
+    await db
+      .update(clubMembers)
+      .set({ leftAt: new Date() })
+      .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, userId)));
   }
 
+  /** Bekleyen katılım istekleri — vazgeçip ayrılanlar (leftAt dolu) hariç. */
   findPendingJoinRequests(clubId: string) {
     return db.query.clubMembers.findMany({
-      where: { clubId, status: "pending" },
+      where: { clubId, status: "pending", leftAt: { isNull: true } },
       with: { user: true },
     });
   }

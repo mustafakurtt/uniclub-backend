@@ -73,20 +73,21 @@ export const authRepository = {
   },
 
   /**
-   * E-posta doğrulama token'ını kaydeder (emailVerifications tablosu).
+   * E-posta doğrulama token'ının ÖZETİNİ kaydeder (emailVerifications tablosu).
+   * Düz token asla buraya gelmez — servis katmanı hash'leyip verir.
    */
-  async createEmailVerification(userId: string, token: string, expiresAt: Date) {
+  async createEmailVerification(userId: string, tokenHash: string, expiresAt: Date) {
     const [inserted] = await db.insert(schema.emailVerifications).values({
       userId,
-      token,
+      tokenHash,
       expiresAt,
     }).returning();
     return inserted;
   },
 
-  async findEmailVerificationByToken(token: string) {
+  async findEmailVerificationByTokenHash(tokenHash: string) {
     return await db.query.emailVerifications.findFirst({
-      where: { token },
+      where: { tokenHash },
     });
   },
 
@@ -202,7 +203,7 @@ export const authRepository = {
   },
 
   // ═══════════════════════════════════════════════
-  // KULLANICI ROLLERİ (genel atama — bkz. docs/yonetim/05 #3)
+  // KULLANICI ROLLERİ (genel atama — bkz. docs/design/05 #3)
   // ═══════════════════════════════════════════════
   async findRolesByUser(userId: string) {
     const rows = await db.query.userRoles.findMany({
@@ -254,7 +255,7 @@ export const authRepository = {
   },
 
   // ═══════════════════════════════════════════════
-  // KULLANICI BAZLI YETKİ OVERRIDE (userPermissions — bkz. docs/yonetim/05 #2)
+  // KULLANICI BAZLI YETKİ OVERRIDE (userPermissions — bkz. docs/design/05 #2)
   // ═══════════════════════════════════════════════
   async findUserPermissions(userId: string) {
     return await db.query.userPermissions.findMany({
@@ -295,7 +296,7 @@ export const authRepository = {
   },
 
   // ═══════════════════════════════════════════════
-  // ROL / YETKİ SİLME (FK bağları tek transaction'da — bkz. docs/yonetim/05 #5)
+  // ROL / YETKİ SİLME (FK bağları tek transaction'da — bkz. docs/design/05 #5)
   // ═══════════════════════════════════════════════
   /**
    * Rolü ve bağlarını siler: önce userRoles + rolePermissions (FK yaprakları),

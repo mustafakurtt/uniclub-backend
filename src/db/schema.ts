@@ -1,15 +1,41 @@
 import { pgTable as table, pgEnum } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
-import { softDeleteColumn } from "../core/db/base.entity";
+import { timestamps, softDeleteColumn } from "../core/db/base.entity";
 
 // ═══════════════════════════════════════════════
-// ORTAK KOLONLAR (spread ile her tabloya eklenir)
+// ORTAK KOLONLAR
 // ═══════════════════════════════════════════════
-export const baseTimestamps = {
-  createdAt: t.timestamp("created_at").defaultNow().notNull(),
-  updatedAt: t.timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
+// created_at/updated_at core'daki `timestamps`ten gelir (bkz. core/db/base.entity).
+// Daha önce burada ikinci bir kopya (`baseTimestamps`) vardı ve o kopya
+// timezone'suzdu — aynı tabloda `deleted_at` timestamptz iken `created_at`
+// timestamp oluyordu. Tek kaynağa indirildi: TÜM zaman kolonları timestamptz.
+
+/** Append-only tablolarda kullanılan tek kolon (satır güncellenmez → updated_at yok). */
+const createdAtColumn = {
+  createdAt: t.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 };
+
+/**
+ * Bileşik (çok kolonlu) yabancı anahtar — çapraz-tenant kilidinin aracı.
+ *
+ * NEDEN SARMALAYICI: drizzle'ın `foreignKey()` jeneriği `foreignColumns`'u
+ * eşlenmiş bir tip (`ColumnsWithTable<...>`) üzerinden çıkarmaya çalışıyor. Bu
+ * şemadaki bileşik FK'lerle birlikte tsc bellek taşırıyor
+ * ("FATAL ERROR: Zone Allocation failed - process out of memory") — yani
+ * `bun run typecheck` hiç bitmiyor. Sarmalayıcı imzayı düz `PgColumn[]`'a
+ * indirip o çıkarımı kesiyor.
+ *
+ * KAYIP: yalnızca "verilen `foreignColumns` gerçekten tek ve aynı tablodan mı"
+ * derleme zamanı kontrolü. Çalışma zamanı davranışı birebir aynı — `foreignKey`
+ * kolon nesnelerinin kendisini okur. Hata yaparsan sessizce geçmez ama tsc yerine
+ * bir adım sonra, `db:generate`/`db:migrate` aşamasında ortaya çıkar.
+ */
+const compositeForeignKey = (config: {
+  name: string;
+  columns: t.PgColumn[];
+  foreignColumns: t.PgColumn[];
+}) => t.foreignKey(config as never);
 
 // ═══════════════════════════════════════════════
 // UNIVERSITIES & DOMAINS (Tenant + çoklu domain desteği)
@@ -18,35 +44,46 @@ export const universities = table("universities", {
   id: t.uuid().primaryKey().defaultRandom(),
   name: t.varchar({ length: 256 }).notNull(),
   slug: t.varchar({ length: 256 }).notNull().unique(), // ileride SaaS subdomain için: xyz-universitesi.uygulaman.com
-  ...baseTimestamps,
+  ...timestamps,
   ...softDeleteColumn,
 });
 
 export const universityDomains = table("university_domains", {
   id: t.uuid().primaryKey().defaultRandom(),
-  universityId: t.uuid("university_id").references(() => universities.id).notNull(),
+  universityId: t.uuid("university_id")
+    .references(() => universities.id, { onDelete: "cascade" })
+    .notNull(),
   domain: t.varchar({ length: 256 }).notNull().unique(), // "ogrenci.xyz.edu.tr", "xyz.edu.tr" gibi birden fazla olabilir
   domainType: t.varchar("domain_type", { length: 50 }).default("student").notNull(),
-  ...baseTimestamps,
+  ...timestamps,
   ...softDeleteColumn,
-});
+}, (cols) => [
+  // Kayıt akışı tenant'ı e-postanın domain'inden bulur. Domain büyük harfle
+  // yazılırsa eşleşme kaçar ve "domain kayıtlı değil" hatası alınır. Uygulama
+  // katmanı küçük harfe çeviriyor; bu kısıt onu unutan bir yolu da kapatır.
+  t.check("university_domains_domain_lowercase", sql`${cols.domain} = lower(${cols.domain})`),
+]);
 
 // ═══════════════════════════════════════════════
 // FACULTIES & DEPARTMENTS (Üniversite > Fakülte > Bölüm)
 // ═══════════════════════════════════════════════
 export const faculties = table("faculties", {
   id: t.uuid().primaryKey().defaultRandom(),
-  universityId: t.uuid("university_id").references(() => universities.id).notNull(),
+  universityId: t.uuid("university_id")
+    .references(() => universities.id, { onDelete: "restrict" })
+    .notNull(),
   name: t.varchar({ length: 256 }).notNull(), // "Mühendislik Fakültesi"
-  ...baseTimestamps,
+  ...timestamps,
   ...softDeleteColumn,
 });
 
 export const departments = table("departments", {
   id: t.uuid().primaryKey().defaultRandom(),
-  facultyId: t.uuid("faculty_id").references(() => faculties.id).notNull(),
+  facultyId: t.uuid("faculty_id")
+    .references(() => faculties.id, { onDelete: "restrict" })
+    .notNull(),
   name: t.varchar({ length: 256 }).notNull(), // "Bilgisayar Mühendisliği"
-  ...baseTimestamps,
+  ...timestamps,
   ...softDeleteColumn,
 });
 // Not: departments.universityId kasıtlı olarak eklenmedi.
@@ -63,8 +100,9 @@ export const users = table("users", {
   // NULL = PLATFORM hesabı (super_admin, platform_support, ileride call_center vb.) —
   // hiçbir üniversiteye ait değildir, tenant scope'unu rolüyle bypass eder.
   // Öğrenci/personel hesaplarında her zaman doludur (kayıt e-posta domain'inden çıkarır).
-  universityId: t.uuid("university_id").references(() => universities.id),
-  departmentId: t.uuid("department_id").references(() => departments.id),
+  universityId: t.uuid("university_id").references(() => universities.id, { onDelete: "restrict" }),
+  // Bölüm silinirse kullanıcı hesabı ayakta kalır, yalnızca bölüm bağı düşer.
+  departmentId: t.uuid("department_id").references(() => departments.id, { onDelete: "set null" }),
 
   studentNumber: t.varchar("student_number", { length: 50 }), // hoca/adminlerde NULL olabilir
   email: t.varchar({ length: 256 }).notNull(),
@@ -80,7 +118,18 @@ export const users = table("users", {
   // Admin şifre sıfırlaması sonrası true; kullanıcı bir sonraki girişte şifresini
   // değiştirmeye zorlanır (moderation feature'ı set eder, self change-password sıfırlar).
   mustChangePassword: t.boolean("must_change_password").default(false).notNull(),
-  ...baseTimestamps,
+  ...timestamps,
+  // KVKK silme talebi = ANONİMLEŞTİRME (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §1.2).
+  // Satır fiziksel olarak silinmez: `auditLogs`, `announcements`, moderasyon
+  // geçmişi gibi KAYITLARIN aktörü olarak ayakta kalması gerekir (o FK'ler
+  // bilerek `restrict`). Bunun yerine kimliği tanımlayan alanlar maskelenir ve
+  // burası doldurulur. `deleted_at IS NOT NULL` = hesap silinmiş sayılır:
+  // giriş yapamaz, yetki taşımaz (bkz. shared/rbac/rbac.repository.ts).
+  //
+  // NOT: `user_status` enum'una "deleted" değeri EKLENMEDİ — Postgres'te
+  // `ALTER TYPE ... ADD VALUE` transaction içinde çalışmaz, drizzle migration'ları
+  // ise transaction içinde koşar. İşaret bu kolon.
+  ...softDeleteColumn,
 }, (cols) => [
   t.uniqueIndex("email_per_university_idx").on(cols.universityId, cols.email),
   t.uniqueIndex("student_number_per_university_idx").on(cols.universityId, cols.studentNumber),
@@ -90,6 +139,18 @@ export const users = table("users", {
   t.uniqueIndex("platform_user_email_idx")
     .on(cols.email)
     .where(sql`${cols.universityId} is null`),
+  // Yukarıdaki index'ler büyük/küçük harfe DUYARLIDIR: "Ali@x.edu.tr" ile
+  // "ali@x.edu.tr" iki ayrı satır olabilirdi (aynı kişi, iki hesap). E-posta
+  // uygulama katmanında küçük harfe çevriliyor; bu kısıt o adımı atlayan her
+  // yolu (seed, script, ileride eklenecek bir rota) sessizce geçmek yerine
+  // patlatır — yani tekilliği fiilen case-insensitive yapar.
+  t.check("users_email_lowercase", sql`${cols.email} = lower(${cols.email})`),
+  // Bileşik yabancı anahtarların hedefi (bkz. clubMembers/clubAdvisors).
+  // `id` zaten tekil olduğu için bu kısıt yeni bir kural getirmez — yalnızca
+  // "(kullanıcı, üniversitesi)" çiftini FK'lerin referans alabileceği bir hedef
+  // haline getirir. Platform hesaplarında university_id NULL'dur; MATCH SIMPLE
+  // gereği o satırlar hiçbir tenant-bağlı çocuk kayda eşleşemez — kasıtlı.
+  t.unique("users_id_university_unique").on(cols.id, cols.universityId),
 ]);
 
 // ═══════════════════════════════════════════════
@@ -101,13 +162,15 @@ export const users = table("users", {
 // action: pgEnum DEĞİL, varchar + ModerationAction katalog (yeni tip migration istemesin).
 export const userModerationActions = table("user_moderation_actions", {
   id: t.uuid().primaryKey().defaultRandom(),
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
-  actorId: t.uuid("actor_id").references(() => users.id).notNull(), // işlemi yapan yönetici
+  // restrict: moderasyon geçmişi bir kayıttır — ne hedefi ne de işlemi yapan
+  // silinerek yok edilebilmeli. Kullanıcı "silme" yolu anonimleştirmedir.
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "restrict" }).notNull(),
+  actorId: t.uuid("actor_id").references(() => users.id, { onDelete: "restrict" }).notNull(), // işlemi yapan yönetici
   action: t.varchar({ length: 50 }).notNull(),
   reason: t.text(),
   previousStatus: userStatusEnum("previous_status"),
   newStatus: userStatusEnum("new_status"),
-  createdAt: t.timestamp("created_at").defaultNow().notNull(),
+  ...createdAtColumn,
 }, (cols) => [
   t.index("moderation_user_created_idx").on(cols.userId, cols.createdAt.desc()),
 ]);
@@ -117,25 +180,32 @@ export const userModerationActions = table("user_moderation_actions", {
 // ═══════════════════════════════════════════════
 export const emailVerifications = table("email_verifications", {
   id: t.uuid().primaryKey().defaultRandom(),
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
-  token: t.varchar({ length: 128 }).notNull().unique(),
-  expiresAt: t.timestamp("expires_at").notNull(),
-  usedAt: t.timestamp("used_at"), // NULL = henüz kullanılmadı
-  ...baseTimestamps,
-});
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  // Token'ın KENDİSİ değil, SHA-256 özeti saklanır (64 hex karakter). Token bir
+  // kimlik bilgisidir: düz saklanırsa bir DB dump'ı ya da salt-okunur erişim,
+  // dolaşımdaki tüm doğrulama linklerini kullanılabilir hale getirir. Şifrede
+  // yapılanın aynısı. Düz token yalnızca maildeki linkte yaşar.
+  tokenHash: t.varchar("token_hash", { length: 64 }).notNull().unique(),
+  expiresAt: t.timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: t.timestamp("used_at", { withTimezone: true }), // NULL = henüz kullanılmadı
+  ...timestamps,
+}, (cols) => [
+  // Kullanıcının açık token'larını iptal etme (resend akışı) bu index'i kullanır.
+  t.index("email_verifications_user_idx").on(cols.userId),
+]);
 
 // ═══════════════════════════════════════════════
 // ROLES & PERMISSIONS (claim-based, iki katmanlı sistemin global katmanı)
 // ═══════════════════════════════════════════════
 /**
- * İleride (bkz. docs/yonetim/07): bölge (region) kapsamı eklenecekse yol şudur —
+ * İleride (bkz. docs/design/07): bölge (region) kapsamı eklenecekse yol şudur —
  * `regions` tablosu + `universities.regionId`, ve `userRoles`'a nullable
  * `scopeUniversityId` / `scopeRegionId` kolonları. Böylece AYNI rol, kullanıcıya
  * farklı kapsamlarda (tek okul / bölge / global) atanabilir. Bu tur kapsam dışı.
  */
 export const roles = table("roles", {
   id: t.uuid().primaryKey().defaultRandom(),
-  universityId: t.uuid("university_id").references(() => universities.id), // NULL = sistem geneli varsayılan rol
+  universityId: t.uuid("university_id").references(() => universities.id, { onDelete: "cascade" }), // NULL = sistem geneli varsayılan rol
   name: t.varchar({ length: 100 }).notNull(), // "student", "teacher", "admin"
   description: t.varchar({ length: 256 }),
   /**
@@ -146,28 +216,37 @@ export const roles = table("roles", {
    * DİKKAT: default 0'dır — yeni rol oluştururken rütbe bilinçli olarak set edilmelidir.
    */
   rank: t.integer().default(0).notNull(),
-  ...baseTimestamps,
-});
+  ...timestamps,
+}, (cols) => [
+  // Aynı tenant'ta iki tane "university_admin" olamaz: aksi halde effective
+  // permission ve rütbe çözümlemesi hangi satırı kastettiğimize göre değişirdi.
+  t.uniqueIndex("role_name_per_university_idx").on(cols.universityId, cols.name),
+  // Global şablon roller (university_id IS NULL) için yukarıdaki bileşik index
+  // yetmez — Postgres NULL'ları birbirinden farklı sayar (users'taki aynı tuzak).
+  t.uniqueIndex("global_role_name_idx")
+    .on(cols.name)
+    .where(sql`${cols.universityId} is null`),
+]);
 
 export const permissions = table("permissions", {
   id: t.uuid().primaryKey().defaultRandom(),
   key: t.varchar({ length: 100 }).notNull().unique(), // "club.approve", "announcement.create"
   description: t.varchar({ length: 256 }),
-  ...baseTimestamps,
+  ...timestamps,
 });
 
 export const rolePermissions = table("role_permissions", {
-  roleId: t.uuid("role_id").references(() => roles.id).notNull(),
-  permissionId: t.uuid("permission_id").references(() => permissions.id).notNull(),
-  ...baseTimestamps,
+  roleId: t.uuid("role_id").references(() => roles.id, { onDelete: "cascade" }).notNull(),
+  permissionId: t.uuid("permission_id").references(() => permissions.id, { onDelete: "cascade" }).notNull(),
+  ...timestamps,
 }, (cols) => [
   t.primaryKey({ columns: [cols.roleId, cols.permissionId] }),
 ]);
 
 export const userRoles = table("user_roles", {
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
-  roleId: t.uuid("role_id").references(() => roles.id).notNull(),
-  ...baseTimestamps,
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  roleId: t.uuid("role_id").references(() => roles.id, { onDelete: "cascade" }).notNull(),
+  ...timestamps,
 }, (cols) => [
   t.primaryKey({ columns: [cols.userId, cols.roleId] }),
   t.index("user_roles_user_id_idx").on(cols.userId),
@@ -175,10 +254,10 @@ export const userRoles = table("user_roles", {
 ]);
 
 export const userPermissions = table("user_permissions", {
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
-  permissionId: t.uuid("permission_id").references(() => permissions.id).notNull(),
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  permissionId: t.uuid("permission_id").references(() => permissions.id, { onDelete: "cascade" }).notNull(),
   granted: t.boolean().default(true).notNull(), // false = rolden gelen yetkiyi geri al
-  ...baseTimestamps,
+  ...timestamps,
 }, (cols) => [
   t.primaryKey({ columns: [cols.userId, cols.permissionId] }),
 ]);
@@ -191,7 +270,9 @@ export const joinPolicyEnum = pgEnum("join_policy", ["open", "approval_required"
 
 export const clubs = table("clubs", {
   id: t.uuid().primaryKey().defaultRandom(),
-  universityId: t.uuid("university_id").references(() => universities.id).notNull(),
+  universityId: t.uuid("university_id")
+    .references(() => universities.id, { onDelete: "restrict" })
+    .notNull(),
 
   name: t.varchar({ length: 256 }).notNull(),
   slug: t.varchar({ length: 256 }).notNull(), // "/clubs/robotik-kulubu"
@@ -202,34 +283,49 @@ export const clubs = table("clubs", {
   status: clubStatusEnum().default("pending").notNull(),
   joinPolicy: joinPolicyEnum("join_policy").default("open").notNull(), // kulübe göre açık/onaylı katılım
 
-  createdBy: t.uuid("created_by").references(() => users.id).notNull(),
-  ...baseTimestamps,
+  createdBy: t.uuid("created_by").references(() => users.id, { onDelete: "restrict" }).notNull(),
+  ...timestamps,
 }, (cols) => [
   t.uniqueIndex("slug_per_university_idx").on(cols.universityId, cols.slug),
+  t.index("clubs_created_by_idx").on(cols.createdBy), // "kurduğum kulüpler"
+  // Bileşik yabancı anahtarların hedefi — bkz. users'taki eşi.
+  t.unique("clubs_id_university_unique").on(cols.id, cols.universityId),
 ]);
 
 // Birden fazla danışman hoca desteği (many-to-many)
 export const clubAdvisors = table("club_advisors", {
-  clubId: t.uuid("club_id").references(() => clubs.id).notNull(),
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
-  ...baseTimestamps,
+  clubId: t.uuid("club_id").notNull(),
+  userId: t.uuid("user_id").notNull(),
+  // Tek kolonluk FK'ler yerine BİLEŞİK FK kullanılıyor (bkz. clubMembers).
+  universityId: t.uuid("university_id").notNull(),
+  ...timestamps,
 }, (cols) => [
   t.primaryKey({ columns: [cols.clubId, cols.userId] }),
-  t.index("club_advisors_club_id_idx").on(cols.clubId), // <-- EKLENDİ
-  t.index("club_advisors_user_id_idx").on(cols.userId), // <-- EKLENDİ
+  compositeForeignKey({
+    columns: [cols.clubId, cols.universityId],
+    foreignColumns: [clubs.id, clubs.universityId],
+    name: "club_advisors_club_tenant_fkey",
+  }).onDelete("cascade"),
+  compositeForeignKey({
+    columns: [cols.userId, cols.universityId],
+    foreignColumns: [users.id, users.universityId],
+    name: "club_advisors_user_tenant_fkey",
+  }).onDelete("cascade"),
+  t.index("club_advisors_club_id_idx").on(cols.clubId),
+  t.index("club_advisors_user_id_idx").on(cols.userId),
 ]);
 
 // Kulübün iletişim/sosyal medya linkleri (esnek, tek tek kolon değil)
-export const contactPlatformEnum = pgEnum("contact_platform", [
-  "whatsapp", "instagram", "discord", "telegram", "twitter", "website", "email", "other"
-]);
-
+// platform: pgEnum DEĞİL, bilinçli — bu liste sık büyür (linkedin, youtube,
+// tiktok...) ve her yeni platform için migration üretmek istemiyoruz. Typo
+// güvenliğini kod tarafındaki `clubs.types.ts` → ContactPlatform (as const)
+// katalogu sağlar (aynı kalıp: notifications.type, audit_logs.action).
 export const clubContactLinks = table("club_contact_links", {
   id: t.uuid().primaryKey().defaultRandom(),
-  clubId: t.uuid("club_id").references(() => clubs.id).notNull(),
-  platform: contactPlatformEnum().notNull(),
+  clubId: t.uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }).notNull(),
+  platform: t.varchar({ length: 32 }).notNull(),
   url: t.varchar({ length: 512 }).notNull(),
-  ...baseTimestamps,
+  ...timestamps,
 }, (cols) => [
   t.uniqueIndex("club_platform_idx").on(cols.clubId, cols.platform),
 ]);
@@ -240,16 +336,63 @@ export const clubContactLinks = table("club_contact_links", {
 export const clubRoleEnum = pgEnum("club_role", ["member", "officer", "president"]);
 export const membershipStatusEnum = pgEnum("membership_status", ["pending", "approved", "rejected"]);
 
+/**
+ * ÇAPRAZ-TENANT KİLİDİ (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §1.1)
+ *
+ * Bu tablo eskiden yalnızca (club_id, user_id) tutuyordu. O halde A üniversitesindeki
+ * bir kullanıcıyı B üniversitesinin kulübüne yazan bir servis hatası, veritabanı
+ * seviyesinde TAMAMEN GEÇERLİ bir satırdı — tek savunma uygulama katmanıydı.
+ *
+ * Çözüm: satır kendi `university_id`'sini taşır ve İKİ bileşik yabancı anahtarla
+ * hem kulübe hem kullanıcıya bağlanır. İkisi de aynı `university_id` kolonunu
+ * kullandığı için Postgres şunu zorunlu kılar:
+ *
+ *     kulübün üniversitesi == satırın üniversitesi == kullanıcının üniversitesi
+ *
+ * Yani çapraz-tenant üyelik artık YAZILAMAZ; servis hatası 500 değil, kısıt ihlali
+ * olarak DB'de durur. `university_id` burada denormalizasyon değil, kilidin kendisidir.
+ *
+ * Yan etki (kasıtlı): platform hesaplarının `university_id`'si NULL olduğu için
+ * (super_admin, platform_support) hiçbir kulübe üye/danışman olamazlar.
+ */
 export const clubMembers = table("club_members", {
-  clubId: t.uuid("club_id").references(() => clubs.id).notNull(),
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
+  clubId: t.uuid("club_id").notNull(),
+  userId: t.uuid("user_id").notNull(),
+  universityId: t.uuid("university_id").notNull(),
 
   role: clubRoleEnum().default("member").notNull(),
   status: membershipStatusEnum().default("pending").notNull(), // clubs.joinPolicy'ye göre app katmanında set edilir
 
-  joinedAt: t.timestamp("joined_at").defaultNow().notNull(),
+  joinedAt: t.timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
+  /**
+   * Üyelikten ayrılma anı. NULL = hâlâ üye.
+   *
+   * Ayrılma artık satırı SİLMİYOR: silinirse "geçen dönem kim üyeydi", "kaç kişi
+   * ayrıldı" gibi sorular kalıcı olarak cevapsız kalır — kulübün okula/danışmana
+   * verdiği faaliyet raporunun ham verisi budur.
+   *
+   * BİLİNEN SINIR: birincil anahtar hâlâ (club_id, user_id) olduğu için bir kişi
+   * aynı kulüpten ayrılıp tekrar katılırsa AYNI satır yeniden kullanılır — yani
+   * yalnızca EN SON ayrılış saklanır, çoklu giriş-çıkış döngüsü tutulamaz. Tam
+   * tarihçe için birincil anahtarın vekil (surrogate) bir `id`ye çevrilip
+   * "(club_id, user_id) WHERE left_at IS NULL" kısmi tekillik index'ine geçmesi
+   * gerekir. Bu bilinçli olarak ERTELENDİ: asıl değerini dönem (academic term)
+   * kavramıyla kazanacak, o yüzden Tier 3.3 ile birlikte yapılmalı.
+   */
+  leftAt: t.timestamp("left_at", { withTimezone: true }),
+  ...timestamps,
 }, (cols) => [
   t.primaryKey({ columns: [cols.clubId, cols.userId] }),
+  compositeForeignKey({
+    columns: [cols.clubId, cols.universityId],
+    foreignColumns: [clubs.id, clubs.universityId],
+    name: "club_members_club_tenant_fkey",
+  }).onDelete("cascade"),
+  compositeForeignKey({
+    columns: [cols.userId, cols.universityId],
+    foreignColumns: [users.id, users.universityId],
+    name: "club_members_user_tenant_fkey",
+  }).onDelete("cascade"),
   t.index("club_members_club_id_idx").on(cols.clubId),
   t.index("club_members_user_id_idx").on(cols.userId),
 ]);
@@ -259,33 +402,59 @@ export const clubMembers = table("club_members", {
 // ═══════════════════════════════════════════════
 export const clubGallery = table("club_gallery", {
   id: t.uuid().primaryKey().defaultRandom(),
-  clubId: t.uuid("club_id").references(() => clubs.id).notNull(),
+  clubId: t.uuid("club_id").notNull(),
+  // Kulüp tarafı bileşik FK ile kilitli (bkz. clubMembers). YÜKLEYEN tarafında
+  // bileşik FK YOK: `uploadedBy` zaten kulüp üyeliğiyle sınırlanıyor ve buraya
+  // bir tenant kilidi koymak, platform hesaplarının içerik girmesini KALICI
+  // olarak yasaklardı — bu bir ürün kararı, sessizce şemaya gömülmemeli.
+  universityId: t.uuid("university_id").notNull(),
   imageUrl: t.varchar("image_url", { length: 512 }).notNull(),
   caption: t.varchar({ length: 256 }),
-  uploadedBy: t.uuid("uploaded_by").references(() => users.id).notNull(),
-  ...baseTimestamps,
-});
+  uploadedBy: t.uuid("uploaded_by").references(() => users.id, { onDelete: "restrict" }).notNull(),
+  ...timestamps,
+}, (cols) => [
+  compositeForeignKey({
+    columns: [cols.clubId, cols.universityId],
+    foreignColumns: [clubs.id, clubs.universityId],
+    name: "club_gallery_club_tenant_fkey",
+  }).onDelete("cascade"),
+  // Kulüp detay sayfasının galeri sorgusu.
+  t.index("club_gallery_club_idx").on(cols.clubId, cols.createdAt.desc()),
+]);
 
 // ═══════════════════════════════════════════════
 // ANNOUNCEMENTS (şimdilik sadece kulüp bazlı)
 // ═══════════════════════════════════════════════
 export const announcements = table("announcements", {
   id: t.uuid().primaryKey().defaultRandom(),
-  universityId: t.uuid("university_id").references(() => universities.id).notNull(), // hızlı sorgu için denormalize
-  clubId: t.uuid("club_id").references(() => clubs.id).notNull(), // ileride okul geneli için nullable'a çevrilebilir
+  universityId: t.uuid("university_id")
+    .references(() => universities.id, { onDelete: "restrict" })
+    .notNull(), // hızlı sorgu için denormalize
+  clubId: t.uuid("club_id").notNull(), // ileride okul geneli için nullable'a çevrilebilir
 
-  authorId: t.uuid("author_id").references(() => users.id).notNull(),
+  authorId: t.uuid("author_id").references(() => users.id, { onDelete: "restrict" }).notNull(),
   title: t.varchar({ length: 256 }).notNull(),
   content: t.text().notNull(),
-  ...baseTimestamps,
-});
+  ...timestamps,
+}, (cols) => [
+  // Denormalize `university_id` kulübünkiyle SAPABİLİRDİ (iki ayrı tekil FK
+  // birbirini kontrol etmez). Bileşik FK ikisini birbirine kilitler; yazar
+  // tarafı bilinçli olarak serbest (bkz. clubGallery'deki aynı gerekçe).
+  compositeForeignKey({
+    columns: [cols.clubId, cols.universityId],
+    foreignColumns: [clubs.id, clubs.universityId],
+    name: "announcements_club_tenant_fkey",
+  }).onDelete("cascade"),
+  // Kulüp detay sayfasının duyuru akışı (en yeniden eskiye) — en sık çağrılan okuma.
+  t.index("announcements_club_created_idx").on(cols.clubId, cols.createdAt.desc()),
+]);
 
 // ═══════════════════════════════════════════════
 // NOTIFICATIONS (kalıcı bildirimler + gerçek zamanlı WS teslimatı)
 // ═══════════════════════════════════════════════
 export const notifications = table("notifications", {
   id: t.uuid().primaryKey().defaultRandom(),
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
 
   // pgEnum DEĞİL, bilinçli: bildirim tipleri sık sık eklenir ve her yeni tip
   // için migration üretmek istemiyoruz. Typo güvenliğini kod tarafındaki
@@ -298,8 +467,8 @@ export const notifications = table("notifications", {
   // Derin link (deep link) için serbest yük: { clubId, applicationId, ... }
   data: t.jsonb().$type<Record<string, unknown>>(),
 
-  readAt: t.timestamp("read_at"), // NULL = okunmamış
-  ...baseTimestamps,
+  readAt: t.timestamp("read_at", { withTimezone: true }), // NULL = okunmamış
+  ...timestamps,
 }, (cols) => [
   // Kullanıcının bildirim akışı (en yeniden eskiye) — keyset sayfalama bunu kullanır.
   t.index("notifications_user_created_idx").on(cols.userId, cols.createdAt.desc()),
@@ -318,11 +487,11 @@ export const notifications = table("notifications", {
 // endpoint = cihazın benzersiz kimliği (UNIQUE → aynı cihaz tek satır, re-subscribe upsert).
 export const pushSubscriptions = table("push_subscriptions", {
   id: t.uuid().primaryKey().defaultRandom(),
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   endpoint: t.text().notNull().unique(),
   p256dh: t.text().notNull(), // istemci public anahtarı (payload şifreleme)
   auth: t.text().notNull(),   // istemci auth secret'ı
-  ...baseTimestamps,
+  ...timestamps,
 }, (cols) => [
   // Bir kullanıcının tüm cihazları (bildirim gönderiminde list, çıkışta delete).
   t.index("push_subscriptions_user_idx").on(cols.userId),
@@ -336,29 +505,54 @@ export const applicationApprovalStatusEnum = pgEnum("application_approval_status
 
 export const clubApplications = table("club_applications", {
   id: t.uuid().primaryKey().defaultRandom(),
-  universityId: t.uuid("university_id").references(() => universities.id).notNull(),
+  universityId: t.uuid("university_id")
+    .references(() => universities.id, { onDelete: "restrict" })
+    .notNull(),
 
   proposedName: t.varchar("proposed_name", { length: 256 }).notNull(),
   description: t.text(),
-  applicantId: t.uuid("applicant_id").references(() => users.id).notNull(),
+  applicantId: t.uuid("applicant_id").notNull(),
 
   status: applicationStatusEnum().default("pending").notNull(), // özet durum, approvals adımlarından türetilir
-  ...baseTimestamps,
-});
+  ...timestamps,
+}, (cols) => [
+  // Başvuran, başvurduğu üniversitenin kullanıcısı OLMAK ZORUNDA. Akış zaten
+  // `requireTenant()` ile korunuyor (bkz. clubs/routes/applications.routes.ts),
+  // bu kısıt onu DB'de kalıcı kılar.
+  // Not: `clubApplicationApprovals.approverId` bilinçli olarak kilitlenmedi —
+  // bir platform hesabının (super_admin) onay adımına düşmesi meşru bir senaryo.
+  compositeForeignKey({
+    columns: [cols.applicantId, cols.universityId],
+    foreignColumns: [users.id, users.universityId],
+    name: "club_applications_applicant_tenant_fkey",
+  }).onDelete("restrict"),
+  // Yönetim panelindeki başvuru listesi (tenant + duruma göre filtre).
+  t.index("club_applications_university_status_idx").on(cols.universityId, cols.status),
+  // "Başvurularım".
+  t.index("club_applications_applicant_idx").on(cols.applicantId),
+]);
 
 // Her onay adımı ayrı bir satır. Şimdilik tek adım (step: 1) kullanılacak,
 // ileride SKS gibi ikinci bir onay eklemek için sadece step: 2 satırı eklenir — şema değişmez.
 export const clubApplicationApprovals = table("club_application_approvals", {
   id: t.uuid().primaryKey().defaultRandom(),
-  applicationId: t.uuid("application_id").references(() => clubApplications.id).notNull(),
+  applicationId: t.uuid("application_id")
+    .references(() => clubApplications.id, { onDelete: "cascade" })
+    .notNull(),
 
   step: t.integer().notNull(), // 1: danışman, 2: SKS (ileride)...
   approverRole: t.varchar("approver_role", { length: 100 }), // bilgi amaçlı: "advisor", "sks_officer"
-  approverId: t.uuid("approver_id").references(() => users.id), // gerçekte onaylayan kişi
+  approverId: t.uuid("approver_id").references(() => users.id, { onDelete: "set null" }), // gerçekte onaylayan kişi
 
   status: applicationApprovalStatusEnum().default("pending").notNull(),
-  reviewedAt: t.timestamp("reviewed_at"),
-  ...baseTimestamps,
+  /**
+   * Karar gerekçesi. Reddederken ZORUNLU (API katmanında): öğrenci başvurusunun
+   * neden reddedildiğini bilmeden düzeltip yeniden başvuramaz — ve gerekçesiz
+   * ret, denetlenebilir bir karar değildir. Onayda serbest (opsiyonel not).
+   */
+  note: t.text(),
+  reviewedAt: t.timestamp("reviewed_at", { withTimezone: true }),
+  ...timestamps,
 }, (cols) => [
   t.uniqueIndex("application_step_idx").on(cols.applicationId, cols.step),
 ]);
@@ -370,11 +564,13 @@ export const clubApplicationApprovals = table("club_application_approvals", {
 // Kayıtlar guard() zincirindeki auditTrail tarafından otomatik yazılır
 // (bkz. core/rbac/audit-hook.ts + features/audit/audit.sink.ts).
 // Append-only: satır asla güncellenmez → updatedAt bilinçli olarak YOK.
+// FK'ler restrict: denetim izi bir kayıttır, başka bir satırın silinmesinin
+// yan etkisiyle kaybolamaz/anonimleşemez.
 export const auditLogs = table("audit_logs", {
   id: t.uuid().primaryKey().defaultRandom(),
   // null = platform seviyesi işlem (tenant'sız super_admin aksiyonu, örn. üniversite oluşturma).
-  universityId: t.uuid("university_id").references(() => universities.id),
-  actorId: t.uuid("actor_id").references(() => users.id).notNull(),
+  universityId: t.uuid("university_id").references(() => universities.id, { onDelete: "restrict" }),
+  actorId: t.uuid("actor_id").references(() => users.id, { onDelete: "restrict" }).notNull(),
 
   // İşlemin yetki anahtarı ("user.manage", "club.approve"...) — permission key ile aynı uzay.
   // pgEnum DEĞİL (notifications.type ile aynı gerekçe): yeni anahtar migration istememeli.
@@ -390,7 +586,7 @@ export const auditLogs = table("audit_logs", {
   metadata: t.jsonb().$type<Record<string, unknown>>(),
   ip: t.varchar({ length: 64 }),
 
-  createdAt: t.timestamp("created_at").defaultNow().notNull(),
+  ...createdAtColumn,
 }, (cols) => [
   // Tenant'ın denetim akışı (en yeniden eskiye) — keyset sayfalama bunu kullanır.
   t.index("audit_logs_university_created_idx").on(cols.universityId, cols.createdAt.desc()),

@@ -118,7 +118,16 @@ export const clubsService = {
     }
 
     const status = club.joinPolicy === "open" ? "approved" : "pending";
-    const membership = await clubsRepository.addMembership(clubId, userId, status);
+    // Tenant, KULÜBÜN kaydından alınır (çağırandan değil): `findClubInUniversity`
+    // zaten kulübün bu tenant'ta olduğunu doğruladı, dolayısıyla ikisi eşit —
+    // ama kaynağı kulüp yapmak, bileşik FK'nin beklediği değeri tek doğru
+    // yerden okumak demek (bkz. db/schema.ts → clubMembers).
+    const membership = await clubsRepository.addMembership(
+      clubId,
+      userId,
+      club.universityId,
+      status
+    );
     // Yalnızca "approved" (open policy) üye listesini/profili değiştirir; pending değil.
     if (status === "approved") {
       await clubsCache.invalidateMembership(clubId);

@@ -9,6 +9,8 @@ export const ModerationAction = {
   BAN: "ban",
   UNBAN: "unban",
   PASSWORD_RESET: "password_reset",
+  /** KVKK silme talebi — geri alınamaz (bkz. moderationService.anonymizeUser). */
+  ANONYMIZE: "anonymize",
 } as const;
 
 export type ModerationAction = (typeof ModerationAction)[keyof typeof ModerationAction];

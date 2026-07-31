@@ -16,7 +16,27 @@ export type ClubContactLink = InferSelectModel<typeof clubContactLinks>;
 export type ClubApplication = InferSelectModel<typeof clubApplications>;
 export type ClubApplicationApproval = InferSelectModel<typeof clubApplicationApprovals>;
 
-export type ContactPlatform = ClubContactLink["platform"];
+/**
+ * İletişim platformu katalogu. DB'de `varchar` tutulur (pgEnum DEĞİL) çünkü bu
+ * liste sık büyür — yeni bir sosyal ağ eklemek migration gerektirmemeli. Typo
+ * güvenliğini bu `as const` katalog sağlar; DB asıl kaynak olmaya devam eder.
+ * (Aynı kalıp: notifications.types.ts → NotificationType.)
+ */
+export const CONTACT_PLATFORMS = [
+  "whatsapp",
+  "instagram",
+  "discord",
+  "telegram",
+  "twitter",
+  "linkedin",
+  "youtube",
+  "tiktok",
+  "website",
+  "email",
+  "other",
+] as const;
+
+export type ContactPlatform = (typeof CONTACT_PLATFORMS)[number];
 
 export interface CreateClubApplicationPayload {
   proposedName: string;

@@ -26,9 +26,12 @@ class GalleryRepository extends BaseRepository<typeof clubGallery, typeof db.que
     return this.findOne({ id: imageId, clubId });
   }
 
-  add(clubId: string, uploadedBy: string, data: CreateGalleryImagePayload) {
+  // universityId zorunlu: (club_id, university_id) bileşik FK ile kulübe kilitli
+  // (bkz. db/schema.ts → clubGallery). Değer kulübün kaydından okunmalı.
+  add(clubId: string, universityId: string, uploadedBy: string, data: CreateGalleryImagePayload) {
     return this.create({
       clubId,
+      universityId,
       uploadedBy,
       imageUrl: data.imageUrl,
       caption: data.caption,

@@ -47,7 +47,7 @@ export const PERMISSION_CATALOG: { key: string; description: string }[] = [
 ];
 
 /**
- * Global rol → yetki demetleri (kurumsal model, bkz. docs/yonetim/06 §B4).
+ * Global rol → yetki demetleri (kurumsal model, bkz. docs/design/06 §B4).
  * super_admin BURADA yok — tüm yetkileri ayrıca alır.
  */
 export const ROLE_BUNDLES: Record<string, string[]> = {

@@ -1,8 +1,8 @@
 # 01 — Kullanıcı Yönetimi
 
-Yönetim panelinin "Kullanıcılar" sekmesi. Bu işlevlerin tamamı `user.manage`
-yetkisiyle ve **tenant-scoped** olarak çalışır (admin kendi üniversitesi,
-super_admin herhangi bir üniversite).
+Yönetim panelinin "Kullanıcılar" sekmesi. Listeleme/görüntüleme `user.view`,
+mutasyonlar (bölüm, ban/unban) `user.manage` ile **tenant-scoped** çalışır
+(`university_admin` kendi üniversitesi, `super_admin`/`platform_support` çapraz-tenant).
 
 > İlgili kaynaklar: `admin.routes.ts`, `admin.service.ts`, `admin.repository.ts`,
 > `admin.schema.ts`, `shared/utils/user.util.ts` (`toSafeUser`).
@@ -35,13 +35,12 @@ davranışını etkiler.
 
 ## 1. Kullanıcıları listeleme
 
-`GET /api/admin/universities/:universityId/users?status=<pending|active|suspended>`
-· yetki: `user.manage` · tenant-scoped
+`GET /api/admin/universities/:universityId/users?status=<pending|active|suspended>&role=<rolAdı>`
+· yetki: `user.view` · tenant-scoped
 
 - `status` opsiyonel filtre; verilmezse tüm kullanıcılar.
-- Dönen her kayıt **safe user**'dır (`passwordHash` yok). **Roller/yetkiler
-  dahil DEĞİLDİR** — düz kolonlar döner (`admin.repository.findUsersByUniversity`
-  `with` kullanmıyor).
+- Dönen her kayıt **safe user** + `roles` dizisidir (`passwordHash` yok).
+  `?role=` ile global rol adına göre filtre (`admin.repository.findUsersByUniversity`).
 
 ```jsonc
 // data: [ ... ]
@@ -92,41 +91,47 @@ davranışını etkiler.
 
 ## 3. Kullanıcı durumu (status) yaşam döngüsü
 
-`PATCH /api/admin/universities/:universityId/users/:userId/status`
-· body: `{ "status": "pending" | "active" | "suspended" }` · yetki: `user.manage`
+Durum değişikliği (ban/unban) **`/api/moderation`** altındadır — eski
+`PATCH .../users/:userId/status` endpoint'i kaldırıldı.
+
+| İşlem | Endpoint | Yetki | Body |
+|---|---|---|---|
+| Askıya al (ban) | `POST /api/moderation/universities/:uid/users/:userId/ban` | `user.manage` | `{ "reason": "string (3-500)" }` |
+| Askıyı kaldır (unban) | `POST .../unban` | `user.manage` | — |
 
 `user_status` enum'u ve davranışları:
 
 | status | Anlamı | Login? | Nasıl oluşur |
 |---|---|:---:|---|
 | `pending` | Mail onayı bekliyor | ✅ (bilinçli, şimdilik serbest) | Kayıt anında |
-| `active` | Aktif | ✅ | Mail doğrulama **veya** admin elle yapar |
-| `suspended` | Askıya alınmış | ❌ (login `401`) | Admin elle yapar |
+| `active` | Aktif | ✅ | Mail doğrulama veya unban |
+| `suspended` | Askıya alınmış | ❌ (login `401`) | Moderation ban |
 
-Geçişler serbesttir (herhangi bir durumdan herhangi birine); backend ek kural
-koymaz — yalnızca kullanıcının varlığını doğrular, yoksa `404`.
+Ban/unban `userModerationActions` tablosuna sebepli kayıt düşer; geçmiş
+`GET .../moderation-history` ile okunur (`user.view`).
 
 **Senaryolar**
 - **S3.1 — Manuel aktivasyon:** `pending` bir kullanıcıyı admin mail beklemeden
   `active` yapar (örn. mail ulaşmadı). Bu, e-posta doğrulama akışını **atlar**
   ama `emailVerifications` satırı `usedAt: null` kalır (temizlenmez) — zararsız,
   token yine de 24 saatte sona erer.
-- **S3.2 — Askıya alma (disiplin):** admin bir öğrenciyi `suspended` yapar →
-  bir sonraki login denemesinde `"Hesabınız askıya alınmıştır. Lütfen SKS
-  birimiyle iletişime geçin."` (401). **Mevcut token'ı anında geçersiz KILMAZ**
-  (JWT stateless); kullanıcı çıkış yapana/oturumu bitene kadar erişebilir.
-  Kesin/anlık engelleme gerekiyorsa bu bir eksiktir — [05](05-eksikler-ve-onerilen-endpointler.md).
-- **S3.3 — Askıdan alma:** `suspended` → `active` geri getirir.
+- **S3.2 — Askıya alma (disiplin):** `university_admin` ban endpoint'ini çağırır
+  → login denemesi `401`; **mevcut oturum** bir sonraki istekte `403` alır
+  (`attachAuthz` / `requireActiveUser`, authz cache'deki `status`). JWT hâlâ
+  geçerlidir ama korunan yüzeylere erişemez. Tam token iptali (logout/şifre
+  değişimi tüm oturumları öldürsün) henüz yok — bkz.
+  [GUVENLIK_YOL_HARITASI.md §1.3](../GUVENLIK_YOL_HARITASI.md).
+- **S3.3 — Askıdan alma:** `POST .../unban` → `status: active`.
 - **S3.4 — İlişkisel kritik nokta:** Askıya alınan kullanıcı bir **kulüp
   başkanıysa** (`clubMembers.role: president`), bu satır **silinmez/değişmez**.
   Global durum ile kulüp içi rol bağımsızdır (KATMAN A vs B). Yani askıdaki
   başkan login olamaz ama kulüp hâlâ onu başkan olarak taşır. Başkanlığı
   devretmek KATMAN B'nin (kulüp yönetimi) işidir, bu panelin değil. Bir
   başkanı görevden almak isteniyorsa süreç ayrıdır — panelde uyarı gösterin.
-- **S3.5 — Kendini askıya alma riski:** Backend, admin'in **kendi hesabını**
-  ya da başka bir admin'i `suspended` yapmasını engellemez. UI seviyesinde
-  "kendini/aynı yetkideki birini askıya alma" için onay/uyarı koyun (backend
-  kısıtı için [05](05-eksikler-ve-onerilen-endpointler.md)).
+- **S3.5 — Kendini askıya alma:** `moderationService.banUser` aktörün kendi
+  `userId`'sine ban atmayı reddeder (`400` — `moderation.cannotModerateSelf`).
+  Eşit/üst rütbeli kullanıcıya dokunma `auth.service` rütbe kurallarıyla
+  ayrıca korunur (bkz. [07](07-rutbe-ve-kapsam.md)).
 
 ---
 

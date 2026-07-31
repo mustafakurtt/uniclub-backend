@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+/**
+ * E-posta domain'i — HER ZAMAN küçük harfe indirgenir. Kayıt akışı tenant'ı
+ * kullanıcının e-posta domain'inden bulur; burada "STD.Antalya.edu.tr" gibi bir
+ * satır yazılırsa eşleşme kaçar ve o okulun öğrencileri kayıt olamaz.
+ * DB tarafında da `university_domains_domain_lowercase` CHECK'i ile korunur.
+ */
+const domainField = z.string().trim().toLowerCase().min(3).max(256);
+
 // ═══════════════════════════════════════════════
 // ÜNİVERSİTE
 // ═══════════════════════════════════════════════
@@ -12,7 +20,7 @@ export const createUniversitySchema = z.object({
   name: z.string().min(2).max(256),
   slug: z.string().min(2).max(256),
   domains: z.array(z.object({
-    domain: z.string().min(3).max(256),
+    domain: domainField,
     domainType: z.enum(["student", "staff"]),
   })).min(1, "En az bir domain girilmelidir."),
 });
@@ -30,13 +38,13 @@ export type UpdateUniversityDTO = z.infer<typeof updateUniversitySchema>;
 // DOMAIN
 // ═══════════════════════════════════════════════
 export const addDomainSchema = z.object({
-  domain: z.string().min(3).max(256),
+  domain: domainField,
   domainType: z.enum(["student", "staff"]),
 });
 export type AddDomainDTO = z.infer<typeof addDomainSchema>;
 
 export const updateDomainSchema = z.object({
-  domain: z.string().min(3).max(256).optional(),
+  domain: domainField.optional(),
   domainType: z.enum(["student", "staff"]).optional(),
 }).refine((data) => Object.keys(data).length > 0, {
   message: "Güncellenecek en az bir alan girilmelidir.",

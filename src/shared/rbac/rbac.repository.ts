@@ -26,6 +26,15 @@ export const rbacRepository = {
       return { roles: [], permissions: [], maxRank: 0 };
     }
 
+    // Anonimleştirilmiş (KVKK silme talebi) hesap: satır duruyor ama hesap yok
+    // sayılır. Tek bir yerden kapatmak, her rotaya ayrı kontrol eklemekten
+    // güvenlidir — burası `attachAuthz` ve `requireActiveUser`'ın ORTAK kaynağı,
+    // dolayısıyla "suspended" dönmek zaten var olan 403 yolunu tetikler; rol ve
+    // izinleri de boşaltmak, o yol bir gün gevşerse ikinci savunma olur.
+    if (user.deletedAt) {
+      return { roles: [], permissions: [], status: "suspended", maxRank: 0 };
+    }
+
     const roleNames = user.roles.map((role) => role.name);
     const status = user.status;
     // Rolsüz kullanıcıda Math.max(...[]) === -Infinity olurdu; 0 tabanı bunu engeller.

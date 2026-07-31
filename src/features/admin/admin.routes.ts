@@ -15,6 +15,8 @@ import {
   listClubApplicationsQuerySchema,
   listClubsQuerySchema,
   addAdvisorSchema,
+  approveApplicationSchema,
+  rejectApplicationSchema,
   updateClubSchema,
   updateUserDepartmentSchema,
 } from "./admin.schema";
@@ -108,22 +110,26 @@ adminRoutes.get(
 adminRoutes.patch(
   "/universities/:universityId/club-applications/:applicationId/approve",
   ...guard(ClubPermission.APPROVE, { tenantScoped: true }),
+  validate("json", approveApplicationSchema),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
     const actor = c.get("user");
-    const result = await adminService.approveClubApplication(universityId, applicationId, actor.userId);
+    const { note } = c.req.valid("json");
+    const result = await adminService.approveClubApplication(universityId, applicationId, actor.userId, note);
     return ok(c, result, "admin.applicationApproved");
   }
 );
 
-// 6. KULÜP BAŞVURUSUNU REDDETME
+// 6. KULÜP BAŞVURUSUNU REDDETME (gerekçe zorunlu)
 adminRoutes.patch(
   "/universities/:universityId/club-applications/:applicationId/reject",
   ...guard(ClubPermission.APPROVE, { tenantScoped: true }),
+  validate("json", rejectApplicationSchema),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
     const actor = c.get("user");
-    const result = await adminService.rejectClubApplication(universityId, applicationId, actor.userId);
+    const { note } = c.req.valid("json");
+    const result = await adminService.rejectClubApplication(universityId, applicationId, actor.userId, note);
     return ok(c, result, "admin.applicationRejected");
   }
 );
@@ -217,7 +223,7 @@ adminRoutes.delete(
 );
 
 // ═══════════════════════════════════════════════
-// TENANT MODERASYON — kulüp içeriğine üstten müdahale (bkz. docs/yonetim/06 §A6)
+// TENANT MODERASYON — kulüp içeriğine üstten müdahale (bkz. docs/design/06 §A6)
 // Kulüp-içi katman (officer/president/advisor) korunur; bunlar tenant yöneticisinin
 // HERHANGİ bir kulüpte kullanabildiği override yetkileridir.
 // ═══════════════════════════════════════════════

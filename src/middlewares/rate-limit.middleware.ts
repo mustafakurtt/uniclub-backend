@@ -57,7 +57,16 @@ export function clientIp(c: Context): string {
       if (first) return first;
     }
   }
-  return getConnInfo(c).remote.address ?? "unknown";
+  // `getConnInfo` Bun'ın sunucu nesnesini ister; `app.request()` ile (testler,
+  // ileride bir in-process çağrı) çalışırken böyle bir sunucu YOKTUR ve fonksiyon
+  // TypeError fırlatır. Bu, denetim kaydını (audit.sink) sessizce düşürüyordu —
+  // yani denetim izi test ortamında hiç yazılmıyor, dolayısıyla hiç sınanmıyordu.
+  // IP'nin bilinmemesi bir hata değil, bir bilgi eksikliğidir: "unknown" dön.
+  try {
+    return getConnInfo(c).remote.address ?? "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 /** JSON body'den bir alanı, akışı bozmadan okur (Hono body'yi cache'ler). */

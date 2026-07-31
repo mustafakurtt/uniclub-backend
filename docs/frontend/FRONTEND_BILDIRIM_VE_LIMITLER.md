@@ -3,7 +3,7 @@
 **Kime:** Frontend ekibine. **Ne:** Üç yeni davranış geldi — gerçek zamanlı
 bildirimler (WebSocket), `429` hız sınırı ve `pending` hesabın yazma kilidi.
 
-> Mimari ayrıntı: [BILDIRIMLER.md](BILDIRIMLER.md). Mail akışı: [MAIL_DOGRULAMA.md](MAIL_DOGRULAMA.md).
+> Mimari ayrıntı: [BILDIRIMLER.md](../BILDIRIMLER.md). Mail akışı: [MAIL_DOGRULAMA.md](../MAIL_DOGRULAMA.md).
 
 ---
 
@@ -129,7 +129,7 @@ const ws = new WebSocket(`${proto}://${location.host}/api/notifications/ws?ticke
 ```
 
 Tam örnek (yeniden bağlanma + backoff + heartbeat) için
-[BILDIRIMLER.md → Frontend](BILDIRIMLER.md#frontend--bağlanma-ve-yeniden-bağlanma).
+[BILDIRIMLER.md → Frontend](../BILDIRIMLER.md#frontend--bağlanma-ve-yeniden-bağlanma).
 
 **Üç kural:**
 1. `{"event":"ping"}` gelince `"pong"` (düz metin) gönder — yoksa 90sn'de kopar.

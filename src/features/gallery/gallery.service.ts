@@ -12,8 +12,16 @@ export const galleryService = {
       .map((img) => ({ ...img, uploader: toSafeUser(img.uploader!) }));
   },
 
-  async addImage(clubId: string, uploadedBy: string, data: CreateGalleryImageDTO) {
-    const result = await galleryRepository.add(clubId, uploadedBy, data);
+  // universityId, (club_id, university_id) bileşik FK'si için gerekiyor. Değer
+  // çağırandan geliyor (duyurularla aynı kalıp); yanlış olursa DB kısıt ihlaliyle
+  // reddeder — `requireClubStaff` zaten başka tenant'ın kulübüne erişimi keser.
+  async addImage(
+    clubId: string,
+    universityId: string,
+    uploadedBy: string,
+    data: CreateGalleryImageDTO
+  ) {
+    const result = await galleryRepository.add(clubId, universityId, uploadedBy, data);
     await galleryCache.invalidate(clubId);
     return result;
   },

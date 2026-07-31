@@ -142,7 +142,11 @@ Bunlar bilinçli olarak **beklemede**: bugün onları kullanan bir kod yolu yok.
   (doğrulandı). İlk "linkin önizlemesini çekelim" / "logoyu indirip thumbnail
   üretelim" isteğinde gerekir: şema allowlist + DNS çözüp private/link-local
   aralık reddi (`169.254.169.254` cloud metadata).
-- **Outbox** — bkz. observability yol haritası, Tier 3.
+- **Outbox** — güvenilir yan-etki teslimatı (DB'ye yaz → arka planda işle).
+  Bugün bildirim/mail doğrudan servisten gidiyor; çok-adımlı işlemlerde (onay +
+  bildirim + audit) atomiklik için transactional outbox gerekir. İlgili soyutlama
+  borcu: bu dosya [§2.7 Kuyruk/job soyutlaması](#27-kuyrukjob-soyutlaması) ve
+  [architecture.md](architecture.md) (background jobs).
 - **Anomali tespiti / alerting** — audit log var ama "aynı kullanıcı 1 dakikada
   50 kulübe başvurdu" gibi bir sinyal yok.
 - **OpenAPI** — zod şemaları zaten var; `@hono/zod-openapi` ile üretilebilir.
