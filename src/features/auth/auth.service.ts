@@ -2,6 +2,7 @@ import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDT
 import { authRepository } from "./auth.repository";
 import { hashPassword, verifyPassword } from "../../shared/utils/password.util"; // verifyPassword eklendi
 import { generateToken } from "../../shared/utils/jwt.util"; // JWT üreteci eklendi
+import { generateOneTimeToken, hashToken } from "../../core/auth/token"; // e-posta doğrulama token'ı (JWT DEĞİL)
 import { emailQueue } from "./auth.queue";
 import { resolveAuthz, invalidateUserPermissions, invalidateUsersPermissions } from "../../shared/rbac/rbac.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
@@ -11,13 +12,15 @@ import { ClubPermission } from "../clubs/clubs.permissions";
 import { UniversityPermission } from "../university/university.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
+import { ActivityPermission } from "../activities/activities.permissions";
+import { DashboardPermission } from "../dashboard/dashboard.permissions";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
-import { authCache } from "./auth.cache";
+import { authCache, authCatalogEffects } from "./auth.cache";
 
 // Kayıt otomatik rolü + promote/demote hedefi. Not: "admin" rolü kurumsal modelde
-// "university_admin" olarak yeniden adlandırıldı (bkz. docs/yonetim/06).
+// "university_admin" olarak yeniden adlandırıldı (bkz. docs/design/06).
 const ADMIN_ROLE_NAME = "university_admin";
 const SUPER_ADMIN_ROLE_NAME = "super_admin";
 const PLATFORM_SUPPORT_ROLE_NAME = "platform_support";
@@ -25,7 +28,7 @@ const PLATFORM_SUPPORT_ROLE_NAME = "platform_support";
 /**
  * Kod tarafından guard'larda sabit referans verilen çekirdek yetki anahtarları
  * (seed kataloğu). Bunlar silinemez — silinirse ilgili endpoint'lerin yetki
- * kontrolü kalıcı olarak kırılır (bkz. docs/yonetim/05 #5).
+ * kontrolü kalıcı olarak kırılır (bkz. docs/design/05 #5).
  */
 const SEED_PERMISSION_KEYS = new Set<string>([
   ...Object.values(AdminPermission),
@@ -34,6 +37,8 @@ const SEED_PERMISSION_KEYS = new Set<string>([
   ...Object.values(AuthPermission),
   ...Object.values(AnnouncementPermission),
   ...Object.values(GalleryPermission),
+  ...Object.values(ActivityPermission),
+  ...Object.values(DashboardPermission),
 ]);
 
 /**
@@ -173,7 +178,7 @@ function assertNotSelfRoleRemoval(actor: RoleAdminActor, targetUserId: string) {
 /**
  * Bir yönetici rolü kaldırılmadan önce, bunun ilgili KAPSAMDAKİ son yönetici
  * olup olmadığını kontrol eder — sistemi/tenant'ı yönetimsiz bırakmayı engeller
- * (bkz. docs/yonetim/05 #6).
+ * (bkz. docs/design/05 #6).
  *   - super_admin  → sistemin tamamında son olan düşürülemez.
  *   - university_admin → bir üniversitenin son yöneticisi düşürülemez.
  */
@@ -216,9 +221,16 @@ const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 async function issueVerificationEmail(user: { id: string; email: string; firstName: string }) {
   await authRepository.invalidateUserEmailVerifications(user.id);
 
-  const verificationToken = crypto.randomUUID();
+  // DB'ye token'ın ÖZETİ yazılır, düz hali yalnızca maildeki linkte yaşar
+  // (bkz. core/auth/token.ts). Bu yüzden "token'ı hatırlatma" gibi bir akış
+  // mümkün değildir; kaybolan link yeniden ÜRETİLİR, geri okunmaz.
+  const verificationToken = generateOneTimeToken();
   const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
-  await authRepository.createEmailVerification(user.id, verificationToken, expiresAt);
+  await authRepository.createEmailVerification(
+    user.id,
+    await hashToken(verificationToken),
+    expiresAt
+  );
 
   await emailQueue.add("send-verify-email", {
     email: user.email,
@@ -360,6 +372,12 @@ export const authService = {
     }
 
     // 3. Hesap durumu kontrolü (İsteğe bağlı koruma)
+    // Anonimleştirilmiş hesap önce gelir: e-postası zaten maskelendiği için
+    // buraya normalde hiç düşülmez, ama silinmiş bir hesabın "askıya alınmış"
+    // diye cevaplanması yanlış olurdu — hesap yok, kimlik bilgisi geçersizdir.
+    if (user.deletedAt) {
+      throw unauthorized("auth.invalidCredentials");
+    }
     if (user.status === "suspended") {
       throw unauthorized("auth.loginAccountSuspended");
     }
@@ -387,7 +405,10 @@ export const authService = {
    * E-posta doğrulama linkindeki token'ı tüketir ve kullanıcıyı aktive eder.
    */
   async verifyEmail(token: string) {
-    const verification = await authRepository.findEmailVerificationByToken(token);
+    // Linkten gelen düz token aynı özetten geçirilip aranır — DB'de düz hali yok.
+    const verification = await authRepository.findEmailVerificationByTokenHash(
+      await hashToken(token)
+    );
     if (!verification) {
       throw badRequest("auth.invalidVerificationLink");
     }
@@ -465,12 +486,12 @@ export const authService = {
       throw badRequest("auth.permissionKeyExists");
     }
     const created = await authRepository.createPermission(data);
-    await authCache.invalidatePermissions();
+    await authCatalogEffects.permissionsChanged.emit();
     return created;
   },
 
   async listPermissions() {
-    return await authCache.permissions(() => authRepository.findAllPermissions());
+    return await authCache.permissions().read(() => authRepository.findAllPermissions());
   },
 
   /**
@@ -483,7 +504,7 @@ export const authService = {
       throw notFound("auth.permissionNotFound");
     }
     const updated = await authRepository.updatePermission(permissionId, data);
-    await authCache.invalidatePermissions();
+    await authCatalogEffects.permissionsChanged.emit();
     return updated;
   },
 
@@ -502,12 +523,11 @@ export const authService = {
     }
     const affectedUserIds = await authRepository.deletePermission(permissionId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidatePermissions();
-    // İzin bir daha roller katalogunda görünmeyecek → rol katalogu da tazelensin.
-    await authCache.invalidateRoles();
+    // Silinen izin rol katalogunda da görünüyordu → tek efekt ikisini birden düşürür.
+    await authCatalogEffects.permissionDeleted.emit();
   },
 
-  /** Bir yetkiyi taşıyan roller (ters listeleme — bkz. docs/yonetim/05 #8). */
+  /** Bir yetkiyi taşıyan roller (ters listeleme — bkz. docs/design/05 #8). */
   async listPermissionRoles(permissionId: string) {
     const permission = await authRepository.findPermissionById(permissionId);
     if (!permission) {
@@ -533,7 +553,7 @@ export const authService = {
       ? { ...data, rank }
       : { ...data, rank, universityId: actor.universityId };
     const created = await authRepository.createRole(payload);
-    await authCache.invalidateRoles();
+    await authCatalogEffects.rolesChanged.emit();
     return created;
   },
 
@@ -543,7 +563,7 @@ export const authService = {
    */
   async listRoles(actor: RoleAdminActor) {
     // Global liste tek anahtarla cache'lenir; aktör filtresi cache DIŞINDA uygulanır.
-    const roles = await authCache.roles(() => authRepository.findAllRolesWithPermissions());
+    const roles = await authCache.roles().read(() => authRepository.findAllRolesWithPermissions());
     if (actor.isSuperAdmin) return roles;
     return roles.filter((r) => r.universityId === null || r.universityId === actor.universityId);
   },
@@ -567,7 +587,7 @@ export const authService = {
       throw badRequest("auth.roleRankCannotExceedActor");
     }
     const updated = await authRepository.updateRole(roleId, data);
-    await authCache.invalidateRoles();
+    await authCatalogEffects.rolesChanged.emit();
     return updated;
   },
 
@@ -586,10 +606,10 @@ export const authService = {
     }
     const affectedUserIds = await authRepository.deleteRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidateRoles();
+    await authCatalogEffects.rolesChanged.emit();
   },
 
-  /** Bir role sahip kullanıcılar (ters listeleme — bkz. docs/yonetim/05 #8). */
+  /** Bir role sahip kullanıcılar (ters listeleme — bkz. docs/design/05 #8). */
   async listRoleUsers(actor: RoleAdminActor, roleId: string) {
     const role = await authRepository.findRoleById(roleId);
     if (!role) {
@@ -601,7 +621,7 @@ export const authService = {
   },
 
   // ═══════════════════════════════════════════════
-  // KULLANICI ROLLERİ (genel atama — bkz. docs/yonetim/05 #3)
+  // KULLANICI ROLLERİ (genel atama — bkz. docs/design/05 #3)
   // ═══════════════════════════════════════════════
   async listUserRoles(actor: RoleAdminActor, userId: string) {
     const user = await authRepository.findUserById(userId);
@@ -673,7 +693,7 @@ export const authService = {
   },
 
   // ═══════════════════════════════════════════════
-  // KULLANICI BAZLI YETKİ OVERRIDE (userPermissions — bkz. docs/yonetim/05 #2)
+  // KULLANICI BAZLI YETKİ OVERRIDE (userPermissions — bkz. docs/design/05 #2)
   // ═══════════════════════════════════════════════
   async listUserPermissions(userId: string) {
     const user = await authRepository.findUserById(userId);
@@ -749,7 +769,7 @@ export const authService = {
     await authRepository.attachPermissionToRole(roleId, permissionId);
     const affectedUserIds = await authRepository.findUserIdsByRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidateRoles(); // rolün gömülü izin listesi değişti
+    await authCatalogEffects.rolesChanged.emit(); // rolün gömülü izin listesi değişti
   },
 
   async detachPermissionFromRole(actor: RoleAdminActor, roleId: string, permissionId: string) {
@@ -766,6 +786,6 @@ export const authService = {
     await authRepository.detachPermissionFromRole(roleId, permissionId);
     const affectedUserIds = await authRepository.findUserIdsByRole(roleId);
     await invalidateUsersPermissions(affectedUserIds);
-    await authCache.invalidateRoles(); // rolün gömülü izin listesi değişti
+    await authCatalogEffects.rolesChanged.emit(); // rolün gömülü izin listesi değişti
   },
 };

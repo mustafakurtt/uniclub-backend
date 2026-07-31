@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CONTACT_PLATFORMS } from "./clubs.types";
 
 export const createApplicationSchema = z.object({
   proposedName: z.string().min(3, "Kulüp adı en az 3 karakter olmalıdır.").max(256),
@@ -22,9 +23,9 @@ export const transferPresidencySchema = z.object({
 });
 export type TransferPresidencyDTO = z.infer<typeof transferPresidencySchema>;
 
-const contactPlatformEnum = z.enum([
-  "whatsapp", "instagram", "discord", "telegram", "twitter", "website", "email", "other",
-]);
+// Katalog tek yerde: clubs.types.ts → CONTACT_PLATFORMS. Buradan türetilir ki
+// yeni bir platform eklendiğinde zod şeması ile tip birbirinden sapmasın.
+const contactPlatformEnum = z.enum(CONTACT_PLATFORMS);
 
 export const createContactLinkSchema = z.object({
   platform: contactPlatformEnum,

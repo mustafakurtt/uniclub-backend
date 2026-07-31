@@ -33,6 +33,31 @@ class ModerationRepository extends BaseRepository<typeof userModerationActions> 
     return usersRepo.updateById(userId, { passwordHash, mustChangePassword: true });
   }
 
+  /**
+   * KVKK anonimleştirmesi: kimliği tanımlayan alanları maskeler, hesabı silinmiş
+   * işaretler. Satır SİLİNMEZ — `auditLogs`/`announcements`/moderasyon geçmişi
+   * onu aktör olarak referanslar (o FK'ler bilerek `restrict`).
+   *
+   * `deletedAt` işaretini SON yazmıyoruz, hepsi tek UPDATE: yarı anonimleştirilmiş
+   * bir ara durum oluşamaz.
+   */
+  anonymize(userId: string, values: {
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+  }) {
+    return usersRepo.updateById(userId, {
+      ...values,
+      studentNumber: null,
+      photoUrl: null,
+      departmentId: null,
+      status: "suspended",
+      mustChangePassword: false,
+      deletedAt: new Date(),
+    });
+  }
+
   /** Kullanıcının moderasyon geçmişi (en yeniden), işlemi yapan yöneticiyle. Keyset sayfalama. */
   async listHistoryForUser(userId: string, limit: number, cursor?: Date): Promise<ModerationHistoryItem[]> {
     const conditions = [eq(userModerationActions.userId, userId)];

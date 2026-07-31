@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../../core/auth/auth.middleware";
-import { requireClubOfficer, requireClubPresident, ClubVariables } from "../../../middlewares/club.middleware";
+import { requireClubStaff, requireClubOfficer, requireClubPresident, ClubVariables } from "../../../middlewares/club.middleware";
 import {
   updateOwnClubSchema,
   createContactLinkSchema,
   updateContactLinkSchema,
 } from "../clubs.schema";
 import { clubsService } from "../clubs.service";
+import { dashboardService } from "../../dashboard/dashboard.service";
 import { requireTenant } from "../../../shared/utils/tenant.util";
 import { validate } from "../../../shared/utils/validate";
 import { ok, created, done } from "../../../shared/utils/respond";
@@ -20,6 +21,13 @@ import { ok, created, done } from "../../../shared/utils/respond";
  * `app.onError` (core/http/error-handler) tek noktadan çevirir.
  */
 export const managementRoutes = new Hono<{ Variables: ClubVariables }>();
+
+// 0. KULÜP PANELİ ÖZETİ (staff: danışman/officer/president) — üye/istek/etkinlik/duyuru sayaçları
+managementRoutes.get("/:clubId/dashboard", authMiddleware, requireClubStaff, async (c) => {
+  const { clubId } = c.req.param();
+  const summary = await dashboardService.getClubDashboard(clubId);
+  return ok(c, summary, "dashboard.clubLoaded");
+});
 
 // 1. KENDİ KULÜBÜMÜ DÜZENLEME (yalnızca president) — ad/açıklama/logo/kapak/joinPolicy
 managementRoutes.patch(

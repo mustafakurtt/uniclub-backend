@@ -12,11 +12,10 @@ backend'de bugün **olmayan** ama gereken parçalar. Her madde: neden gerekli,
 
 ---
 
-## ✅ DURUM (Temmuz 2026): #7 hariç hepsi uygulandı
+## ✅ DURUM (Temmuz 2026): tüm maddeler uygulandı
 
-Aşağıdaki maddeler koda geçirildi ve **canlı sunucuda gerçek DB ile uçtan uca
-doğrulandı** (rol atama, kişisel override, effective yansıması, silme + FK
-temizliği, tüm koruma kuralları). Yeni endpoint referansı:
+Aşağıdaki maddeler koda geçirildi ve canlı sunucuda doğrulandı. Yeni endpoint
+referansı:
 
 | # | Endpoint | Metod | Yetki | Not |
 |---|---|---|---|---|
@@ -35,16 +34,17 @@ temizliği, tüm koruma kuralları). Yeni endpoint referansı:
 | 8 | `/api/auth/roles/:roleId/users` | GET | `role.manage` | role sahip kullanıcılar |
 | 8 | `/api/auth/permissions/:permissionId/roles` | GET | `permission.manage` | yetkiyi taşıyan roller |
 
-**#6 korumalar** ayrı endpoint değil, mevcut servislere eklendi:
+**#6 korumalar** ve **#7 askı anında kesme** servislere eklendi:
+`attachAuthz` + `requireActiveUser` authz cache'deki `status` ile `suspended`
+hesabı bir sonraki istekte keser (`shared/rbac/authz-policy.ts`). JWT revocation
+(logout/şifre değişimi tüm oturumları öldürsün) hâlâ açık — bkz.
+[GUVENLIK_YOL_HARITASI.md §1.3](../GUVENLIK_YOL_HARITASI.md).
+
+Diğer korumalar:
 `"Sistemdeki son sistem yöneticisi görevden alınamaz."`,
 `"Kendi hesabınızı askıya alamazsınız."`,
 `"Sistem rolünün adı değiştirilemez."`,
 `"Sistem rolü silinemez."`, `"Sistem yetkisi silinemez."`.
-
-**Kalan tek madde: #7** (askıya alma → anlık JWT geçersizleştirme) — mimari
-karar gerektirdiği için bilinçli olarak ertelendi (aşağıda).
-
----
 
 ---
 
@@ -197,16 +197,17 @@ almasını, çekirdek rol adının değiştirilmesini engellemiyor (senaryo S-H)
 
 ---
 
-## #7 — Askıya alma → anlık erişim kesme (JWT invalidation)
+## #7 — Askıya alma → anlık erişim kesme ✅ UYGULANDI
 
-**Sorun:** `suspended` yapılan kullanıcının mevcut JWT'si süresi dolana dek
-çalışır (stateless), anlık kesilmez ([01 §S3.2](01-kullanici-yonetimi.md), S-E).
+**Uygulama:** `status` RBAC cache'ine gömüldü (`getEffectiveRolesAndPermissions`).
+`attachAuthz` (guard zinciri) ve `requireActiveUser` (self-service/kulüp)
+`enforceAccountStatus` ile `suspended` hesabı **bir sonraki istekte** `403` ile
+keser. Ban/unban `invalidateUserPermissions` çağırır → gecikme yok.
 
-**Öneri (biri):**
-- `authMiddleware`'e hafif bir `users.status` kontrolü eklemek (her istekte
-  `suspended` ise `401`) — ekstra DB/cache okuması getirir ama kesindir; ya da
-- Redis'te bir "token denylist / tokenVersion" tutup askıda artırmak.
-  Karar performans/kesinlik dengesine göre verilmeli.
+**Hâlâ açık olan:** JWT'nin kendisini geçersiz kılma (logout, şifre değişimi,
+çalıntı token) — stateless token 7 gün yaşar. Tam revocation için
+[GUVENLIK_YOL_HARITASI.md §1.3](../GUVENLIK_YOL_HARITASI.md) (session epoch /
+jti denylist).
 
 ---
 

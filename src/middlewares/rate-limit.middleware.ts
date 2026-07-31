@@ -1,41 +1,71 @@
-import { Context, Next, MiddlewareHandler } from "hono";
+import type { Context } from "hono";
 import { getConnInfo } from "hono/bun";
+import { createRateLimiter, RedisRateLimitStore, type RateLimitStore } from "../core/ratelimit";
 import { env } from "../config/env";
 import { redis } from "../shared/redis/redis.client";
 import { logger } from "../shared/logger/logger";
 
-const log = logger.child({ module: "rate-limit" });
-
 /**
- * Redis tabanlı sabit pencere (fixed-window) hız sınırlayıcı. Çok-instance
- * güvenlidir: sayaç Redis'te tutulur, `INCR` atomiktir.
+ * Bu projenin hız sınırı KURULUMU — taşınabilir `core/ratelimit` fabrikasının
+ * projeye özel bağlanması (depolama mevcut Redis'ten, kapatma anahtarı env'den,
+ * hata bu projenin logger'ına). Aynı desen: shared/cache/cache.client.ts.
+ *
+ * Mekanizma (pencere/sayaç/başlık/fail-open) core'da; burada yalnızca bu projeye
+ * ait KARARLAR var: neye göre anahtarlıyoruz ve limitler ne.
  *
  * ════════════════════════════════════════════════════════════════════════
  * ANAHTARLAMA İLKESİ — neden IP değil?
  * ════════════════════════════════════════════════════════════════════════
  * Öğrenciler kampüs ağından, tek bir public IP'nin (NAT) arkasından çıkar.
- * IP başına limit koymak, bir kişinin limiti doldurduğunda TÜM KAMPÜSÜ
- * kilitler. Bu yüzden mümkün olan her yerde *korunan kaynağın kimliğine*
- * (e-posta, userId) göre anahtarlarız; IP yalnızca kimliğin bulunmadığı
- * yerlerde (kayıt) ve cömert bir tavanla kullanılır.
+ * IP başına limit koymak, bir kişi limiti doldurduğunda TÜM KAMPÜSÜ kilitler.
+ * Bu yüzden mümkün olan her yerde *korunan kaynağın kimliğine* (e-posta, userId)
+ * göre anahtarlarız; IP yalnızca kimliğin bulunmadığı yerlerde (kayıt) ve cömert
+ * bir tavanla kullanılır.
  */
 
-export interface RateLimitOptions {
-  /** Redis anahtar öneki — endpoint'ler birbirinin sayacını yemesin. */
-  keyPrefix: string;
-  /** Pencere başına izin verilen istek sayısı. */
-  limit: number;
-  /** Pencere uzunluğu (saniye). */
-  windowSeconds: number;
-  /**
-   * İsteği kime sayacağımızı belirler. `null` dönerse limit UYGULANMAZ
-   * (örn. body'de e-posta yoksa — zaten validasyon reddedecektir).
-   */
-  keyFn: (c: Context) => string | null | Promise<string | null>;
-}
+const log = logger.child({ module: "rate-limit" });
 
-/** Ters proxy arkasındaysak gerçek istemci IP'si X-Forwarded-For'un ilk girdisidir. */
-export function clientIp(c: Context): string {
+/** Tüm limitlerin paylaştığı depolama: mevcut Redis bağlantısı (çok-instance güvenli). */
+const store: RateLimitStore = new RedisRateLimitStore(redis);
+
+/**
+ * Bu projenin limit fabrikası — ortak kararları (store/logger/env kapatma) tek
+ * yerde sabitler, çağrı yerinde yalnızca limit değerleri kalır.
+ *
+ * `disabled` bir FONKSİYON: env açılışta değil çağrı anında okunur, böylece
+ * kapatma anahtarı modül import sırasına bağlı kalmaz.
+ */
+const limiter = (options: {
+  keyPrefix: string;
+  limit: number;
+  windowSeconds: number;
+  keyFn: (c: Context) => string | null | Promise<string | null>;
+}) =>
+  createRateLimiter({
+    ...options,
+    store,
+    logger: log,
+    disabled: () => env.RATE_LIMIT_DISABLED,
+  });
+
+/**
+ * İstemci IP'si; çözülemezse `null`. Ters proxy arkasındaysak gerçek istemci
+ * X-Forwarded-For'un ilk girdisidir.
+ *
+ * ASLA FIRLATMAZ. `getConnInfo` (hono/bun) soket bilgisini `c.env.server`
+ * üzerinden arar; bu yalnızca `Bun.serve` ile gelen isteklerde vardır. Hono'nun
+ * `app.request()` arayüzünde (testler, iç çağrılar) `c.env` yoktur ve fonksiyon
+ * TypeError atar. Bu, denetim sink'ini her mutasyonda düşürüyordu.
+ *
+ * Neden "unknown" gibi bir yer tutucu DEĞİL de `null`: bu değer hız sınırı
+ * ANAHTARI olarak kullanılıyor (aşağıda). Sabit bir yer tutucu dönmek, IP'si
+ * çözülemeyen HERKESİ tek bir sayaç kovasına toplar — yani tek bir kullanıcı
+ * tüm platformun kayıt kotasını yiyebilir. `null` ise createRateLimiter'ın
+ * "kimlik yok → sınırlama yok" yoluna girer (modülün fail-open ilkesiyle
+ * tutarlı: sınır bir korumadır, doğruluk kaynağı değil). Denetim kaydında da
+ * null, "bilinmiyor"un dürüst karşılığıdır (kolon nullable).
+ */
+export function clientIp(c: Context): string | null {
   if (env.TRUST_PROXY) {
     const forwarded = c.req.header("x-forwarded-for");
     if (forwarded) {
@@ -43,84 +73,12 @@ export function clientIp(c: Context): string {
       if (first) return first;
     }
   }
-  return getConnInfo(c).remote.address ?? "unknown";
-}
-
-/**
- * Sayacı artırır ve pencerenin bitişine kalan süreyi döner.
- * `INCR` + (ilk yazımda) `EXPIRE` tek pipeline'da gider.
- */
-async function hit(key: string, windowSeconds: number) {
-  const [incrResult, ttlResult] = await redis
-    .pipeline()
-    .incr(key)
-    .ttl(key)
-    .exec() as [[Error | null, number], [Error | null, number]];
-
-  const count = incrResult[1];
-  let ttl = ttlResult[1];
-
-  // İlk istek (ya da TTL bir şekilde kaybolmuş): pencereyi başlat.
-  if (ttl < 0) {
-    await redis.expire(key, windowSeconds);
-    ttl = windowSeconds;
+  try {
+    return getConnInfo(c).remote.address ?? null;
+  } catch {
+    return null;
   }
-
-  return { count, ttl };
 }
-
-export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
-  const { keyPrefix, limit, windowSeconds, keyFn } = options;
-
-  return async (c: Context, next: Next) => {
-    if (env.RATE_LIMIT_DISABLED) {
-      return next();
-    }
-
-    const identity = await keyFn(c);
-    if (identity === null) {
-      return next(); // kimlik çıkarılamadı → sınırlama yok
-    }
-
-    const key = `ratelimit:${keyPrefix}:${identity}`;
-
-    let count: number;
-    let ttl: number;
-    try {
-      ({ count, ttl } = await hit(key, windowSeconds));
-    } catch (error) {
-      // FAIL-OPEN: Redis düştüyse tüm API'yi kilitlemek, hız sınırını
-      // aşılmasına izin vermekten çok daha kötüdür.
-      log.error({ err: error, keyPrefix }, "redis hatası, istek geçiriliyor (fail-open)");
-      return next();
-    }
-
-    const remaining = Math.max(0, limit - count);
-    c.header("RateLimit-Limit", String(limit));
-    c.header("RateLimit-Remaining", String(remaining));
-    c.header("RateLimit-Reset", String(ttl));
-
-    if (count > limit) {
-      c.header("Retry-After", String(ttl));
-      const minutes = Math.max(1, Math.ceil(ttl / 60));
-      return c.json(
-        {
-          success: false,
-          // Frontend metne string-match etmesin diye makine-okur kod.
-          code: "RATE_LIMITED",
-          message: `Çok fazla deneme yaptınız. Lütfen ${minutes} dakika sonra tekrar deneyin.`,
-        },
-        429
-      );
-    }
-
-    await next();
-  };
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// HAZIR LİMİTLER — değerler tek yerde, endpoint'ler bunları import eder.
-// ════════════════════════════════════════════════════════════════════════
 
 /** JSON body'den bir alanı, akışı bozmadan okur (Hono body'yi cache'ler). */
 async function bodyField(c: Context, field: string): Promise<string | null> {
@@ -133,24 +91,31 @@ async function bodyField(c: Context, field: string): Promise<string | null> {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// HAZIR LİMİTLER — değerler tek yerde, endpoint'ler bunları import eder.
+// ════════════════════════════════════════════════════════════════════════
+
 /**
  * Doğrulama maili yeniden gönderimi — HEDEF E-POSTA başına.
  * Korunan kaynak, o e-postanın gelen kutusudur; kampüsün ortak IP'siyle ilgisi yok.
  * Not: hesap var olmasa da sayaç artar → endpoint'in "hesap var mı?" sızıntısı
  * (user enumeration) yapmama garantisi korunur.
  */
-export const resendVerificationEmailLimit = rateLimit({
+export const resendVerificationEmailLimit = limiter({
   keyPrefix: "resend:email",
   limit: 3,
   windowSeconds: 60 * 60,
   keyFn: (c) => bodyField(c, "email"),
 });
 
-/** Aynı endpoint için kaba bir sel koruması. Kampüs-güvenli olacak kadar cömert. */
-export const resendVerificationIpLimit = rateLimit({
+/**
+ * Aynı endpoint için kaba bir SEL koruması (asıl koruma yukarıdaki e-posta
+ * limitidir). KISA pencere — gerekçe için `registerLimit`'e bakınız.
+ */
+export const resendVerificationIpLimit = limiter({
   keyPrefix: "resend:ip",
-  limit: 30,
-  windowSeconds: 60 * 60,
+  limit: 20,
+  windowSeconds: 60,
   keyFn: (c) => clientIp(c),
 });
 
@@ -159,7 +124,7 @@ export const resendVerificationIpLimit = rateLimit({
  * IP başına limit BİLİNÇLİ OLARAK YOK: kampüs NAT'ı arkasındaki yüzlerce öğrenci
  * aynı IP'yi paylaşır, tek bir yanlış şifre denemesi seli hepsini kilitlerdi.
  */
-export const loginLimit = rateLimit({
+export const loginLimit = limiter({
   keyPrefix: "login:email",
   limit: 10,
   windowSeconds: 15 * 60,
@@ -167,13 +132,38 @@ export const loginLimit = rateLimit({
 });
 
 /**
- * Kayıt — IP başına (henüz bir kimlik yok). Cömert bir tavan: kayıt zaten
- * (a) tanınan bir okul domaini ve (b) benzersiz e-posta gerektiriyor, dolayısıyla
- * istismar payı dar. Oryantasyon günü tüm kampüsün kaydolabilmesi gerekir.
+ * Kayıt — IP başına (henüz bir kimlik yok, başka anahtar yok).
+ *
+ * ════════════════════════════════════════════════════════════════════════
+ * Neden UZUN pencere + küçük limit DEĞİL, KISA pencere?
+ * ════════════════════════════════════════════════════════════════════════
+ * Kampüs NAT'ı arkasındaki yüzlerce öğrenci tek bir public IP'den çıkar, yani
+ * bu sayaç bir kişiyi değil TÜM KAMPÜSÜ ölçer. Burası çok kiracılı (SaaS) bir
+ * ürün: üniversitelerin öğrenci sayıları 500 ile 50.000 arasında değişir, o
+ * yüzden "kampüse yetecek" tek bir rakam YOKTUR — her seçim bir okul için fazla,
+ * başkası için az olur.
+ *
+ * Asıl zarar limite takılmak değil, KİLİTLİ KALMA SÜRESİDİR. Sabit pencerede
+ * tavana vuran, pencere kapanana kadar bekler: 1 saatlik pencerede oryantasyon
+ * günü bir kampüs bir SAAT boyunca kaydolamaz. Bu yüzden pencere 1 DAKİKAYA
+ * indirildi — en kötü durumda kullanıcı ~60 sn sonra tekrar dener (cevaptaki
+ * `Retry-After` bunu söyler) ve akış kendini toparlar.
+ *
+ * Böylece sınır KAMPÜS BÜYÜKLÜĞÜNDEN BAĞIMSIZ hale gelir: ayırt edici özellik
+ * toplam hacim değil, İNSAN hızı ile MAKİNE hızı arasındaki farktır. 60 saniyede
+ * aynı NAT'tan 30 kayıt formu gönderen bir insan kalabalığı zaten olağandışıdır
+ * ve takılsa bile saniyeler içinde devam eder; bir script ise saniyede yüzlerce
+ * dener ve burada durur.
+ *
+ * Kalan savunma katmanları (bu limit tek başına değil):
+ *   - kayıt TANINAN bir okul domaini ister (auth.service register)
+ *   - var olan e-posta 400 döner ve MAİL GÖNDERMEZ → bir adresi döngüye alıp
+ *     mail seli yapılamaz; saldırganın her seferinde yeni bir adres uydurması gerekir
+ *   - hesap doğrulanana kadar `pending` — kullanılamaz
  */
-export const registerLimit = rateLimit({
+export const registerLimit = limiter({
   keyPrefix: "register:ip",
-  limit: 60,
-  windowSeconds: 60 * 60,
+  limit: 30,
+  windowSeconds: 60,
   keyFn: (c) => clientIp(c),
 });

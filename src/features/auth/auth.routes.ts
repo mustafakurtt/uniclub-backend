@@ -257,7 +257,7 @@ authRoutes.get("/permissions/:permissionId/roles", ...guard(AuthPermission.PERMI
 });
 
 // ═══════════════════════════════════════════════
-// KULLANICI ROLLERİ — genel atama (bkz. docs/yonetim/05 #3)
+// KULLANICI ROLLERİ — genel atama (bkz. docs/design/05 #3)
 // ═══════════════════════════════════════════════
 
 // 17. KULLANICININ ROLLERİNİ LİSTELEME
@@ -288,7 +288,7 @@ authRoutes.delete("/users/:userId/roles/:roleId", ...guard(AuthPermission.ROLE_M
 });
 
 // ═══════════════════════════════════════════════
-// KULLANICI BAZLI YETKİ OVERRIDE (bkz. docs/yonetim/05 #2)
+// KULLANICI BAZLI YETKİ OVERRIDE (bkz. docs/design/05 #2)
 // ═══════════════════════════════════════════════
 
 // 20. KULLANICININ KİŞİSEL YETKİ OVERRIDE'LARINI LİSTELEME

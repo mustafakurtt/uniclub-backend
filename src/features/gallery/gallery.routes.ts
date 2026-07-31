@@ -5,6 +5,7 @@ import { validate } from "../../shared/utils/validate";
 import { ok, created, done } from "../../shared/utils/respond";
 import { createGalleryImageSchema } from "./gallery.schema";
 import { galleryService } from "./gallery.service";
+import { requireTenant } from "../../shared/utils/tenant.util";
 
 // Bu router, clubs.routes.ts içinde "/:clubId/gallery" olarak mount edilir;
 // bu yüzden ":clubId" parametresi parent route'tan miras alınır.
@@ -30,7 +31,12 @@ galleryRoutes.post(
     const user = c.get("user");
     const clubId = c.req.param("clubId")!;
     const body = c.req.valid("json");
-    const image = await galleryService.addImage(clubId, user.userId, body);
+    const image = await galleryService.addImage(
+      clubId,
+      requireTenant(user.universityId),
+      user.userId,
+      body
+    );
     return created(c, image, "gallery.imageAdded");
   }
 );

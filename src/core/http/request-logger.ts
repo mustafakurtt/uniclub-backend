@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import { LogLevel, type Logger } from "../logger/logger";
+import { LogLevel, type EmittableLogLevel, type Logger } from "../logger/logger";
 
 /**
  * Taşınabilir istek-loglama middleware FABRİKASI. `hono/logger()`'ın (renkli
@@ -15,15 +15,25 @@ export interface RequestLoggerOptions {
   logger: Logger;
   /** requestId'yi context'ten okuma yolu. Varsayılan `c.get("requestId")` (error-handler ile aynı). */
   getRequestId?: (c: Context) => string | undefined;
-  /** HTTP status → log seviyesi. Varsayılan: 5xx→Error, 4xx→Warn, aksi Info. */
-  getLevel?: (status: number) => LogLevel;
+  /**
+   * HTTP status → log seviyesi. Varsayılan: 5xx→Error, 4xx→Warn, aksi Info.
+   * `Silent` KABUL EDİLMEZ (bkz. EmittableLogLevel): bir satırı susturmak için
+   * seviye değil `skip` kullanılır.
+   */
+  getLevel?: (status: number) => EmittableLogLevel;
   /** Seviye/duruma göre log mesajı. Varsayılan nötr İngilizce; proje TR ile override eder. */
-  getMessage?: (level: LogLevel, status: number) => string;
+  getMessage?: (level: EmittableLogLevel, status: number) => string;
   /**
    * Standart alanlara eklenecek proje-özel alanlar (ör. userId, tenant). Açık
    * genişletme dikişi: ileride alan eklemek çekirdeği değiştirmesin (OCP).
    */
   getExtraFields?: (c: Context) => Record<string, unknown>;
+  /**
+   * `true` dönerse istek LOGLANMAZ (yalnızca log satırı atlanır; istek normal işler).
+   * Sık pollanan altyapı uçlarının (Prometheus `/metrics`, load-balancer `/health`)
+   * gürültüsünü kesmek için — bunlar saniyeler içinde logu doldurur ve sinyal taşımaz.
+   */
+  skip?: (c: Context) => boolean;
 }
 
 /** Her istekte loglanan sabit iskelet; `getExtraFields` bunun üstüne eklenir. */
@@ -39,11 +49,11 @@ export interface RequestLogFields {
  * Varsayılan seviye eşlemesi. 400/500 çıplak birer sabit değil, HTTP'nin
  * evrensel semantik sınırları (istemci/sunucu hatası) — isimlendirmek gürültü olur.
  */
-const defaultGetLevel = (status: number): LogLevel =>
+const defaultGetLevel = (status: number): EmittableLogLevel =>
   status >= 500 ? LogLevel.Error : status >= 400 ? LogLevel.Warn : LogLevel.Info;
 
 /** Nötr İngilizce varsayılan mesajlar; projeler `getMessage` ile kendi dillerini enjekte eder. */
-const DEFAULT_MESSAGES: Record<LogLevel, string> = {
+const DEFAULT_MESSAGES: Record<EmittableLogLevel, string> = {
   [LogLevel.Trace]: "request completed",
   [LogLevel.Debug]: "request completed",
   [LogLevel.Info]: "request completed",
@@ -59,9 +69,13 @@ export function createRequestLogger(options: RequestLoggerOptions) {
     getLevel = defaultGetLevel,
     getMessage,
     getExtraFields,
+    skip,
   } = options;
 
   return async (c: Context, next: Next) => {
+    // Atlanan uçlar (ör. /metrics, /health) hiç loglanmaz — zaman ölçümü de gereksiz.
+    if (skip?.(c)) return next();
+
     const start = Date.now();
     await next();
     const durationMs = Date.now() - start;

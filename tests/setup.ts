@@ -16,4 +16,5 @@ process.env.REDIS_URL = TEST_REDIS_URL;
 process.env.JWT_SECRET ||= "test-secret-not-used-anywhere-else-min-len";
 process.env.RATE_LIMIT_DISABLED = "true"; // testler hız sınırına takılmasın
 process.env.CACHE_DRIVER = "memory"; // koşu-başı izolasyon (Redis'e taşmaz) + InMemory adaptörünü test eder
+process.env.STORAGE_DRIVER = "memory"; // dosya yüklemeleri diske yazılmaz + InMemory storage adaptörünü test eder
 process.env.LOG_LEVEL ||= "error"; // test çıktısını sessizleştir (beklenen 4xx'ler warn üretir)

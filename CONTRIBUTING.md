@@ -78,8 +78,19 @@ fix(auth): invalidate permission cache on email verification
 
 Read [docs/architecture.md](docs/architecture.md) first. The non-negotiables:
 
-- **Language.** Code comments and user-facing API messages are **Turkish**.
-  README and architecture docs are English.
+### Documentation language
+
+The repo uses a deliberate split — match the folder you're editing:
+
+| Language | What |
+|---|---|
+| **English** | Root `README.md`, `docs/architecture.md`, `docs/operations.md`, `CONTRIBUTING.md`, `CLAUDE.md` — architecture and operations for a mixed team |
+| **Turkish** | `docs/API.md`, `docs/design/`, `docs/frontend/`, and other product/integration docs — same audience as the API |
+| **Turkish** | All code comments, commit messages, and user-facing API `message` strings |
+
+Do not introduce a third convention without updating this table.
+
+### Application code
 - **Layering.** `routes → service → repository`. Only repositories import
   `db`/`schema`. Services never touch the database directly.
 - **Errors.** Business-rule failures throw a *plain* `new Error("Türkçe mesaj")`.

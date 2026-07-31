@@ -36,4 +36,10 @@ export const requestLogger = createRequestLogger({
     if (!user) return {};
     return { userId: user.userId, universityId: user.universityId };
   },
+  /**
+   * Sık pollanan altyapı uçlarını loglama — gürültü. Prometheus `/metrics`'i her
+   * 15sn scrape eder, load-balancer `/health`'i sürekli yoklar; ikisi de logu
+   * doldurur ama sinyal taşımaz. (requestId yine üretilir; sadece log satırı atlanır.)
+   */
+  skip: (c) => c.req.path === "/metrics" || c.req.path === "/health",
 });

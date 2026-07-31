@@ -39,3 +39,24 @@ export function get(path: string, token?: string) {
 }
 
 export const postJson = (path: string, body: unknown) => app.request(path, json(body));
+
+/** Bearer token'lı yazma isteği (POST/PATCH/DELETE), opsiyonel JSON gövde ile. */
+export function reqAuth(
+  method: "POST" | "PATCH" | "DELETE",
+  path: string,
+  token: string,
+  body?: unknown
+) {
+  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  if (body !== undefined) headers["content-type"] = "application/json";
+  return app.request(path, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+/** JSON `data` gövdesini çıkarır (başarı zarfı). */
+export async function data<T = any>(res: Response): Promise<T> {
+  return (await res.json()).data as T;
+}

@@ -17,6 +17,7 @@ export const adminMessages = defineCatalog({
     "admin.departmentNotInUniversity": "Bölüm bu üniversiteye ait değil.",
     "admin.clubNotFound": "Kulüp bulunamadı.",
     "admin.applicationNotFound": "Başvuru bulunamadı.",
+    "admin.rejectionNoteRequired": "Ret gerekçesi zorunludur.",
     "admin.applicationAlreadyDecided": "Bu başvuru zaten değerlendirilmiş.",
     "admin.slugGenerationFailed": "Kulüp için uygun bir slug bulunamadı, lütfen tekrar deneyin.",
     "admin.clubNotArchivedOrRejected":
@@ -54,6 +55,7 @@ export const adminMessages = defineCatalog({
     "admin.departmentNotInUniversity": "This department does not belong to this university.",
     "admin.clubNotFound": "Club not found.",
     "admin.applicationNotFound": "Application not found.",
+    "admin.rejectionNoteRequired": "A rejection reason is required.",
     "admin.applicationAlreadyDecided": "This application has already been decided.",
     "admin.slugGenerationFailed": "Could not find a suitable slug for the club, please try again.",
     "admin.clubNotArchivedOrRejected":

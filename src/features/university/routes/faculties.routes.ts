@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
+import { invalidates, fromParams } from "../../../core/cache";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
+import { universityEffects } from "../university.cache";
 import { createFacultySchema, updateFacultySchema } from "../university.schema";
 import { universityService } from "../university.service";
 
@@ -35,6 +37,7 @@ facultiesRoutes.get("/:universityId/faculties/:facultyId", async (c) => {
 facultiesRoutes.post(
   "/:universityId/faculties",
   ...guard(UniversityPermission.FACULTY_CREATE, { tenantScoped: true }),
+  invalidates(universityEffects.facultyChanged, fromParams("universityId")),
   validate("json", createFacultySchema),
   async (c) => {
     const { universityId } = c.req.param();
@@ -48,6 +51,7 @@ facultiesRoutes.post(
 facultiesRoutes.patch(
   "/:universityId/faculties/:facultyId",
   ...guard(UniversityPermission.FACULTY_UPDATE, { tenantScoped: true }),
+  invalidates(universityEffects.facultyChanged, fromParams("universityId")),
   validate("json", updateFacultySchema),
   async (c) => {
     const { universityId, facultyId } = c.req.param();
@@ -61,6 +65,7 @@ facultiesRoutes.patch(
 facultiesRoutes.delete(
   "/:universityId/faculties/:facultyId",
   ...guard(UniversityPermission.FACULTY_DELETE, { tenantScoped: true }),
+  invalidates(universityEffects.facultyDeleted, fromParams("universityId", "facultyId")),
   async (c) => {
     const { universityId, facultyId } = c.req.param();
     await universityService.deleteFaculty(universityId, facultyId);

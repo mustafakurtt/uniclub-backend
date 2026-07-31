@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { validate } from "../../../shared/utils/validate";
 import { guard } from "../../../core/rbac/guard";
+import { invalidates, fromParams } from "../../../core/cache";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { ok, created, done } from "../../../shared/utils/respond";
 import { UniversityPermission } from "../university.permissions";
+import { universityEffects } from "../university.cache";
 import { addDomainSchema, updateDomainSchema } from "../university.schema";
 import { universityService } from "../university.service";
 
@@ -28,6 +30,7 @@ domainsRoutes.get("/:universityId/domains", async (c) => {
 domainsRoutes.post(
   "/:universityId/domains",
   ...guard(UniversityPermission.DOMAIN_CREATE, { tenantScoped: true }),
+  invalidates(universityEffects.domainsChanged, fromParams("universityId")),
   validate("json", addDomainSchema),
   async (c) => {
     const { universityId } = c.req.param();
@@ -41,6 +44,7 @@ domainsRoutes.post(
 domainsRoutes.patch(
   "/:universityId/domains/:domainId",
   ...guard(UniversityPermission.DOMAIN_UPDATE, { tenantScoped: true }),
+  invalidates(universityEffects.domainsChanged, fromParams("universityId")),
   validate("json", updateDomainSchema),
   async (c) => {
     const { universityId, domainId } = c.req.param();
@@ -54,6 +58,7 @@ domainsRoutes.patch(
 domainsRoutes.delete(
   "/:universityId/domains/:domainId",
   ...guard(UniversityPermission.DOMAIN_DELETE, { tenantScoped: true }),
+  invalidates(universityEffects.domainsChanged, fromParams("universityId")),
   async (c) => {
     const { universityId, domainId } = c.req.param();
     await universityService.deleteDomain(universityId, domainId);

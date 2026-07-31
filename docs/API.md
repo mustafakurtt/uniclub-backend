@@ -3,10 +3,10 @@
 Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tüm bilgileri içerir: base URL, auth akışı, yetki (RBAC) modeli ve her endpoint'in request/response şekli.
 
 > **İlişkili dokümanlar:**
-> - `docs/FRONTEND_AUTH_RBAC.md` — Auth + RBAC yapılanmasının ayrıntılı anlatımı ve ilk 3 feature'ın (Auth, Users, University) request/response örnekli tam referansı. **Auth/RBAC detayı için asıl kaynak orasıdır**; bu doküman tüm endpoint'lerin özet kataloğudur.
-> - `docs/FRONTEND_UNIVERSITY.md` — **University katmanının tam derinlemesine referansı**: granüler `university.*` yetki modeli, üniversite/domain/fakülte/bölüm CRUD'unun request/response örnekleri, silme sırası ve yönetim paneli akışları.
-> - `docs/FRONTEND_CLUBS.md` — **Clubs katmanının tam derinlemesine referansı**: kulüp keşfi/üyeliği, kulüp-içi roller (member/officer/başkan), danışman (advisor) akışı, kulüp kurma başvuruları, granüler `club.*` yetki modeli ve admin kulüp yönetimi + uçtan uca senaryolar.
-> - `docs/FRONTEND_AUTH_GUARD_GUIDE.md` — React tarafında route/UI guard mimarisi önerisi.
+> - `docs/frontend/FRONTEND_AUTH_RBAC.md` — Auth + RBAC yapılanmasının ayrıntılı anlatımı ve ilk 3 feature'ın (Auth, Users, University) request/response örnekli tam referansı. **Auth/RBAC detayı için asıl kaynak orasıdır**; bu doküman tüm endpoint'lerin özet kataloğudur.
+> - `docs/frontend/FRONTEND_UNIVERSITY.md` — **University katmanının tam derinlemesine referansı**: granüler `university.*` yetki modeli, üniversite/domain/fakülte/bölüm CRUD'unun request/response örnekleri, silme sırası ve yönetim paneli akışları.
+> - `docs/frontend/FRONTEND_CLUBS.md` — **Clubs katmanının tam derinlemesine referansı**: kulüp keşfi/üyeliği, kulüp-içi roller (member/officer/başkan), danışman (advisor) akışı, kulüp kurma başvuruları, granüler `club.*` yetki modeli ve admin kulüp yönetimi + uçtan uca senaryolar.
+> - `docs/frontend/FRONTEND_AUTH_GUARD_GUIDE.md` — React tarafında route/UI guard mimarisi önerisi.
 >
 > Not: `message` alanları **isteğin diline** göre döner (`Accept-Language: tr|en`, varsayılan `tr`). Kalıcı mantık için mesaj metnine değil `code`/`details`/HTTP status'a bakın — bkz. [Genel Kurallar → Hata & i18n](#hata-zarf%C4%B1-ve-i18n).
 
@@ -24,6 +24,11 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Gallery (kulüp alt-kaynağı)](#6-gallery--apiclubsclubidgallery)
   - [Admin (okul yöneticisi)](#7-admin--apiadmin)
   - [Moderation (kullanıcı yönetimi)](#8-moderation--apimoderation)
+  - [Notifications (bildirimler)](#9-notifications--apinotifications)
+  - [Audit (denetim izi)](#10-audit--apiaudit)
+  - [Activities (etkinlikler)](#11-activities--apiactivities)
+  - [Dashboard & Feed](#12-dashboard--feed--apifeed)
+  - [Media (dosya yükleme)](#13-media--apiuploads)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -31,7 +36,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/notifications`, `/api/audit`, `/api/moderation`. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -108,12 +113,12 @@ Sistemde **iki bağımsız yetki katmanı** vardır — birbirine karıştırıl
 
 ### 1) Global (üniversite geneli) claim-based roller/izinler
 
-- `roles` (seed: `student`, `advisor`, `admin`, `super_admin`) ve `permissions` (seed: `user.manage`, **granüler `club.*`** (`club.approve`/`club.update`/`club.advisor.manage`/`club.delete`), `role.manage`, `permission.manage` + **granüler `university.*` yetkileri** — bkz. University/Clubs bölümleri) tabloları.
+- `roles` (seed: 9 kurumsal rol — `super_admin`, `platform_support`, `university_admin`, `student_affairs`, `academic_affairs`, `content_moderator`, `auditor`, `advisor`, `student`) ve `permissions` (seed: `user.view`, `user.manage`, `audit.view`, granüler `club.*`, `announcement.moderate`, `gallery.moderate`, `role.manage`, `permission.manage` + granüler `university.*` — bkz. University/Clubs bölümleri) tabloları.
 - Bir kullanıcı birden fazla role sahip olabilir (`userRoles`); roller izin taşır (`rolePermissions`).
 - `userPermissions` ile kullanıcıya doğrudan izin verilebilir/geri alınabilir (`granted: false` → rolden gelen izni override edip iptal eder).
 - Bu katman **Redis'te 5 dakika cache'lenir** (`rbac.cache.ts`, key: `rbac:permissions:<userId>`). Rol/izin değiştiren tüm endpoint'ler (promote/demote, role permission ekleme/çıkarma) etkilenen kullanıcıların cache'ini **anında temizler** — yani değişiklikler bir sonraki istekte geçerlidir; 5 dakikalık gecikme yoktur. (Ancak hedef kullanıcının açık frontend oturumundaki state kendiliğinden yenilenmez — sayfa yenileme/yeniden login gerekir.)
 - Bu katman `admin` feature'ının tüm endpoint'lerinde, `auth` feature'ının yönetim rotalarında ve `universities`'in yazma rotalarında kullanılır (`guard()` → `authMiddleware → attachAuthz → requirePermission("...") [→ enforceTenantScope()]`).
-- `super_admin` rolü, `enforceTenantScope` kontrolünü bypass eder — yani `:universityId` path param'ı kendi üniversitesiyle eşleşmese bile işlem yapabilir. Diğer roller için `:universityId` mutlaka kendi `universityId`'leri ile eşleşmelidir, aksi halde `403`.
+- `super_admin` ve `platform_support` rolleri `enforceTenantScope` kontrolünü bypass eder — yani `:universityId` path param'ı kendi üniversitesiyle eşleşmese bile işlem yapabilirler. Diğer roller için `:universityId` mutlaka kendi `universityId`'leri ile eşleşmelidir, aksi halde `403`.
 
 ### 2) Kulüp bazlı roller (`clubMembers.role`)
 
@@ -186,6 +191,8 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 | GET | `/api/users/me/clubs` | Bearer | Üye olduğum kulüpler (pending istekler dahil) |
 | GET | `/api/users/me/applications` | Bearer | Kulüp kurma başvurularım |
 | GET | `/api/users/me/advised-clubs` | Bearer | Danışmanı olduğum kulüpler (advisor rolü) |
+| GET | `/api/users/me/activities` | Bearer | Katılım bildirdiğim etkinlikler (takvimim) — bkz. [Activities](#11-activities--apiactivities) |
+| GET | `/api/users/me/dashboard` | Bearer | Öğrenci panel özeti (kulüp/etkinlik/istek sayaçları) — bkz. [Dashboard](#12-dashboard--feed) |
 
 **PATCH /api/users/me** body (en az bir alan zorunlu):
 ```jsonc
@@ -212,7 +219,7 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 
 ### 3) University — `/api/universities`
 
-**Ayrıntılı request/response örnekleri ve frontend akış rehberi için `docs/FRONTEND_UNIVERSITY.md`'ye bakın.** Bu bölüm özet kataloğudur.
+**Ayrıntılı request/response örnekleri ve frontend akış rehberi için `docs/frontend/FRONTEND_UNIVERSITY.md`'ye bakın.** Bu bölüm özet kataloğudur.
 
 Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda üniversite/fakülte/bölüm seçimi için. Yazma rotaları **granüler `university.*` permission'larıyla** korunur (sistem yönetim paneli). Eski tek `university.manage` yetkisi kaldırıldı; yerine kaynak+aksiyon bazlı 12 ayrı yetki geldi (aşağıdaki tabloda her satırın yetkisi belirtilmiştir). Bu, bir kullanıcıya örneğin "yalnızca fakülte ekleme" yetkisi verip "üniversite silme" yetkisi vermemeyi mümkün kılar.
 
@@ -272,7 +279,7 @@ Kayıt formu akışı için önerilen sıra: üniversite seç → fakülte seç 
 
 ### 4) Clubs — `/api/clubs`
 
-**Ayrıntılı request/response örnekleri, roller ve uçtan uca senaryolar için `docs/FRONTEND_CLUBS.md`'ye bakın.** Bu bölüm özet kataloğudur.
+**Ayrıntılı request/response örnekleri, roller ve uçtan uca senaryolar için `docs/frontend/FRONTEND_CLUBS.md`'ye bakın.** Bu bölüm özet kataloğudur.
 
 Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyle sınırlıdır (path'te `universityId` yoktur — JWT'den çözülür). Yetki **kulüp-içi rolden** (`clubMembers.role` + danışmanlık) gelir, global RBAC'tan değil (`club.middleware`).
 
@@ -354,18 +361,19 @@ Body şemaları:
 
 **POST** body: `{ "imageUrl": "url (max 512)", "caption": "string (max 256, opsiyonel)" }`
 
-> Not: Dosya upload endpoint'i yok — `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Görsel yükleme (S3/Cloudinary vb.) frontend veya ayrı bir servis tarafından yapılıp URL buraya verilmelidir.
+> Not: `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Bu URL'yi **`POST /api/uploads`** ile (gerçek dosya yükleyip) üretebilirsiniz — bkz. [Media](#13-media--dosya-yükleme). Alternatif olarak harici bir servisin (S3/Cloudinary) URL'si de verilebilir.
 
 ---
 
 ### 7) Admin — `/api/admin`
 
-Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geçer: path'teki `:universityId` **çağıran kullanıcının kendi üniversitesiyle eşleşmeli** (super_admin hariç — o herhangi bir üniversiteyi hedefleyebilir). Gerekli permission'lar seed'de `admin` rolüne atanmıştır: `user.manage` + granüler `club.*` (`club.approve`, `club.update`, `club.advisor.manage`, `club.delete`). Kulüp yönetiminin ayrıntısı için `docs/FRONTEND_CLUBS.md §11`.
+Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geçer: path'teki `:universityId` **çağıran kullanıcının kendi üniversitesiyle eşleşmeli** (`super_admin`/`platform_support` bypass). Kulüp yönetiminin ayrıntısı için `docs/frontend/FRONTEND_CLUBS.md §11`.
 
 | Method | Path | Permission | Açıklama |
 |---|---|---|---|
-| GET | `/api/admin/universities/:universityId/users?status=` | `user.manage` | Kullanıcıları listele |
-| GET | `/api/admin/universities/:universityId/users/:userId` | `user.manage` | Tek kullanıcı |
+| GET | `/api/admin/universities/:universityId/users?status=&role=` | `user.view` | Kullanıcıları listele (`roles` dahil) |
+| GET | `/api/admin/universities/:universityId/users/:userId` | `user.view` | Tek kullanıcı (roller, üyelikler, override'lar) |
+| GET | `/api/admin/universities/:universityId/users/:userId/effective-permissions` | `user.view` | Etkin roller + yetkiler |
 | PATCH | `/api/admin/universities/:universityId/users/:userId/department` | `user.manage` | Kullanıcının bölümünü güncelle |
 
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/frontend/FRONTEND_MODERASYON.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
@@ -414,11 +422,171 @@ Body / dönüş:
 
 ---
 
+### 9) Notifications — `/api/notifications`
+
+Kalıcı bildirimler + gerçek zamanlı WebSocket teslimatı. Tüm REST rotaları
+`authMiddleware` + `requireActiveUser` ister (`pending` kullanıcı bildirimleri
+okuyabilir; `suspended` kesilir). **Ayrıntılı mimari:** `docs/BILDIRIMLER.md`.
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| POST | `/api/notifications/ws-ticket` | Bearer | WS için 60sn tek kullanımlık ticket |
+| GET | `/api/notifications/ws?ticket=<uuid>` | ticket | WebSocket upgrade (header taşınamaz) |
+| GET | `/api/notifications?limit=20&cursor=<ISO>` | Bearer | Bildirim listesi (keyset, en yeni → eski) |
+| GET | `/api/notifications/unread-count` | Bearer | Okunmamış sayısı (zil rozeti) |
+| PATCH | `/api/notifications/:notificationId/read` | Bearer | Tek bildirimi okundu işaretle |
+| PATCH | `/api/notifications/read-all` | Bearer | Tümünü okundu işaretle |
+| GET | `/api/notifications/push-key` | Bearer | Web Push VAPID anahtarı (`enabled`, `publicKey`) |
+| POST | `/api/notifications/push-subscribe` | Bearer | Push aboneliği kaydet |
+| DELETE | `/api/notifications/push-subscribe` | Bearer | Push aboneliğinden çık |
+
+**WebSocket akışı:**
+1. `POST /api/notifications/ws-ticket` → `{ ticket, expiresIn: 60 }`
+2. `GET /api/notifications/ws?ticket=<ticket>` → upgrade; sunucu `{ event: "ready" }` yollar
+3. Bildirim gelince `{ event: "notification", data: { id, type, title, body, ... } }`
+4. Heartbeat: sunucu `ping` → istemci düz metin `"pong"` cevabı
+
+Body şemaları:
+- `GET /` query: `limit` (1–50, varsayılan 20), `cursor` (ISO 8601 `createdAt`)
+- `POST /push-subscribe`: `{ endpoint, keys: { p256dh, auth } }` (PushSubscription JSON)
+- `DELETE /push-subscribe`: `{ endpoint }`
+
+Örnek liste yanıtı:
+```jsonc
+{
+  "success": true,
+  "message": "...",
+  "data": {
+    "items": [
+      { "id": "...", "type": "club.membership.decided", "title": "...", "body": "...",
+        "data": { "clubId": "...", "status": "approved" }, "readAt": null, "createdAt": "..." }
+    ],
+    "nextCursor": "2026-07-09T12:00:00.000Z"  // yoksa null — son sayfa
+  }
+}
+```
+
+---
+
+### 10) Audit — `/api/audit`
+
+Append-only denetim izi — **salt-okunur**; yazma/silme endpoint'i yoktur (kayıtlar
+`guard()` zincirindeki `auditTrail` tarafından otomatik üretilir).
+**Ayrıntı:** `docs/DENETIM_VE_HATA.md`.
+
+| Method | Path | Permission | Açıklama |
+|---|---|---|---|
+| GET | `/api/audit/universities/:universityId` | `audit.view` (tenant-scoped) | Denetim kayıtları (cursor + filtre) |
+
+Query parametreleri:
+- `limit` (1–100, varsayılan 50)
+- `cursor` (ISO 8601 — keyset sayfalama, bildirimlerle aynı desen)
+- `actorId` (uuid) — "bu kişi neler yaptı?"
+- `action` (string, max 128) — yetki anahtarı: `user.manage`, `club.approve`, …
+- `targetId` (string) — "bu kaynağa kimler dokundu?"
+
+Örnek yanıt:
+```jsonc
+{
+  "success": true,
+  "message": "...",
+  "data": {
+    "items": [
+      {
+        "id": "...", "actorId": "...", "action": "user.manage",
+        "method": "POST", "path": "/api/moderation/universities/.../ban",
+        "status": 200, "targetType": "user", "targetId": "...",
+        "metadata": { "params": {}, "body": { "reason": "[GİZLENDİ]" } },
+        "ip": "...", "universityId": "...", "createdAt": "...",
+        "actor": { "id": "...", "firstName": "...", "lastName": "...", "email": "..." }
+      }
+    ],
+    "nextCursor": null
+  }
+}
+```
+
+`audit.view` yetkisi: `auditor`, `university_admin`, `platform_support`, `super_admin`.
+### 11) Activities — `/api/activities`
+
+Kulüp etkinlikleri: keşif, katılım (RSVP), takvim ve kulüp-içi yönetim.
+**Tam derinlemesine referans (kavramsal model, co-host/cross-university, tüm
+request/response örnekleri): [`docs/frontend/FRONTEND_ACTIVITIES.md`](frontend/FRONTEND_ACTIVITIES.md).**
+
+Kilit tasarım: etkinlik ↔ kulüp **M:N** (`activity_clubs`, host/co_host). Bir etkinliğin
+tek bir `universityId`'si **yoktur** — tenant'ı katılan kulüplerden türetilir; co-hosted
+etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva senaryosu).
+
+**Keşif + RSVP** (Bearer; tenant JWT'den):
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/activities?scope=upcoming\|past\|all&search=` | Üniversite geneli yayınlanmış + `university` görünürlüklü etkinlikler |
+| GET | `/api/activities/:activityId` | Detay (görünürlük/tenant/yayın kuralları uygulanır) |
+| POST | `/api/activities/:activityId/rsvp` | Katılım bildir — `{ status: "going"\|"interested" }` (vars. `going`, kapasite kontrollü) |
+| DELETE | `/api/activities/:activityId/rsvp` | Katılımı geri al (idempotent) |
+
+**Kulüp-içi yönetim** — `/api/clubs/:clubId/activities` (kulüp alt-kaynağı; yazma = host staff):
+
+| Method | Path | Kim |
+|---|---|---|
+| GET | `/api/clubs/:clubId/activities` | Bearer (herkes; `members` yalnızca üyeye, taslak yalnızca staff'a) |
+| POST | `/api/clubs/:clubId/activities` | host staff (bu kulüp host; `publish:false` → taslak) |
+| PATCH | `/api/clubs/:clubId/activities/:activityId` | host staff |
+| POST | `.../:activityId/publish` | host staff (taslağı yayınla) |
+| POST | `.../:activityId/cancel` | host staff (katılımcılara bildirim) |
+| GET | `.../:activityId/attendees` | host staff |
+| POST\|DELETE | `.../:activityId/attendees/:userId/check-in` | host staff (yoklama işaretle/geri al) |
+| POST\|GET | `.../:activityId/co-hosts` | host staff (kulüp davet et `{clubId}` / listele) |
+| DELETE | `.../:activityId/co-hosts/:coClubId` | host staff (co-host kaldır) |
+| POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
+| POST | `/api/admin/universities/:uid/activities/:activityId/cancel` | `activity.moderate` (tenant) | **Moderasyon:** tenant'taki herhangi bir kulübün etkinliğini iptal etme |
+
+Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true) }`; `PATCH` aynı alanlar opsiyonel (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
+
+---
+
+### 12) Dashboard & Feed — `/api/feed`
+
+Rollere göre özet/akış (okuma modeli — mevcut veriyi birleştirir).
+**Tam referans: [`docs/frontend/FRONTEND_DASHBOARD.md`](frontend/FRONTEND_DASHBOARD.md).**
+
+| Method | Path | Yetki | Açıklama |
+|---|---|---|---|
+| GET | `/api/feed?limit=&cursor=` | Bearer | Öğrenci akışı: kulüplerimin duyuru+etkinlikleri (keyset) |
+| GET | `/api/users/me/dashboard` | Bearer | Öğrenci özeti (kulüp/etkinlik/istek sayaçları + en yakın etkinlik) |
+| GET | `/api/clubs/:clubId/dashboard` | kulüp staff | Kulüp özeti (üye/istek/etkinlik/duyuru sayaçları) |
+| GET | `/api/admin/universities/:universityId/dashboard` | `dashboard.view` (tenant) | Tenant özeti (kulüp/kullanıcı durum dağılımı + bekleyen başvuru + yaklaşan etkinlik) |
+
+Feed öğesi: `{ type: "announcement"|"activity", at (ISO), club, item }`. `nextCursor` doluysa `?cursor=` ile devam.
+
+---
+
+### 13) Media — `/api/uploads`
+
+Gerçek dosya yükleme. **Tam referans: [`docs/frontend/FRONTEND_MEDIA.md`](frontend/FRONTEND_MEDIA.md).**
+Akış: **yükle → dönen URL'yi mevcut `*Url` alanına yaz** (endpoint'ler hâlâ URL string alır).
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| POST | `/api/uploads` | Bearer | multipart `file` + `purpose` → `{ id, url }`. Yalnızca görsel (magic-byte doğrulaması), ≤ `MAX_UPLOAD_BYTES` (5MB) |
+| DELETE | `/api/uploads/:mediaId` | Bearer | Sil (yalnızca yükleyen) |
+| GET | `/uploads/:key` | Public | Servis (`Cache-Control: immutable`) |
+
+`purpose`: `avatar\|club_logo\|club_cover\|gallery\|other`. Boyut aşımı → `413`; görsel değil → `400`.
+
+---
+
 ## Enum Referansı
 
 | Enum | Değerler |
 |---|---|
 | `user.status` | `pending`, `active`, `suspended` |
+| `activity_status` | `draft`, `published`, `cancelled` |
+| `activity_visibility` | `university`, `members` |
+| `activity_club_role` | `host`, `co_host` |
+| `activity_club_status` | `invited`, `accepted` |
+| `rsvp_status` | `going`, `interested`, `waitlist` |
 | `club.status` | `pending`, `approved`, `rejected`, `archived` |
 | `join_policy` | `open`, `approval_required` |
 | `club_role` (kulüp içi) | `member`, `officer`, `president` |
@@ -427,7 +595,7 @@ Body / dönüş:
 | `contact_platform` | `whatsapp`, `instagram`, `discord`, `telegram`, `twitter`, `website`, `email`, `other` |
 | `domain_type` | `student`, `staff` |
 | Global roller (seed — 9 rol) | `super_admin`, `platform_support`, `university_admin`, `student_affairs`, `academic_affairs`, `content_moderator`, `auditor`, `advisor`, `student` |
-| Global permission'lar (seed) | `user.view`, `user.manage`, `audit.view`, `club.approve`, `club.update`, `club.advisor.manage`, `club.delete`, `announcement.moderate`, `gallery.moderate`, `role.manage`, `permission.manage`, `university.create`, `university.update`, `university.delete`, `university.domain.create`, `university.domain.update`, `university.domain.delete`, `university.faculty.create`, `university.faculty.update`, `university.faculty.delete`, `university.department.create`, `university.department.update`, `university.department.delete` (**kapalı küme değil** — `permission.manage` ile runtime'da genişletilebilir) |
+| Global permission'lar (seed) | `user.view`, `user.manage`, `audit.view`, `club.approve`, `club.update`, `club.advisor.manage`, `club.delete`, `announcement.moderate`, `gallery.moderate`, `activity.moderate`, `dashboard.view`, `role.manage`, `permission.manage`, `university.create`, `university.update`, `university.delete`, `university.domain.create`, `university.domain.update`, `university.domain.delete`, `university.faculty.create`, `university.faculty.update`, `university.faculty.delete`, `university.department.create`, `university.department.update`, `university.department.delete` (**kapalı küme değil** — `permission.manage` ile runtime'da genişletilebilir) |
 
 ---
 
@@ -439,5 +607,6 @@ Body / dönüş:
 - **`announcements`/`gallery` feature'ları `index.ts`'te ayrı mount edilmez** — `clubs.routes.ts` içinden `/:clubId/announcements` ve `/:clubId/gallery` olarak mount edilirler. `clubs.routes.ts` ayrıca kendi rotalarını `routes/` alt-dizinine böler (browse/applications/membership/management) — üniversite feature'ıyla aynı desen.
 - **Kulüp başkanlığı devri** artık `POST /api/clubs/:clubId/transfer-presidency` ile yapılır (yalnızca mevcut başkan; eski başkan officer'a düşer). Böylece başkan devrettikten sonra kulüpten ayrılabilir. (member↔officer geçişi hâlâ ayrı: `.../members/:userId/role`.)
 - **Kulüp kurma başvurularında** başvuran kendi başvurusunu görüntüleyebilir (`GET /api/clubs/applications/:id`) ve bekleyen başvuruyu geri çekebilir (`DELETE`). Değerlendirme (onay/red) admin'dedir. Onay zinciri (`clubApplicationApprovals`) çok-adımlı olacak şekilde genişletilebilir (şu an tek adım).
-- **Etkin permission listesini döndüren bir endpoint yok** — `GET /api/users/me` rol adlarını verir ama flatten edilmiş permission listesi hiçbir yerden dönmez; permission bazlı UI guard'ı için backend'e ek gerekir (bkz. `FRONTEND_AUTH_GUARD_GUIDE.md` §3).
+- **Etkin permission listesi:** `GET /api/users/me/permissions` → `{ roles, permissions, status }`.
+  Yönetici görünümü: `GET /api/admin/.../users/:userId/effective-permissions`.
 - **Rol/izin değişiklikleri anında etkilidir** — RBAC cache'i (5 dk TTL) ilgili akışlarda otomatik invalidate edilir; frontend tarafında yalnızca açık oturumdaki state'in yenilenmesi (refresh/yeniden login) gerekir.

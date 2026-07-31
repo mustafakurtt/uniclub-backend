@@ -4,7 +4,7 @@ import { ok } from "../../shared/utils/respond";
 import { guard } from "../../core/rbac/guard";
 import { RbacVariables } from "../../core/rbac/rbac.middleware";
 import { ModerationPermission } from "./moderation.permissions";
-import { banUserSchema, activityQuerySchema } from "./moderation.schema";
+import { banUserSchema, anonymizeUserSchema, activityQuerySchema } from "./moderation.schema";
 import { moderationService } from "./moderation.service";
 
 /**
@@ -39,6 +39,23 @@ moderationRoutes.post(
     const actorId = c.get("user").userId;
     const user = await moderationService.unbanUser(universityId, userId, actorId);
     return ok(c, user, "moderation.unbanned");
+  }
+);
+
+// 2b. ANONİMLEŞTİRME (KVKK silme talebi — GERİ ALINAMAZ)
+// Ayrı bir yetki anahtarı almadı: `user.manage`ı taşıyan bir yönetici zaten
+// hesabı süresiz askıya alabiliyor. Asıl koruma yetki değil, gövdedeki açık
+// onay + zorunlu gerekçe (bkz. anonymizeUserSchema).
+moderationRoutes.post(
+  `${BASE}/anonymize`,
+  ...guard(ModerationPermission.MODERATE, { tenantScoped: true }),
+  validate("json", anonymizeUserSchema),
+  async (c) => {
+    const { universityId, userId } = c.req.param();
+    const body = c.req.valid("json");
+    const actorId = c.get("user").userId;
+    const user = await moderationService.anonymizeUser(universityId, userId, body, actorId);
+    return ok(c, user, "moderation.anonymized");
   }
 );
 

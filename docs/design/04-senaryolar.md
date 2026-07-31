@@ -6,10 +6,10 @@ ve `seed.ts`) somutlaştırılmıştır. Adımlarda `[VAR]` = bugün çalışır
 `[EKSİK]` = önerilen endpoint gerektirir ([05](05-eksikler-ve-onerilen-endpointler.md)).
 
 Seed'den kritik aktörler:
-- `superadmin@antalya.edu.tr` → `super_admin` (tenant bypass, tüm yetkiler)
-- `elif.demir@antalya.edu.tr` → Antalya `admin`
-- `okan.yildiz@egebilim.edu.tr` → Ege `admin`
-- `hulya.ozkan@kartek.edu.tr` → Karadeniz `admin`
+- `superadmin@platform.local` → `super_admin` (platform, tenant bypass)
+- `elif.demir@antalya.edu.tr` → Antalya `university_admin`
+- `okan.yildiz@egebilim.edu.tr` → Ege `university_admin`
+- `hulya.ozkan@kartek.edu.tr` → Karadeniz `university_admin`
 - `ahmet.hoca@antalya.edu.tr` → `advisor` (2 kulüp danışmanı)
 - `murat.tekin@antalya.edu.tr` → `advisor` (kulüpsüz — havuz)
 - `mustafa.kurt@std.antalya.edu.tr` → `student`, Yazılım Kulübü **president**
@@ -17,16 +17,15 @@ Seed'den kritik aktörler:
 
 ---
 
-## S-A — Yeni bir okul yöneticisi (admin) atama
+## S-A — Yeni bir okul yöneticisi (university_admin) atama
 
-**Amaç:** super_admin, Ege'de bir öğretim üyesini admin yapsın.
+**Amaç:** super_admin, Ege'de bir öğretim üyesini tenant yöneticisi yapsın.
 
 1. `[VAR]` super_admin giriş yapar (`role.manage` var).
-2. `[EKSİK/VAR]` Hedef kullanıcıyı bulmak: Ege kullanıcılarını listele →
-   `GET /api/admin/universities/<Ege>/users` **çalışır** (super_admin tenant
-   bypass). Ancak "advisor'ları filtrele" yoktur → tüm listeden seçilir.
+2. `[VAR]` Hedef kullanıcıyı bulmak: `GET /api/admin/universities/<Ege>/users?role=advisor`
+   (veya tüm liste).
 3. `[VAR]` `PATCH /api/auth/users/<kemal.hoca>/promote-admin` →
-   `"Kullanıcı yönetici yapıldı."`. `userRoles`'a `admin` eklenir; kullanıcının
+   `"Kullanıcı yönetici yapıldı."`. `userRoles`'a `university_admin` eklenir;
    `advisor` rolü **durur** (union). Cache anında temizlenir.
 4. **Sonuç:** kemal.hoca artık Ege admini. `/api/admin/universities/<Ege>/...`
    çağırabilir; **başka tenant'ı çağırırsa `403`** (super_admin değil, admin).
@@ -93,11 +92,11 @@ silebilsin ve hulya'nın öbür admin yetkileri kalsın.
 **Amaç:** `mustafa.kurt` (Yazılım Kulübü başkanı) disiplin nedeniyle askıya
 alınsın.
 
-1. `[VAR]` `PATCH /api/admin/universities/<Antalya>/users/<mustafa>/status
-   { "status": "suspended" }` (admin `elif` veya super_admin).
-2. **Sonuç (KATMAN A):** mustafa'nın bir sonraki login'i `401`
-   `"Hesabınız askıya alınmıştır..."`. Mevcut JWT'si süresi dolana dek çalışır
-   (stateless) — anlık kesme yok (bkz. [01 §S3.2](01-kullanici-yonetimi.md)).
+1. `[VAR]` `POST /api/moderation/universities/<Antalya>/users/<mustafa>/ban
+   { "reason": "Disiplin cezası" }` (`elif` veya super_admin).
+2. **Sonuç (KATMAN A):** mustafa'nın bir sonraki login'i `401`. Mevcut JWT ile
+   korunan yüzeylere **bir sonraki istekte** `403` (`attachAuthz` / authz cache
+   `status`) — bkz. [01 §S3.2](01-kullanici-yonetimi.md).
 3. **Sonuç (KATMAN B — kritik):** `clubMembers(Yazılım, mustafa, president,
    approved)` satırı **DEĞİŞMEZ**. Kulüp hâlâ mustafa'yı başkan olarak taşır.
    Global askı, kulüp içi rolü düşürmez (iki katman bağımsız).

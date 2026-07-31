@@ -7,15 +7,7 @@ lives in the [root README](../README.md); this folder holds the deep dives.
 > the codebase convention. API `message` alanları **isteğin diline** göre döner
 > (`Accept-Language: tr|en`, varsayılan `tr`).
 
-## Frontend'e son değişiklikler (Temmuz 2026)
-
-Aşağıdakiler frontend'i etkiler; ilgili dokümanlar güncellendi:
-
-- **Birleşik hata zarfı + i18n:** tüm hatalar `{ success:false, message, code?, details?, requestId }`; `message` `Accept-Language`'e göre (`tr`/`en`). Doğrulama hataları artık ham `ZodError` değil → `code: "VALIDATION_ERROR"` + `details:[{ path, code, message }]`. **Mantığı mesaj metnine değil `code`/HTTP status'a bağlayın.** (bkz. `DENETIM_VE_HATA.md`)
-- **Yeni feature — Moderation (`/api/moderation`):** kullanıcı ban/unban (sebepli), admin şifre sıfırlama (geçici şifre), kullanıcı aktivitesi + moderasyon geçmişi. (bkz. `frontend/FRONTEND_MODERASYON.md`)
-- **Kaldırıldı:** admin `PATCH .../users/:userId/status` → yerine moderation ban/unban.
-- **Login:** `user.mustChangePassword` alanı — `true` ise zorunlu şifre değiştirme ekranı.
-- **Yeni bildirim tipleri:** `account.unsuspended`, `account.passwordReset`.
+Değişiklik günlüğü: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Reference
 
@@ -29,6 +21,12 @@ Aşağıdakiler frontend'i etkiler; ilgili dokümanlar güncellendi:
 | [BILDIRIMLER.md](BILDIRIMLER.md) | Notification system + WebSocket delivery |
 | [DENETIM_VE_HATA.md](DENETIM_VE_HATA.md) | Audit trail + error-handling contract |
 | [MAIL_DOGRULAMA.md](MAIL_DOGRULAMA.md) | Email verification flow (BullMQ + Mailpit) |
+| [GUVENLIK_YOL_HARITASI.md](GUVENLIK_YOL_HARITASI.md) | Güvenlik + `core/` çatısının eksikleri, tier'lı |
+| [SEMA_VE_URUN_YOL_HARITASI.md](SEMA_VE_URUN_YOL_HARITASI.md) | Veri modeli, SaaS ürünleşme ve doküman borcu, tier'lı |
+| [ONBOARDING_TENANT.md](ONBOARDING_TENANT.md) | Yeni üniversite (tenant) açma runbook'u — operasyon |
+| [DATA_MODEL.md](DATA_MODEL.md) | Veri modeli: ER diyagramı, tablo sözlüğü, şema kuralları |
+| [KVKK.md](KVKK.md) | Kişisel veri envanteri, anonimleştirme akışı, saklama süreleri |
+| [adr/](adr/) | Mimari karar kayıtları (ADR) |
 
 ## Frontend integration guides — [`frontend/`](frontend/)
 
@@ -40,6 +38,9 @@ Endpoint contracts and expected client behavior for each surface:
 | [FRONTEND_AUTH_GUARD_GUIDE.md](frontend/FRONTEND_AUTH_GUARD_GUIDE.md) | React route/UI guard mimarisi |
 | [FRONTEND_UNIVERSITY.md](frontend/FRONTEND_UNIVERSITY.md) | Üniversite/fakülte/bölüm/domain (soft delete notu) |
 | [FRONTEND_CLUBS.md](frontend/FRONTEND_CLUBS.md) | Kulüpler, üyelik, danışman, başvurular |
+| [FRONTEND_ACTIVITIES.md](frontend/FRONTEND_ACTIVITIES.md) | **Yeni** — etkinlikler: keşif/RSVP/takvim + kulüp-içi yönetim (M:N host/co-host, cross-university) |
+| [FRONTEND_DASHBOARD.md](frontend/FRONTEND_DASHBOARD.md) | **Yeni** — panel & akış: öğrenci feed/özeti, kulüp paneli, admin paneli |
+| [FRONTEND_MEDIA.md](frontend/FRONTEND_MEDIA.md) | **Yeni** — dosya yükleme: multipart upload → URL → `*Url` alanı; public servis |
 | [FRONTEND_YONETIM.md](frontend/FRONTEND_YONETIM.md) | Yönetim paneli (kullanıcı/kulüp/başvuru) |
 | [FRONTEND_MODERASYON.md](frontend/FRONTEND_MODERASYON.md) | **Yeni** — ban/unban/şifre sıfırla/aktivite/geçmiş |
 | [FRONTEND_BILDIRIM_VE_LIMITLER.md](frontend/FRONTEND_BILDIRIM_VE_LIMITLER.md) | Bildirimler (WS) + rate limit |

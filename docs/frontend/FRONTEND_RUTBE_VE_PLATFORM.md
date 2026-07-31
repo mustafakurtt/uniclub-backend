@@ -6,7 +6,7 @@ artık **null olabiliyor**. Bu, mevcut panelde **kırıcı (breaking)** değişi
 yol açıyor.
 
 > Tüm örnekler çalışan sunucudan birebir doğrulanmıştır (Temmuz 2026).
-> Tasarım gerekçesi: [yonetim/07-rutbe-ve-kapsam.md](yonetim/07-rutbe-ve-kapsam.md).
+> Tasarım gerekçesi: [design/07-rutbe-ve-kapsam.md](../design/07-rutbe-ve-kapsam.md).
 > Endpoint referansının tamamı: [FRONTEND_YONETIM.md](FRONTEND_YONETIM.md).
 
 ---

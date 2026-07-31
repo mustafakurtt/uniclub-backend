@@ -97,7 +97,38 @@ services:
   redis:
     image: redis:7-alpine
     container_name: uniclub_prod_redis
-    command: ["redis-server", "--appendonly", "yes"]
+    # BELLEK POLİTİKASI — bu Redis KARIŞIK yük taşır: atılabilir cache + rate-limit
+    # sayaçları + WS biletleri YANINDA, kaybolmaması gereken BullMQ iş verisi
+    # (doğrulama e-postaları).
+    #
+    # `--maxmemory` EKLENDİ: sınır yokken instance host'un RAM'ini doldurana kadar
+    # büyür ve OOM killer konteyneri (kötü ihtimalle komşularını) düşürür. Sınırlı
+    # bir Redis ise ölmek yerine BOZULARAK ÇALIŞIR ve bunu görünür kılar. 512 MB,
+    # mevcut kullanımın (~10 MB, tepe ~27 MB) çok üstünde bir güvenlik bariyeridir.
+    #
+    # `--maxmemory-policy noeviction` BİLİNÇLİ TERCİHTİR. `volatile-lru` denendi
+    # (mantık: "TTL'siz BullMQ iş verisi tahliye edilmez") ve BullMQ çalışma anında
+    # UYARI VERDİ: "Eviction policy is volatile-lru. It should be noeviction".
+    # Çıkarım eksikti — BullMQ'nun bazı anahtarları (iş KİLİTLERİ) TTL taşır;
+    # tahliye edilirlerse aynı iş iki kez işlenebilir (mükerrer doğrulama e-postası).
+    # Kütüphanenin açık gereksinimi kendi çıkarımımıza tercih edilir.
+    #
+    # SONUÇ: sınıra gelindiğinde tahliye değil YAZMA HATASI olur. Cache fail-open
+    # olduğu için okumalar DB'den servis edilmeye devam eder; BullMQ enqueue ise
+    # gürültülü biçimde başarısız olur — sessiz bozulmaya yeğdir. `used_memory`
+    # izlenmeli ve %80'de alarm kurulmalıdır.
+    #
+    # KALICI ÇÖZÜM (yol haritası): cache'i AYRI bir Redis instance'ına almak.
+    # maxmemory-policy INSTANCE geneldir, DB index'i başına DEĞİLDİR — bu yüzden
+    # "cache'i ayrı DB'ye al" tahliyeyi ayırmaz; yalnızca ayrı instance ayırır.
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--maxmemory"
+      - "${REDIS_MAXMEMORY:-512mb}"
+      - "--maxmemory-policy"
+      - "noeviction"
     volumes:
       - redisdata:/data
     healthcheck:

@@ -1,54 +1,85 @@
+import { defineKeyspace, entry, effect } from "../../core/cache";
 import { cache } from "../../shared/cache/cache.client";
+import type { Department, Faculty } from "./university.types";
+import type { universityRepository } from "./repositories";
 
 /**
- * university feature'ının izole cache keyspace'i (`university:` öneki) + tipli
- * read-through/invalidasyon yardımcıları. Anahtar üretimi ve invalidasyon
- * ilişkileri TEK yerde toplanır ki service okunur kalsın, anahtarlar dağılmasın.
+ * university feature'ının cache SÖZLEŞMESİ: hangi anahtar hangi TİPİ taşır ve
+ * hangi iş olayı hangi anahtarları bayatlatır — ikisi de tek dosyada, tek beyanda
+ * (bkz. core/cache/keyspace.ts).
  *
- * Bu okumalar görece durağandır (tenant/fakülte/bölüm ağacı); yazma yollarında
- * ilgili anahtarlar AÇIKÇA geçersiz kılınır (grup/tag invalidasyonu yok — bkz.
- * core/cache Cache.namespace). Domainler getUniversity yanıtının parçası olduğu
- * için domain yazımları `byId`'i geçersiz kılar.
+ * Bu okumalar görece durağandır (tenant/fakülte/bölüm ağacı). Arama sonuçları ve
+ * varlık/tenant guard'ları BİLİNÇLİ olarak cache DIŞINDA kalır (çok anahtar, düşük
+ * değer) — gerekçeler servis katmanındaki notlarda.
+ *
+ * İnvalidasyon TETİĞİ rotalardadır (`invalidates(...)` middleware'i, bkz.
+ * routes/*.routes.ts); servis katmanı cache'i hiç bilmez. HTTP dışı bir yazar
+ * çıkarsa aynı efekti `universityEffects.x.emit(...)` ile doğrudan tetikler.
  */
-const c = cache.namespace("university");
 
-const keys = {
+// Cache'lenen liste/detay şekilleri repository sorgularının TAM çıktısıdır (kolon
+// seçimi + `with` ilişkileri dahil). Elle DTO yazmak yerine oradan türetiyoruz ki
+// sorgu değiştiğinde cache'in taşıdığı tip sessizce ayrışmasın.
+type UniversityList = Awaited<ReturnType<typeof universityRepository.list>>;
+type UniversityDetail = Awaited<ReturnType<typeof universityRepository.findByIdWithDomains>>;
+
+/**
+ * `university:` keyspace'i. Okuma: `universityCache.faculties(id).read(loader)`.
+ * Tek bir girdiyi elle düşürmek gerekirse `.drop()` — ama normal yol efektlerdir.
+ */
+export const universityCache = defineKeyspace(cache, "university", {
   /** Aramasız public üniversite listesi. */
-  list: "list",
-  /** Domainleriyle tek üniversite. */
-  byId: (universityId: string) => `byId:${universityId}`,
+  list: entry<UniversityList>()("list"),
+  /** Domainleriyle tek üniversite (bulunamazsa `undefined` — getOrSet onu yazmaz). */
+  byId: entry<UniversityDetail>()((universityId: string) => `byId:${universityId}`),
   /** Bir üniversitenin fakülte listesi. */
-  faculties: (universityId: string) => `faculties:${universityId}`,
+  faculties: entry<Faculty[]>()((universityId: string) => `faculties:${universityId}`),
   /** Bir fakültenin bölüm listesi. */
-  departments: (facultyId: string) => `departments:${facultyId}`,
-};
+  departments: entry<Department[]>()((facultyId: string) => `departments:${facultyId}`),
+});
 
-export const universityCache = {
-  // ── Okuma (read-through) ────────────────────────────────────────────────
-  list: <T>(loader: () => Promise<T>) => c.getOrSet(keys.list, loader),
-  byId: <T>(universityId: string, loader: () => Promise<T>) =>
-    c.getOrSet(keys.byId(universityId), loader),
-  faculties: <T>(universityId: string, loader: () => Promise<T>) =>
-    c.getOrSet(keys.faculties(universityId), loader),
-  departments: <T>(facultyId: string, loader: () => Promise<T>) =>
-    c.getOrSet(keys.departments(facultyId), loader),
-
-  // ── Invalidasyon ────────────────────────────────────────────────────────
+/**
+ * İş olayı → bayatlayan girdiler. Anahtar listeleri BURADA, tek yerde durur;
+ * rotalar yalnızca hangi olayın gerçekleştiğini bildirir.
+ */
+export const universityEffects = {
   /** Üniversite oluşturuldu → yalnızca liste değişir. */
-  invalidateList: () => c.delete(keys.list),
+  universityCreated: effect("university.created", () => [universityCache.list()]),
+
   /** Üniversite güncellendi → liste + o kayıt. */
-  invalidateUniversity: (universityId: string) =>
-    c.delete([keys.list, keys.byId(universityId)]),
-  /** Domain değişti → yalnızca o üniversitenin kaydı (domainler onun parçası). */
-  invalidateUniversityDomains: (universityId: string) => c.delete(keys.byId(universityId)),
+  universityUpdated: effect("university.updated", (universityId: string) => [
+    universityCache.list(),
+    universityCache.byId(universityId),
+  ]),
+
   /** Üniversite silindi → liste + kayıt + fakülte listesi. */
-  invalidateUniversityDeep: (universityId: string) =>
-    c.delete([keys.list, keys.byId(universityId), keys.faculties(universityId)]),
+  universityDeleted: effect("university.deleted", (universityId: string) => [
+    universityCache.list(),
+    universityCache.byId(universityId),
+    universityCache.faculties(universityId),
+  ]),
+
+  /**
+   * Domain eklendi/güncellendi/silindi → yalnızca o üniversitenin kaydı; domainler
+   * `getUniversity` yanıtının parçasıdır, ayrı bir anahtarları yoktur.
+   */
+  domainsChanged: effect("university.domainsChanged", (universityId: string) => [
+    universityCache.byId(universityId),
+  ]),
+
   /** Fakülte oluşturuldu/güncellendi → o üniversitenin fakülte listesi. */
-  invalidateFaculties: (universityId: string) => c.delete(keys.faculties(universityId)),
+  facultyChanged: effect("university.facultyChanged", (universityId: string) => [
+    universityCache.faculties(universityId),
+  ]),
+
   /** Fakülte silindi → fakülte listesi + o fakültenin bölüm listesi. */
-  invalidateFacultyDeep: (universityId: string, facultyId: string) =>
-    c.delete([keys.faculties(universityId), keys.departments(facultyId)]),
+  facultyDeleted: effect("university.facultyDeleted", (universityId: string, facultyId: string) => [
+    universityCache.faculties(universityId),
+    universityCache.departments(facultyId),
+  ]),
+
   /** Bölüm oluşturuldu/güncellendi/silindi → o fakültenin bölüm listesi. */
-  invalidateDepartments: (facultyId: string) => c.delete(keys.departments(facultyId)),
+  departmentChanged: effect("university.departmentChanged", (facultyId: string) => [
+    universityCache.departments(facultyId),
+  ]),
 };

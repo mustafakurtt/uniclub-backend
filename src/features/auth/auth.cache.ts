@@ -1,7 +1,9 @@
+import { defineKeyspace, entry, effect } from "../../core/cache";
 import { cache } from "../../shared/cache/cache.client";
+import type { authRepository } from "./auth.repository";
 
 /**
- * auth RBAC KATALOĞU için izole cache keyspace'i (`auth:rbac:` öneki). İzin ve rol
+ * auth RBAC KATALOĞUNUN cache sözleşmesi (`auth:rbac:` keyspace'i). İzin ve rol
  * katalogları görece durağandır ama her yetki panelinde okunur → read-through cache.
  *
  * KAPSAM: yalnızca global KATALOG okumaları (tüm izinler, permission'larıyla tüm
@@ -11,20 +13,33 @@ import { cache } from "../../shared/cache/cache.client";
  * `listRoles(actor)` altta global `findAllRolesWithPermissions()`i çağırıp aktörün
  * tenant kapsamına göre app-içinde filtreler; bu yüzden GLOBAL liste tek anahtarla
  * cache'lenir, filtreleme cache DIŞINDA kalır (aktör-özel anahtar patlaması olmaz).
+ *
+ * TETİK NEDEN SERVİSTE: bu efektler auth.service'te per-user RBAC cache
+ * invalidasyonuyla (`invalidateUsersPermissions`) İÇ İÇE çalışır — ör. bir izin
+ * silinince hem katalog hem etkilenen kullanıcıların yetkileri tazelenmeli.
+ * Rotaya taşımak birbirine bağlı iki invalidasyonu iki dosyaya bölerdi.
  */
-const c = cache.namespace("auth:rbac");
+type PermissionCatalog = Awaited<ReturnType<typeof authRepository.findAllPermissions>>;
+type RoleCatalog = Awaited<ReturnType<typeof authRepository.findAllRolesWithPermissions>>;
 
-const KEY_PERMISSIONS = "permissions";
-const KEY_ROLES = "roles";
-
-export const authCache = {
+export const authCache = defineKeyspace(cache, "auth:rbac", {
   /** Tüm izin kataloğu (global). */
-  permissions: <T>(loader: () => Promise<T>) => c.getOrSet(KEY_PERMISSIONS, loader),
+  permissions: entry<PermissionCatalog>()("permissions"),
   /** Tüm roller + izinleri (global; aktör filtresi çağırıda uygulanır). */
-  roles: <T>(loader: () => Promise<T>) => c.getOrSet(KEY_ROLES, loader),
+  roles: entry<RoleCatalog>()("roles"),
+});
 
-  /** İzin oluştur/güncelle/sil → izin kataloğu. */
-  invalidatePermissions: () => c.delete(KEY_PERMISSIONS),
+export const authCatalogEffects = {
+  /** İzin oluştur/güncelle → izin kataloğu. */
+  permissionsChanged: effect("auth.permissionsChanged", () => [authCache.permissions()]),
   /** Rol oluştur/güncelle/sil + role izin ekle/çıkar → rol kataloğu. */
-  invalidateRoles: () => c.delete(KEY_ROLES),
+  rolesChanged: effect("auth.rolesChanged", () => [authCache.roles()]),
+  /**
+   * İzin SİLİNDİ → hem izin kataloğu hem rol kataloğu (silinen izin rollerin
+   * gömülü izin listesinde de görünüyordu).
+   */
+  permissionDeleted: effect("auth.permissionDeleted", () => [
+    authCache.permissions(),
+    authCache.roles(),
+  ]),
 };

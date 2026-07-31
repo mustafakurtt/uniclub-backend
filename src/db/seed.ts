@@ -190,6 +190,61 @@ async function main() {
       return inserted;
     }
 
+    /** "n gün sonra/önce" — etkinlik tarihleri için (negatif = geçmiş). */
+    const inDays = (n: number) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+
+    /**
+     * Etkinlik + kulüp bağlarını (1 host + opsiyonel co_host'lar) + RSVP'leri
+     * kurar. co_host'lar farklı ÜNİVERSİTEDEN olabilir (turnuva) — M:N yapı
+     * ikisini de kaldırır. v1 varsayılanı: published + university görünürlük.
+     */
+    async function createActivity(a: {
+      hostClubId: string;
+      coHostClubIds?: string[];
+      createdBy: string;
+      title: string;
+      description?: string;
+      location?: string;
+      startsAt: Date;
+      endsAt?: Date;
+      capacity?: number;
+      visibility?: "university" | "members";
+      status?: "draft" | "published" | "cancelled";
+      attendees?: { userId: string; status?: "going" | "interested" | "waitlist" }[];
+    }) {
+      const [activity] = await tx.insert(schema.activities).values({
+        title: a.title,
+        description: a.description ?? null,
+        location: a.location ?? null,
+        startsAt: a.startsAt,
+        endsAt: a.endsAt ?? null,
+        capacity: a.capacity ?? null,
+        visibility: a.visibility ?? "university",
+        status: a.status ?? "published",
+        createdBy: a.createdBy,
+      }).returning();
+
+      await tx.insert(schema.activityClubs).values([
+        { activityId: activity.id, clubId: a.hostClubId, role: "host" as const },
+        ...(a.coHostClubIds ?? []).map((clubId) => ({
+          activityId: activity.id,
+          clubId,
+          role: "co_host" as const,
+        })),
+      ]);
+
+      if (a.attendees?.length) {
+        await tx.insert(schema.activityAttendees).values(
+          a.attendees.map((att) => ({
+            activityId: activity.id,
+            userId: att.userId,
+            status: att.status ?? ("going" as const),
+          }))
+        );
+      }
+      return activity;
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // 1B. PLATFORM HESAPLARI (universityId: NULL — hiçbir okula ait değiller)
     // Şirketin kendi çalışanları. Tenant scope'unu rolleriyle bypass ederler;
@@ -244,7 +299,7 @@ async function main() {
     const zeynepHoca = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Psikoloji"], firstName: "Zeynep", lastName: "Aydın", email: "zeynep.aydin@antalya.edu.tr", role: "advisor" });
     await createUser({ universityId: antalya.id, departmentId: antalyaDept["Endüstri Mühendisliği"], firstName: "Murat", lastName: "Tekin", email: "murat.tekin@antalya.edu.tr", role: "advisor" }); // hiçbir kulübün danışmanı DEĞİL
 
-    // Yöneticiler + kurumsal roller (yeni model — bkz. docs/yonetim/06)
+    // Yöneticiler + kurumsal roller (yeni model — bkz. docs/design/06)
     // NOT: super_admin ve platform_support artık BURADA DEĞİL — onlar tenant'sız
     // platform hesaplarıdır ve yukarıda (üniversitelerden önce) kurulur.
     await createUser({ universityId: antalya.id, firstName: "Elif", lastName: "Demir", email: "elif.demir@antalya.edu.tr", role: "university_admin" }); // tenant yöneticisi
@@ -262,12 +317,12 @@ async function main() {
       universityId: antalya.id, name: "Yazılım ve Teknoloji Kulübü", slug: "yazilim-teknoloji",
       description: "Okulun en inek ama en eğlenceli kulübü.", joinPolicy: "open", status: "approved", createdBy: mustafa,
     }).returning();
-    await tx.insert(schema.clubAdvisors).values({ clubId: techClub.id, userId: ahmetHoca });
+    await tx.insert(schema.clubAdvisors).values({ clubId: techClub.id, universityId: techClub.universityId, userId: ahmetHoca });
     await tx.insert(schema.clubMembers).values([
-      { clubId: techClub.id, userId: mustafa, role: "president", status: "approved" },
-      { clubId: techClub.id, userId: can, role: "officer", status: "approved" },
-      { clubId: techClub.id, userId: sen, role: "member", status: "approved" },
-      { clubId: techClub.id, userId: selin, role: "member", status: "pending" }, // bekleyen katılım isteği
+      { clubId: techClub.id, universityId: techClub.universityId, userId: mustafa, role: "president", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: can, role: "officer", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: sen, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: selin, role: "member", status: "pending" }, // bekleyen katılım isteği
     ]);
     await tx.insert(schema.clubContactLinks).values([
       { clubId: techClub.id, platform: "instagram", url: "https://instagram.com/yazilim-antalya" },
@@ -280,13 +335,13 @@ async function main() {
       description: "Kampüsün ve şehrin güzelliklerini bir de bizim gözümüzden görün.", joinPolicy: "approval_required", status: "approved", createdBy: ayse,
     }).returning();
     await tx.insert(schema.clubAdvisors).values([
-      { clubId: photographyClub.id, userId: ahmetHoca },
-      { clubId: photographyClub.id, userId: zeynepHoca }, // birden fazla danışman senaryosu
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, userId: ahmetHoca },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, userId: zeynepHoca }, // birden fazla danışman senaryosu
     ]);
     await tx.insert(schema.clubMembers).values([
-      { clubId: photographyClub.id, userId: ayse, role: "president", status: "approved" },
-      { clubId: photographyClub.id, userId: burak, role: "member", status: "approved" },
-      { clubId: photographyClub.id, userId: sen, role: "member", status: "pending" }, // onay bekleyen istek
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, userId: ayse, role: "president", status: "approved" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, userId: burak, role: "member", status: "approved" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, userId: sen, role: "member", status: "pending" }, // onay bekleyen istek
     ]);
     await tx.insert(schema.clubContactLinks).values({ clubId: photographyClub.id, platform: "website", url: "https://fotografcilik-antalya.example.com" });
 
@@ -295,10 +350,10 @@ async function main() {
       universityId: antalya.id, name: "Müzik Kulübü", slug: "muzik",
       description: "Koro, orkestra ve akustik geceler.", joinPolicy: "open", status: "approved", createdBy: can,
     }).returning();
-    await tx.insert(schema.clubAdvisors).values({ clubId: musicClub.id, userId: zeynepHoca });
+    await tx.insert(schema.clubAdvisors).values({ clubId: musicClub.id, universityId: musicClub.universityId, userId: zeynepHoca });
     await tx.insert(schema.clubMembers).values([
-      { clubId: musicClub.id, userId: can, role: "president", status: "approved" },
-      { clubId: musicClub.id, userId: emre, role: "member", status: "approved" },
+      { clubId: musicClub.id, universityId: musicClub.universityId, userId: can, role: "president", status: "approved" },
+      { clubId: musicClub.id, universityId: musicClub.universityId, userId: emre, role: "member", status: "approved" },
     ]);
 
     // 4) pending — admin onayı bekleyen kulüp; DANIŞMANI YOK (danışman atama testi burada yapılır)
@@ -306,14 +361,14 @@ async function main() {
       universityId: antalya.id, name: "Tiyatro Kulübü", slug: "tiyatro",
       description: "Sahne tozunu yutmak isteyen herkese açık.", joinPolicy: "approval_required", status: "pending", createdBy: selin,
     }).returning();
-    await tx.insert(schema.clubMembers).values({ clubId: theatreClub.id, userId: selin, role: "president", status: "approved" });
+    await tx.insert(schema.clubMembers).values({ clubId: theatreClub.id, universityId: theatreClub.universityId, userId: selin, role: "president", status: "approved" });
 
     // 5) archived — "önce arşivle sonra sil" akışının test verisi
     const [roboticsClub] = await tx.insert(schema.clubs).values({
       universityId: antalya.id, name: "Robotik Kulübü", slug: "robotik",
       description: "Bir dönem aktifti, şimdi arşivde.", joinPolicy: "open", status: "archived", createdBy: emre,
     }).returning();
-    await tx.insert(schema.clubMembers).values({ clubId: roboticsClub.id, userId: emre, role: "president", status: "approved" });
+    await tx.insert(schema.clubMembers).values({ clubId: roboticsClub.id, universityId: roboticsClub.universityId, userId: emre, role: "president", status: "approved" });
 
     // 6) rejected — silinebilir ikinci durum
     await tx.insert(schema.clubs).values({
@@ -329,10 +384,10 @@ async function main() {
       { universityId: antalya.id, clubId: musicClub.id, authorId: can, title: "Akustik Gece: Kayıtlar Açıldı", content: "Perşembe akşamı amfide buluşuyoruz, sahne almak isteyenler DM." },
     ]);
     await tx.insert(schema.clubGallery).values([
-      { clubId: techClub.id, uploadedBy: mustafa, imageUrl: "https://picsum.photos/seed/tech-meetup-1/800/600", caption: "Haftalık buluşmamızdan bir kare" },
-      { clubId: techClub.id, uploadedBy: can, imageUrl: "https://picsum.photos/seed/tech-hackathon-1/800/600", caption: "Hackathon gecesi" },
-      { clubId: photographyClub.id, uploadedBy: ayse, imageUrl: "https://picsum.photos/seed/photo-kaleici-1/800/600", caption: "Kaleiçi gezisinden" },
-      { clubId: musicClub.id, uploadedBy: can, imageUrl: "https://picsum.photos/seed/music-night-1/800/600", caption: "Geçen dönemin kapanış konseri" },
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: mustafa, imageUrl: "https://picsum.photos/seed/tech-meetup-1/800/600", caption: "Haftalık buluşmamızdan bir kare" },
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: can, imageUrl: "https://picsum.photos/seed/tech-hackathon-1/800/600", caption: "Hackathon gecesi" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, uploadedBy: ayse, imageUrl: "https://picsum.photos/seed/photo-kaleici-1/800/600", caption: "Kaleiçi gezisinden" },
+      { clubId: musicClub.id, universityId: musicClub.universityId, uploadedBy: can, imageUrl: "https://picsum.photos/seed/music-night-1/800/600", caption: "Geçen dönemin kapanış konseri" },
     ]);
 
     // --- Kulüp kurma başvuruları (onay zincirinin 3 durumu da mevcut) ---
@@ -379,15 +434,15 @@ async function main() {
       universityId: ege.id, name: "Yazılım ve Teknoloji Kulübü", slug: "yazilim-teknoloji",
       description: "Ege'nin kod yazan kulübü — Antalya'dakiyle KARIŞMAMALI!", joinPolicy: "open", status: "approved", createdBy: cem,
     }).returning();
-    await tx.insert(schema.clubAdvisors).values({ clubId: egeTechClub.id, userId: leylaHoca });
+    await tx.insert(schema.clubAdvisors).values({ clubId: egeTechClub.id, universityId: egeTechClub.universityId, userId: leylaHoca });
     await tx.insert(schema.clubMembers).values([
-      { clubId: egeTechClub.id, userId: cem, role: "president", status: "approved" },
-      { clubId: egeTechClub.id, userId: gizem, role: "officer", status: "approved" },
-      { clubId: egeTechClub.id, userId: tolga, role: "member", status: "approved" },
+      { clubId: egeTechClub.id, universityId: egeTechClub.universityId, userId: cem, role: "president", status: "approved" },
+      { clubId: egeTechClub.id, universityId: egeTechClub.universityId, userId: gizem, role: "officer", status: "approved" },
+      { clubId: egeTechClub.id, universityId: egeTechClub.universityId, userId: tolga, role: "member", status: "approved" },
     ]);
     await tx.insert(schema.clubContactLinks).values({ clubId: egeTechClub.id, platform: "instagram", url: "https://instagram.com/yazilim-egebilim" });
     await tx.insert(schema.announcements).values({ universityId: ege.id, clubId: egeTechClub.id, authorId: cem, title: "Tanışma Toplantısı", content: "Dönemin ilk buluşması çarşamba 18:00'de B blok amfide." });
-    await tx.insert(schema.clubGallery).values({ clubId: egeTechClub.id, uploadedBy: gizem, imageUrl: "https://picsum.photos/seed/ege-tech-1/800/600", caption: "Tanışma toplantısından" });
+    await tx.insert(schema.clubGallery).values({ clubId: egeTechClub.id, universityId: egeTechClub.universityId, uploadedBy: gizem, imageUrl: "https://picsum.photos/seed/ege-tech-1/800/600", caption: "Tanışma toplantısından" });
 
     // approval_required + danışmansız + bekleyen istek
     const [hikingClub] = await tx.insert(schema.clubs).values({
@@ -395,8 +450,8 @@ async function main() {
       description: "Zirve sevdalıları burada.", joinPolicy: "approval_required", status: "approved", createdBy: gizem,
     }).returning();
     await tx.insert(schema.clubMembers).values([
-      { clubId: hikingClub.id, userId: gizem, role: "president", status: "approved" },
-      { clubId: hikingClub.id, userId: nazli, role: "member", status: "pending" }, // bekleyen istek
+      { clubId: hikingClub.id, universityId: hikingClub.universityId, userId: gizem, role: "president", status: "approved" },
+      { clubId: hikingClub.id, universityId: hikingClub.universityId, userId: nazli, role: "member", status: "pending" }, // bekleyen istek
     ]);
 
     // pending + archived kulüpler (admin filtre/silme testleri)
@@ -441,16 +496,16 @@ async function main() {
       universityId: kartek.id, name: "Robotik ve Mekatronik Kulübü", slug: "robotik-mekatronik",
       description: "Robot yarışmalarına takım çıkarıyoruz.", joinPolicy: "open", status: "approved", createdBy: yusuf,
     }).returning();
-    await tx.insert(schema.clubAdvisors).values({ clubId: mechClub.id, userId: omerHoca });
+    await tx.insert(schema.clubAdvisors).values({ clubId: mechClub.id, universityId: mechClub.universityId, userId: omerHoca });
     await tx.insert(schema.clubMembers).values([
-      { clubId: mechClub.id, userId: yusuf, role: "president", status: "approved" },
-      { clubId: mechClub.id, userId: merve, role: "officer", status: "approved" }, // Merve burada officer...
-      { clubId: mechClub.id, userId: hakan, role: "member", status: "approved" },
-      { clubId: mechClub.id, userId: esra, role: "member", status: "pending" }, // bekleyen istek
+      { clubId: mechClub.id, universityId: mechClub.universityId, userId: yusuf, role: "president", status: "approved" },
+      { clubId: mechClub.id, universityId: mechClub.universityId, userId: merve, role: "officer", status: "approved" }, // Merve burada officer...
+      { clubId: mechClub.id, universityId: mechClub.universityId, userId: hakan, role: "member", status: "approved" },
+      { clubId: mechClub.id, universityId: mechClub.universityId, userId: esra, role: "member", status: "pending" }, // bekleyen istek
     ]);
     await tx.insert(schema.clubContactLinks).values({ clubId: mechClub.id, platform: "telegram", url: "https://t.me/kartek-robotik" });
     await tx.insert(schema.announcements).values({ universityId: kartek.id, clubId: mechClub.id, authorId: merve, title: "Teknofest Takım Seçmeleri", content: "Bu cuma laboratuvar 2'de seçmeler var, CV'nizi getirin." });
-    await tx.insert(schema.clubGallery).values({ clubId: mechClub.id, uploadedBy: yusuf, imageUrl: "https://picsum.photos/seed/kartek-robot-1/800/600", caption: "Geçen yılın yarışma robotu" });
+    await tx.insert(schema.clubGallery).values({ clubId: mechClub.id, universityId: mechClub.universityId, uploadedBy: yusuf, imageUrl: "https://picsum.photos/seed/kartek-robot-1/800/600", caption: "Geçen yılın yarışma robotu" });
 
     // Aynı kullanıcı (Merve) başka kulüpte PRESIDENT — çapraz rol senaryosu
     const [seaClub] = await tx.insert(schema.clubs).values({
@@ -458,8 +513,8 @@ async function main() {
       description: "Yelken, kürek ve dalış etkinlikleri.", joinPolicy: "approval_required", status: "approved", createdBy: merve,
     }).returning();
     await tx.insert(schema.clubMembers).values([
-      { clubId: seaClub.id, userId: merve, role: "president", status: "approved" }, // ...burada başkan
-      { clubId: seaClub.id, userId: hakan, role: "member", status: "pending" }, // hakan: robotikte approved, burada pending
+      { clubId: seaClub.id, universityId: seaClub.universityId, userId: merve, role: "president", status: "approved" }, // ...burada başkan
+      { clubId: seaClub.id, universityId: seaClub.universityId, userId: hakan, role: "member", status: "pending" }, // hakan: robotikte approved, burada pending
     ]);
 
     // Antalya'dakiyle AYNI slug'lı pending kulüp (izolasyon + filtre testi)
@@ -471,6 +526,55 @@ async function main() {
     console.log("   📝 Karadeniz başvuruları...");
     await createApplication({ universityId: kartek.id, proposedName: "Satranç Kulübü", description: "Antalya'daki başvuruyla AYNI isim — tenant izolasyon testi.", applicantId: esra, status: "pending" });
     await createApplication({ universityId: kartek.id, proposedName: "Havacılık Kulübü", description: "Model uçak ve drone atölyeleri.", applicantId: hakan, status: "rejected", reviewerId: omerHoca });
+
+    // ═══════════════════════════════════════════════════════════════
+    // 5. ETKİNLİKLER (activities) — tüm kulüpler kurulduktan SONRA
+    // Kulüp↔etkinlik M:N (activity_clubs): tek-host, çok-kulüp, hatta
+    // ÇOK-ÜNİVERSİTE (turnuva) senaryolarını gösterir.
+    // ═══════════════════════════════════════════════════════════════
+    console.log("🎉 Etkinlikler (activities) kuruluyor...");
+
+    // 1) Tek host, kapasiteli, yaklaşan — keşif + RSVP akışının temel örneği.
+    await createActivity({
+      hostClubId: techClub.id, createdBy: mustafa,
+      title: "React ile Web Atölyesi", description: "Sıfırdan bir SPA kuruyoruz.",
+      location: "B Blok Lab 2", startsAt: inDays(7), endsAt: inDays(7), capacity: 30,
+      attendees: [{ userId: sen }, { userId: can }, { userId: emre, status: "interested" }],
+    });
+
+    // 2) AYNI üniversiteden co-host (Yazılım + Müzik) — tek üniversitede birlikte etkinlik.
+    await createActivity({
+      hostClubId: techClub.id, coHostClubIds: [musicClub.id], createdBy: can,
+      title: "Kod & Müzik Gecesi", description: "Canlı kodlama + akustik performans.",
+      location: "Merkezi Amfi", startsAt: inDays(14), capacity: 100,
+      attendees: [{ userId: mustafa }, { userId: can }, { userId: emre }],
+    });
+
+    // 3) members görünürlüğü — yalnızca Fotoğrafçılık üyelerine görünür/RSVP.
+    await createActivity({
+      hostClubId: photographyClub.id, createdBy: ayse,
+      title: "Üyelere Özel Karanlık Oda Atölyesi", description: "Analog film banyosu (yalnızca üyeler).",
+      location: "Güzel Sanatlar Stüdyo", startsAt: inDays(10), visibility: "members",
+      attendees: [{ userId: burak }],
+    });
+
+    // 4) ⭐ ÇOK-ÜNİVERSİTELİ TURNUVA — Antalya (host) + Ege (co_host).
+    //    Tek etkinlik iki üniversitenin kulüplerini birleştirir; universityId
+    //    denormalize EDİLMEDİĞİ için bu ŞEMA DEĞİŞMEDEN mümkün olur.
+    await createActivity({
+      hostClubId: techClub.id, coHostClubIds: [egeTechClub.id], createdBy: mustafa,
+      title: "Üniversitelerarası Hackathon 2026", description: "Antalya ve Ege kulüpleri ortak turnuva.",
+      location: "Online + Kampüsler", startsAt: inDays(21), endsAt: inDays(23), capacity: 200,
+      attendees: [{ userId: mustafa }, { userId: cem }, { userId: gizem }, { userId: sen, status: "interested" }],
+    });
+
+    // 5) GEÇMİŞ etkinlik (scope=past) — Karadeniz Robotik.
+    await createActivity({
+      hostClubId: mechClub.id, createdBy: yusuf,
+      title: "Teknofest Hazırlık Kampı", description: "Geçen dönemin yarışma kampı.",
+      location: "Mekatronik Lab", startsAt: inDays(-20), endsAt: inDays(-18), capacity: 40,
+      attendees: [{ userId: yusuf }, { userId: merve }, { userId: hakan }],
+    });
   });
 
   console.log("✅ Seeding başarıyla tamamlandı!");
@@ -523,6 +627,12 @@ async function main() {
   console.log("   esra.bulut@std.kartek.edu.tr     → student  (Robotik'te pending istek, Satranç başvurusu)");
   console.log("   Kulüpler: Robotik ve Mekatronik(approved) Deniz Sporları(approved)");
   console.log("             Fotoğrafçılık(pending — Antalya'dakiyle aynı slug)");
+  console.log("\n── ETKİNLİKLER (activities) ───────────────────────");
+  console.log("   React Atölyesi (Yazılım)                → tek host, kapasiteli, yaklaşan");
+  console.log("   Kod & Müzik Gecesi (Yazılım + Müzik)    → AYNI üniversite co-host");
+  console.log("   Karanlık Oda Atölyesi (Fotoğrafçılık)   → members görünürlük (yalnızca üyeler)");
+  console.log("   Üniversitelerarası Hackathon (Antalya + Ege) → ⭐ ÇOK-ÜNİVERSİTELİ turnuva (M:N)");
+  console.log("   Teknofest Hazırlık Kampı (Karadeniz)    → GEÇMİŞ etkinlik (scope=past)");
 }
 
 // Bağlantı havuzu kapatılmadan süreç sonlanmaz: postgres-js açık soketleri

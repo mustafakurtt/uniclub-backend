@@ -75,3 +75,52 @@ describe("auth: kayıt ve giriş", () => {
     expect(res.status).toBe(401);
   });
 });
+
+// E-posta büyük/küçük harf normalizasyonu (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §0.1).
+// Normalize edilmezse "Ali@x" ile "ali@x" aynı kişi için İKİ hesap açardı ve login
+// yanlış satıra düşerdi; tekillik index'i harfe duyarlıdır.
+describe("auth: e-posta büyük/küçük harf normalizasyonu", () => {
+  it("kayıt sırasında e-posta küçük harfe indirgenir (giriş küçük harfle çalışır)", async () => {
+    const res = await postJson("/api/auth/register", {
+      firstName: "Buyuk",
+      lastName: "Harf",
+      email: "  BuYuK.Harf@STD.Antalya.EDU.TR  ",
+      password: SEED_PASSWORD,
+    });
+    expect(res.status).toBe(201);
+
+    const login = await postJson("/api/auth/login", {
+      email: "buyuk.harf@std.antalya.edu.tr",
+      password: SEED_PASSWORD,
+    });
+    expect(login.status).toBe(200);
+  });
+
+  it("aynı e-postanın farklı harf yazımıyla ikinci kayıt reddedilir", async () => {
+    const res = await postJson("/api/auth/register", {
+      firstName: "Mustafa",
+      lastName: "Kurt",
+      email: "Mustafa.KURT@std.Antalya.edu.tr", // seed'de küçük harfle mevcut
+      password: SEED_PASSWORD,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("büyük harfle yazılan e-posta ile giriş yapılabilir", async () => {
+    const res = await postJson("/api/auth/login", {
+      email: "MUSTAFA.KURT@STD.ANTALYA.EDU.TR",
+      password: SEED_PASSWORD,
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("büyük harfli domain de tanınır (tenant çıkarımı domainden yapılır)", async () => {
+    const res = await postJson("/api/auth/register", {
+      firstName: "Domain",
+      lastName: "Buyuk",
+      email: "domain.buyuk@STD.ANTALYA.EDU.TR",
+      password: SEED_PASSWORD,
+    });
+    expect(res.status).toBe(201);
+  });
+});

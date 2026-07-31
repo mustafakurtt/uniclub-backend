@@ -1,9 +1,27 @@
 import { z } from "zod";
 
+/**
+ * E-posta alanı — kırpılır ve HER ZAMAN küçük harfe indirgenir.
+ *
+ * E-postanın yerel kısmı teknik olarak büyük/küçük harfe duyarlı olabilir ama
+ * pratikte hiçbir sağlayıcı böyle davranmaz; buna karşılık `users` üzerindeki
+ * tekillik index'i harfe DUYARLIDIR. Normalize edilmezse "Ali@x.edu.tr" ile
+ * "ali@x.edu.tr" aynı kişi için iki ayrı hesap açar ve login denemesi yanlış
+ * satıra düşer. Aynı sebeple tenant çıkarımı da (e-postadan domain ayıklama)
+ * ancak küçük harfle `university_domains` ile eşleşir.
+ *
+ * Son savunma DB'de: `users_email_lowercase` CHECK kısıtı (bkz. db/schema.ts).
+ */
+const emailField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Geçerli bir e-posta adresi giriniz.");
+
 export const registerSchema = z.object({
   firstName: z.string().min(2, "Ad en az 2 karakter olmalıdır.").max(100),
   lastName: z.string().min(2, "Soyad en az 2 karakter olmalıdır.").max(100),
-  email: z.string().email("Geçerli bir e-posta adresi giriniz."), 
+  email: emailField,
   studentNumber: z.string().optional(),
   password: z.string().min(6, "Şifre en az 6 karakter olmalıdır."),
 });
@@ -11,7 +29,7 @@ export const registerSchema = z.object({
 export type RegisterDTO = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email("Geçerli bir e-posta adresi giriniz."),
+  email: emailField,
   password: z.string().min(1, "Şifre boş bırakılamaz."),
 });
 
@@ -20,7 +38,7 @@ export type LoginDTO = z.infer<typeof loginSchema>;
 // Doğrulama mailini yeniden gönderme. Yanıt, hesabın var olup olmadığından
 // bağımsız olarak hep aynıdır (bkz. authService.resendVerification).
 export const resendVerificationSchema = z.object({
-  email: z.string().email("Geçerli bir e-posta adresi giriniz."),
+  email: emailField,
 });
 export type ResendVerificationDTO = z.infer<typeof resendVerificationSchema>;
 
@@ -61,14 +79,14 @@ export const updatePermissionSchema = z.object({
 });
 export type UpdatePermissionDTO = z.infer<typeof updatePermissionSchema>;
 
-// Kullanıcıya genel rol atama (bkz. docs/yonetim/05 #3)
+// Kullanıcıya genel rol atama (bkz. docs/design/05 #3)
 export const assignRoleSchema = z.object({
   roleId: z.string().uuid(),
 });
 export type AssignRoleDTO = z.infer<typeof assignRoleSchema>;
 
 /**
- * Kullanıcı bazlı yetki override (bkz. docs/yonetim/05 #2).
+ * Kullanıcı bazlı yetki override (bkz. docs/design/05 #2).
  * permissionId veya key ile yetki belirtilebilir (en az biri zorunlu);
  * granted: true → yetkiyi ekle, false → rolden geleni iptal et.
  */

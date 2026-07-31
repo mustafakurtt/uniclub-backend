@@ -32,6 +32,14 @@ const envSchema = z.object({
    */
   TRUST_PROXY: envBoolean(false),
 
+  /**
+   * Kapanış draini (ms): SIGTERM geldiğinde `/health` 503'e çevrilir ve sunucu
+   * kapatılmadan ÖNCE bu süre beklenir — yük dengeleyici bizi havuzdan çıkarsın
+   * diye. Verilmezse prod'da 5000, aksi halde 0 (yerelde Ctrl+C anında çıksın).
+   * Tipik LB probe aralığının ~2 katı olmalı.
+   */
+  HEALTH_DRAIN_MS: z.coerce.number().optional(),
+
   // ── LOGLAMA ───────────────────────────────────────────────────────────
   /** Verilmezse shared/logger.ts, NODE_ENV'e göre karar verir (prod: info, aksi: debug). */
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
@@ -64,9 +72,30 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
   /**
    * İstek gövdesi üst sınırı (byte). Aşılırsa 413 döner — dev bir payload ile
-   * bellek/DoS'a karşı ucuz kalkan. Bu API JSON-only (binary upload yok); 1MB bol.
+   * bellek/DoS'a karşı ucuz kalkan. JSON gövdeleri için; dosya YÜKLEME rotası
+   * (`/api/uploads`) bu global sınırdan MUAFTIR ve kendi `MAX_UPLOAD_BYTES`'ını
+   * uygular (bkz. index.ts + features/media). 1MB JSON'a bol.
    */
   MAX_BODY_BYTES: z.coerce.number().default(1_048_576),
+
+  // ── MEDYA / DOSYA YÜKLEME ─────────────────────────────────────────────────
+  /**
+   * Depolama sürücüsü (bkz. shared/storage/storage.client.ts):
+   *  - local  : yerel disk (UPLOAD_DIR) — self-host varsayılanı.
+   *  - memory : süreç-içi (test; diske yazmaz).
+   * İleride s3 adaptörü eklense yalnızca bu ve birkaç env değişir, kod aynı kalır.
+   */
+  STORAGE_DRIVER: z.enum(["local", "memory"]).default("local"),
+  /** local sürücüde dosyaların yazılacağı dizin (repo köküne göre). .gitignore'da. */
+  UPLOAD_DIR: z.string().default("./uploads"),
+  /** Tek dosya üst sınırı (byte). Upload rotası bunu uygular (global MAX_BODY_BYTES değil). */
+  MAX_UPLOAD_BYTES: z.coerce.number().default(5_242_880), // 5 MB
+  /**
+   * Sunulan dosya URL'lerinin tabanı. Verilmezse relatif `/uploads/<key>` döner
+   * (frontend API tabanına göre çözer). Bir CDN/ayrı host varsa mutlak URL verin
+   * (ör. "https://cdn.uniclub.test").
+   */
+  UPLOAD_PUBLIC_BASE_URL: z.string().optional(),
 
   // ── WEB PUSH (VAPID) ──────────────────────────────────────────────────────
   /**

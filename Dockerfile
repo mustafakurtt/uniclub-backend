@@ -40,9 +40,20 @@ USER bun
 
 EXPOSE 3000
 
-# /health rotası bağımlılıkları da yoklar: DB veya Redis düşükse 503 döner,
-# yani container "unhealthy" işaretlenir.
+# LIVENESS kontrolü — bilinçli olarak /health DEĞİL /live.
+#
+# Docker'ın HEALTHCHECK'i "bu container yeniden başlatılmalı/rotasyondan
+# çıkarılmalı mı?" sorusuna cevap verir. /health bağımlılıkları yoklar (DB, Redis);
+# oraya bağlarsak bir veritabanı kesintisinde TÜM uygulama container'ları
+# unhealthy olur ve orkestratör hepsini yeniden başlatmaya çalışır — kesinti
+# düzelmez, üstüne bir de yeniden başlatma fırtınası eklenir. Süreç sağlıklıdır;
+# sorun onun DIŞINDADIR.
+#
+# Bağımlılık kesintisi başka kanallardan görünür ve orası doğru yerdir:
+#   - /health   → deploy doğrulaması (bkz. .github/workflows/deploy.yml) ve
+#                 yük dengeleyici/uptime probu; 503 = "bana trafik gönderme"
+#   - Prometheus → uyarı/alarm (bkz. docker-compose.yml, /metrics)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD bun -e "fetch('http://localhost:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD bun -e "fetch('http://localhost:'+(process.env.PORT||3000)+'/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["bun", "run", "src/index.ts"]
