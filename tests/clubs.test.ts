@@ -82,14 +82,13 @@ describe("kulüpler (/api/clubs)", () => {
   it("danışman: staff listesi görebilir, officer kararı veremez", async () => {
     expect((await get(`/api/clubs/${techClubId}/join-requests`, ahmetHoca)).status).toBe(200);
 
-    const pendingOnPhoto = await db.query.clubMembers.findFirst({
-      where: { clubId: photoClubId, status: "pending", leftAt: { isNull: true } },
-    });
-    if (!pendingOnPhoto) throw new Error("seed'de foto kulübünde bekleyen istek yok");
+    const joinRes = await reqAuth("POST", `/api/clubs/${photoClubId}/join`, emre);
+    expect(joinRes.status).toBe(201);
+    expect((await joinRes.json()).data.status).toBe("pending");
 
     expect(
       (
-        await reqAuth("PATCH", `/api/clubs/${photoClubId}/join-requests/${pendingOnPhoto.userId}`, ahmetHoca, {
+        await reqAuth("PATCH", `/api/clubs/${photoClubId}/join-requests/${(await me(emre)).userId}`, ahmetHoca, {
           decision: "approved",
         })
       ).status

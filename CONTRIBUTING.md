@@ -125,3 +125,4 @@ bun run dev
 - [ ] Migration committed if `schema.ts` changed
 - [ ] New env vars in `.env.example` **and** `src/config/env.ts`
 - [ ] Docs updated where behavior changed
+- [ ] Integration tests follow [tests/README.md](tests/README.md) (shared DB isolation rules)

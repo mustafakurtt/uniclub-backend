@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { data, get, login, me, reqAuth } from "./helpers";
 import { TenantSettingKey } from "../src/features/tenant-settings/tenant-settings.catalog";
 
@@ -35,6 +35,15 @@ describe("tenant_settings (C1)", () => {
 
     const clubs = await data<Array<{ id: string; slug: string }>>(await get("/api/clubs", mustafa));
     techClubId = clubs.find((c) => c.slug === "yazilim-teknoloji")!.id;
+  });
+
+  afterAll(async () => {
+    await reqAuth("PATCH", settingsPath(antalyaUni), elif, {
+      settings: { [TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX]: null },
+    });
+    await reqAuth("PATCH", settingsPath(antalyaUni), superAdmin, {
+      settings: { [TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR]: null },
+    });
   });
 
   it("varsayılan: dördüncü sabitleme reddedilir (kota 3)", async () => {
