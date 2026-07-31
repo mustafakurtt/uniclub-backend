@@ -9,6 +9,10 @@ senaryolarla, ilişki yapıları göz önünde bulundurularak dökümante edilme
 > — Temmuz 2026). Tüm backend mesajları **Türkçedir** ve UI'da doğrudan
 > gösterilebilir.
 
+**RBAC hub:** tasarım → bu klasör; frontend endpoint'leri →
+[integration/admin-panel.md](../integration/admin-panel.md); ADR →
+[adr/0004](../adr/0004-nine-role-rbac-with-rank.md).
+
 Bu klasör uzun olduğu için dosyalara bölünmüştür:
 
 | Dosya | İçerik |
@@ -18,7 +22,7 @@ Bu klasör uzun olduğu için dosyalara bölünmüştür:
 | [02-rol-yonetimi.md](02-rol-yonetimi.md) | Rol CRUD, kullanıcıya rol atama/kaldırma, promote/demote, tenant'a özel roller — senaryolar |
 | [03-yetki-ve-claim-yonetimi.md](03-yetki-ve-claim-yonetimi.md) | Permission CRUD, rol↔yetki matrisi, kullanıcı bazlı override (`userPermissions.granted`), effective permission hesabı, cache — senaryolar |
 | [04-senaryolar.md](04-senaryolar.md) | Uçtan uca birleşik senaryolar (yeni admin atama, başkanı askıya alma, tek seferlik yetki verme, rolden yetki geri çekme, tenant izolasyonu ihlali…) |
-| [05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md) | Tarihsel: paneli tamamlamak için önerilen endpoint'ler (çoğu uygulandı) |
+| [archive/05-implemented-endpoints.md](archive/05-implemented-endpoints.md) | Tarihsel: paneli tamamlamak için önerilen endpoint'ler (tamamı uygulandı) |
 | [06-rol-mimarisi-yeniden-tasarim.md](06-rol-mimarisi-yeniden-tasarim.md) | Kurumsal 9 rollük model, `admin` → `university_admin`, salt-okunur `*.view` yetkileri, tenant moderasyonu |
 | [07-rutbe-ve-kapsam.md](07-rutbe-ve-kapsam.md) | **Rol rütbesi (`roles.rank`) + hiyerarşi kuralları**, self-demotion / son-admin / escalation korumaları, tenant'sız platform hesapları, kapsam-farkında `GET /admin/universities` |
 | [08-aday-soru-platformu.md](08-aday-soru-platformu.md) | 🟡 **TASARIM (uygulanmadı)** — Tanıtım günleri soru-cevap platformu: tenant'sız **aday** kullanıcı sınıfı, `user_identities` ile kimlik temeli, `candidate`/`admission_rep` rolleri, ilk **auth'suz public** yüzey, moderasyon politikası, aday→öğrenci dönüşümü |
@@ -195,7 +199,7 @@ arar. `university_admin` kendi tenant'ının rollerini yönetirken `auth.service
 `attachAuthz` (guard zinciri) ve `requireActiveUser` (self-service/kulüp rotaları)
 `suspended` hesabı **bir sonraki istekte** `403` ile keser. JWT hâlâ 7 günlük
 stateless'tır; logout/şifre değişimi diğer oturumları öldürmez — bkz.
-[GUVENLIK_YOL_HARITASI.md §1.3](../GUVENLIK_YOL_HARITASI.md).
+[security-core.md §1.3](../planning/security-core.md).
 
 ---
 
@@ -224,7 +228,7 @@ Rol matrisine göre panel **üç yüz** gösterir:
 > `permissions` dizisine bakın (`permissions.includes("<key>")`). Rol adına
 > yalnızca tenant seçici gibi az sayıda kararda bakılır (`super_admin` /
 > `platform_support` → çapraz-tenant). Frontend rehberi:
-> [FRONTEND_YONETIM.md](../frontend/FRONTEND_YONETIM.md).
+> Frontend rehberi: [admin-panel.md](../integration/admin-panel.md).
 
 ---
 
@@ -246,7 +250,7 @@ Rol matrisine göre panel **üç yüz** gösterir:
 | Denetim izi görüntüleme | ✅ | `GET /api/audit/universities/:uid` (`audit.view`, cursor sayfalama) |
 | Askıya alma → anlık erişim kesme | ✅ | `attachAuthz` + `requireActiveUser` (authz cache'deki `status`) |
 | Kullanıcı **silme** | ❌ (kasıtlı) | FK ağı nedeniyle desteklenmez → ban/askı |
-| Logout / token revocation (tüm oturumlar) | ❌ | JWT stateless — bkz. GUVENLIK_YOL_HARITASI §1.3 |
+| Logout / token revocation (tüm oturumlar) | ❌ | JWT stateless — bkz. [security-core.md](../planning/security-core.md) §1.3 |
 
 Uygulanan endpoint'lerin tarihsel öneri metinleri:
-[05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md).
+[archive/05-implemented-endpoints.md](archive/05-implemented-endpoints.md).

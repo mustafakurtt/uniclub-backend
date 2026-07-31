@@ -13,8 +13,8 @@ hale gelir ve yeniden kullanılamaz.
 ## Karar
 
 - **`src/core/`** — proje-agnostik HTTP/RBAC/cache/logger mekanizmaları. `env`,
-  `shared/`, `features/` **import etmez** (grep ile doğrulanır; `GUVENLIK_YOL_HARITASI`
-  sınır testi önerir).
+  `shared/`, `features/` **import etmez** (grep ile doğrulanır; bkz.
+  [security-core.md](../planning/security-core.md)).
 - **`src/shared/`** — bu projeye özgü dikişler: `rbac.repository`, `rbac.cache`,
   `jwt.util`, `mailer`, i18n kataloğu.
 - **Enjeksiyon deseni:** `configureRbac`, `setTokenVerifier`, `setGuardAuditSink`,
@@ -28,7 +28,7 @@ ile alır; `suspended` kavramı `shared/rbac/authz-policy.ts`'te yaşar.
 
 - Aynı guard zincirini başka bir üründe tekrar kullanabilmek (portable toolkit).
 - Testlerde core'u mock seam'lerle izole etmek kolaylaşır.
-- `GUVENLIK_YOL_HARITASI` ve `CORE_MIDDLEWARE.md`: middleware'ler **alana göre**
+- [security-core.md](../planning/security-core.md) ve [core-middleware.md](../architecture/core-middleware.md): middleware'ler **alana göre**
   gruplanır (`core/ratelimit/`, `core/rbac/`), tek `middlewares/` çuvalına
   konmaz — taşınabilirlik bozulmasın diye.
 

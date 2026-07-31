@@ -76,7 +76,7 @@ describe("auth: kayıt ve giriş", () => {
   });
 });
 
-// E-posta büyük/küçük harf normalizasyonu (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §0.1).
+// E-posta büyük/küçük harf normalizasyonu (bkz. docs/planning/schema-product.md §0.1).
 // Normalize edilmezse "Ali@x" ile "ali@x" aynı kişi için İKİ hesap açardı ve login
 // yanlış satıra düşerdi; tekillik index'i harfe duyarlıdır.
 describe("auth: e-posta büyük/küçük harf normalizasyonu", () => {

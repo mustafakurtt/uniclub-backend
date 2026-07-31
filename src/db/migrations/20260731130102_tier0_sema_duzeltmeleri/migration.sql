@@ -1,4 +1,4 @@
--- Tier 0 şema düzeltmeleri (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md).
+-- Tier 0 şema düzeltmeleri (bkz. docs/planning/schema-product.md).
 --
 -- ZAMAN TİPİ DÖNÜŞÜMÜ HAKKINDA: aşağıdaki `::timestamp with time zone` cast'leri
 -- mevcut değerleri OTURUMUN saat dilimine göre yorumlar. Eski kolonlar

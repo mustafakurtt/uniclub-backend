@@ -16,7 +16,7 @@
 - [ ] Schema changes include a migration (`bun run db:generate`)
 - [ ] New env vars added to `.env.example` and validated in `src/config/env.ts`
 - [ ] Docs updated where relevant
-- [ ] Follows the layering + error contract in [docs/architecture.md](../docs/architecture.md)
+- [ ] Follows the layering + error contract in [docs/architecture/overview.md](../docs/architecture/overview.md)
 
 ## Notes for reviewers
 

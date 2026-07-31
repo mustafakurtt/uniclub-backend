@@ -6,7 +6,7 @@ import { defineCatalog } from "../../core/i18n/translator";
  * Kompozisyon kökü shared/i18n/messages.ts bunu mergeCatalogs ile birleştirir.
  *
  * Not: login response'u zarfın DIŞINDA `user`/`token` de döner (bkz.
- * docs/API.md "tek istisna") — bu yüzden auth.routes.ts login için core
+ * docs/reference/api.md "tek istisna") — bu yüzden auth.routes.ts login için core
  * responder yerine `translate`'i doğrudan çağırır; mesaj anahtarı burada
  * yine de aynı katalogdan gelir.
  */

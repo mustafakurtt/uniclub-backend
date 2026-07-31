@@ -67,7 +67,7 @@ function buildScenarios(auth: { token: string; universityId: string }): Scenario
       request: () => ({ url: `${BASE_URL}/api/universities/${auth.universityId}` }),
     },
     {
-      // Arama BİLİNÇLİ olarak cache'lenmez (bkz. docs/cache/README.md §2.5) →
+      // Arama BİLİNÇLİ olarak cache'lenmez (bkz. docs/architecture/cache/README.md §2.5) →
       // bu senaryo aynı veriyi her seferinde DB'den okur. 2 ile farkı = cache'in değeri.
       name: "3. aramalı liste (cache DIŞI, DB)",
       request: () => ({ url: `${BASE_URL}/api/universities?search=a` }),

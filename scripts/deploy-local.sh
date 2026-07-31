@@ -113,7 +113,7 @@ if [[ "$HEALTHY" -ne 1 ]]; then
     echo "▶ ${PREV_TAG} imajına geri dönülüyor" >&2
     IMAGE_TAG="$PREV_TAG" compose up -d --no-build app
     echo "  ⚠ Geri dönüldü. NOT: migration'lar geri ALINMAZ." >&2
-    echo "    Yıkıcı bir migration varsa yedekten dönmen gerekir (bkz. docs/operations.md)." >&2
+    echo "    Yıkıcı bir migration varsa yedekten dönmen gerekir (bkz. docs/operations/runbook.md)." >&2
   else
     echo "  ⚠ Geri dönülecek önceki imaj yok." >&2
   fi

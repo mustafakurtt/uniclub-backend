@@ -47,7 +47,7 @@ export const notificationsService = {
     // 3. WebSocket fanout: her instance kendi (açık) soketlerine teslim eder.
     //    İKİLİ TESLİMAT: hem WS hem push gider; çift-bildirimi service worker önler
     //    (odaklı pencere varsa OS bildirimini bastırır, `tag`=id ile de-dup). Bkz.
-    //    docs/BILDIRIMLER.md → "Service Worker sözleşmesi".
+    //    docs/architecture/notifications.md → "Service Worker sözleşmesi".
     await publish(userId, notification);
     return notification;
   },

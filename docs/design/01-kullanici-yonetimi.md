@@ -64,7 +64,7 @@ davranışını etkiler.
   bulunmamaktadır."`. super_admin her ikisini de çağırabilir.
 - **S1.4 — (eksik) rol filtresi:** "sadece advisor'ları göster" ya da "adminleri
   göster" **şu an mümkün değil** — listeleme role göre filtrelemez ve rol
-  bilgisini döndürmez. Öneri: bkz. [05](05-eksikler-ve-onerilen-endpointler.md).
+  bilgisini döndürmez. Öneri: bkz. [05](archive/05-implemented-endpoints.md).
 
 ---
 
@@ -82,7 +82,7 @@ davranışını etkiler.
 - **S2.1 — Detay draweri:** Bir kullanıcıya tıklanınca profil + durum + bölüm
   gösterilir. Ancak "bu kullanıcının rolleri neler / hangi kulüplerde" bilgisi
   bu endpoint'ten **gelmez** → detay ekranı için ek endpoint gerekir
-  (eksik #2, #3 — [05](05-eksikler-ve-onerilen-endpointler.md)).
+  (eksik #2, #3 — [05](archive/05-implemented-endpoints.md)).
 - **S2.2 — Başka tenant'ın kullanıcısını açma:** admin, kendi path'inde başka
   bir tenant'ın `userId`'sini denese bile kullanıcı kendi tenant'ında
   aranacağı için `404` alır (bilgi sızıntısı yok).
@@ -120,7 +120,7 @@ Ban/unban `userModerationActions` tablosuna sebepli kayıt düşer; geçmiş
   (`attachAuthz` / `requireActiveUser`, authz cache'deki `status`). JWT hâlâ
   geçerlidir ama korunan yüzeylere erişemez. Tam token iptali (logout/şifre
   değişimi tüm oturumları öldürsün) henüz yok — bkz.
-  [GUVENLIK_YOL_HARITASI.md §1.3](../GUVENLIK_YOL_HARITASI.md).
+  [security-core.md §1.3](../planning/security-core.md).
 - **S3.3 — Askıdan alma:** `POST .../unban` → `status: active`.
 - **S3.4 — İlişkisel kritik nokta:** Askıya alınan kullanıcı bir **kulüp
   başkanıysa** (`clubMembers.role: president`), bu satır **silinmez/değişmez**.
@@ -173,7 +173,7 @@ kurucusu, duyurunun yazarı vb. kaybolur).
 **Doğru yaklaşım:** silme yerine **`suspended`** (soft-lock). İleride gerçek
 bir "kullanıcıyı anonimleştir/arşivle" akışı istenirse, tıpkı kulüp silmede
 olduğu gibi (`admin.repository.deleteClub` tek transaction'da yaprak kayıtları
-temizliyor) tasarlanmalıdır — bkz. [05](05-eksikler-ve-onerilen-endpointler.md).
+temizliyor) tasarlanmalıdır — bkz. [05](archive/05-implemented-endpoints.md).
 
 ---
 
@@ -184,6 +184,6 @@ temizliyor) tasarlanmalıdır — bkz. [05](05-eksikler-ve-onerilen-endpointler.
 - [ ] Bölüm ata (fakülte→bölüm kademeli seçici, tenant'a ait doğrulaması var)
 - [ ] "Sil" butonu **YOK** — yerine "Askıya al"
 - [ ] Detayda rol/yetki/kulüp bilgisi göstermek isteniyorsa → eksik endpoint'ler
-  ([05](05-eksikler-ve-onerilen-endpointler.md)); o gelene kadar detay draweri
+  ([05](archive/05-implemented-endpoints.md)); o gelene kadar detay draweri
   yalnızca profil+durum+bölüm gösterir
 - [ ] Rol atama (admin yap vb.) ayrı bir işlem → [02-rol-yonetimi.md](02-rol-yonetimi.md)

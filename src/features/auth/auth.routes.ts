@@ -55,7 +55,7 @@ const actorFromCtx = (c: Context<{ Variables: RbacVariables }>) => {
 };
 
 /**
- * login response'u zarfın DIŞINDA `user`/`token` de döner (bkz. docs/API.md
+ * login response'u zarfın DIŞINDA `user`/`token` de döner (bkz. docs/reference/api.md
  * "tek istisna") — core responder (`ok`) bu şekle uymaz, bu yüzden `translate`
  * burada doğrudan çağrılır. Mesaj yine aynı katalogdan gelen bir anahtardır.
  */

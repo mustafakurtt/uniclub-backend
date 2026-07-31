@@ -64,7 +64,7 @@ function buildStore(): CacheStore {
 /**
  * core/cache'in ölçüm dikişinin prom-client karşılığı. Seriler uygulamanın MEVCUT
  * registry'sine yazılır, yani `/metrics` ucundan Prometheus'a birlikte gider
- * (bkz. docs/LOGLAMA.md'deki Grafana yığını).
+ * (bkz. docs/operations/logging.md'deki Grafana yığını).
  *
  * KARDİNALİTE: `namespace` etiketi keyspace önekidir ("university", "clubs"…) —
  * sayısı sabit ve küçüktür. Anahtar ASLA etiketlenmez (her ID yeni seri demekti).

@@ -16,7 +16,7 @@ explore real backend concerns: layered architecture, a portable RBAC engine,
 realtime delivery, background jobs, auditing and structured logging.
 
 > The codebase uses **Turkish** for code comments and user-facing API messages
-> by design; this README and the [architecture guide](docs/architecture.md) are
+> by design; this README and the [architecture guide](docs/architecture/overview.md) are
 > in English.
 
 ---
@@ -62,7 +62,7 @@ realtime delivery, background jobs, auditing and structured logging.
 | Validation | **Zod** |
 | Auth | JWT (HS256) + `Bun.password` (bcrypt) |
 | Mail | Nodemailer (Mailpit locally) |
-| Observability | Pino → Vector → Loki (logs) · Prometheus → Grafana (metrics) — [docs](docs/LOGLAMA.md) |
+| Observability | Pino → Vector → Loki (logs) · Prometheus → Grafana (metrics) — [docs](docs/operations/logging.md) |
 | Language | TypeScript (strict) |
 
 ## Architecture at a glance
@@ -80,7 +80,7 @@ HTTP ─▶ requestId ─▶ logger ─▶ auth (JWT) ─▶ attachAuthz ─▶ 
 Code is organized **by feature** (`src/features/<feature>/`), each split into
 `routes / service / repository / schema / types / permissions`. Repositories are
 the only layer that touches the database. See
-**[docs/architecture.md](docs/architecture.md)** for the full design.
+**[docs/architecture/overview.md](docs/architecture/overview.md)** for the full design.
 
 ## Project structure
 
@@ -197,15 +197,17 @@ CI builds the image, applies migrations to a clean database, boots the container
 and waits for `/health` before anything is deployed. `develop` deploys to the
 `development` environment automatically; `main` deploys to `production` behind a
 required manual approval. Backups, migration rules and incident response are
-documented in **[docs/operations.md](docs/operations.md)**.
+documented in **[docs/operations/runbook.md](docs/operations/runbook.md)**.
 
 ## API & docs
 
-- **[docs/API.md](docs/API.md)** — REST endpoint reference
-- **[docs/architecture.md](docs/architecture.md)** — full system design
-- **[docs/LOGLAMA.md](docs/LOGLAMA.md)** — logging + metrics observability stack
-- **[docs/operations.md](docs/operations.md)** — deploy, backups, incident response
-- **[docs/frontend/](docs/frontend/)** — per-surface frontend integration guides
+Index: **[docs/README.md](docs/README.md)**.
+
+- **[docs/reference/api.md](docs/reference/api.md)** — REST endpoint reference
+- **[docs/architecture/overview.md](docs/architecture/overview.md)** — full system design
+- **[docs/operations/logging.md](docs/operations/logging.md)** — logging + metrics observability stack
+- **[docs/operations/runbook.md](docs/operations/runbook.md)** — deploy, backups, incident response
+- **[docs/integration/](docs/integration/)** — per-surface frontend integration guides
 - **[docs/design/](docs/design/)** — RBAC model design notes & scenarios
 
 ## Contributing

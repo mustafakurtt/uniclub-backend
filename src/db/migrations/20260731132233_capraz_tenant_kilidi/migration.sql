@@ -1,4 +1,4 @@
--- ÇAPRAZ-TENANT KİLİDİ (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §1.1)
+-- ÇAPRAZ-TENANT KİLİDİ (bkz. docs/planning/schema-product.md §1.1)
 --
 -- Kulüp-kullanıcı bağı tutan tablolar kendi `university_id`'lerini taşır ve İKİ
 -- bileşik FK ile hem kulübe hem kullanıcıya bağlanır. İkisi de aynı kolonu

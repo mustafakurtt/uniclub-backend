@@ -2,14 +2,14 @@
 /**
  * Doküman bütünlük kontrolü — CI'da çalışır.
  * 1. docs altındaki ve kök .md dosyalarındaki relative markdown linkleri
- * 2. index.ts'teki app.route mount'ları ↔ docs/API.md bölümleri
+ * 2. index.ts'teki app.route mount'ları ↔ docs/reference/api.md bölümleri
  */
 import { readdirSync, readFileSync, statSync, existsSync } from "fs";
 import { join, dirname, resolve, relative } from "path";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DOCS = join(ROOT, "docs");
-const API_MD = join(DOCS, "API.md");
+const API_MD = join(DOCS, "reference", "api.md");
 const INDEX_TS = join(ROOT, "src", "index.ts");
 
 let failed = false;
@@ -94,7 +94,7 @@ if (brokenCount === 0) {
   fail(`${brokenCount} kırık relative link`);
 }
 
-// ── 3. API.md kapsam kontrolü ───────────────────────────────────────────────
+// ── 3. reference/api.md kapsam kontrolü ─────────────────────────────────────
 
 const indexSrc = readFileSync(INDEX_TS, "utf8");
 const routeMounts = [...indexSrc.matchAll(/app\.route\("(\/api\/[^"]+)"/g)].map(
@@ -138,15 +138,68 @@ const extraInApiMd = documentedMounts.filter((r) => !isMounted(r));
 
 if (missingInApiMd.length === 0 && extraInApiMd.length === 0) {
   ok(
-    `API.md kapsamı — ${routeMounts.length} üst mount + ${documentedMounts.length - routeMounts.length} alt kaynak belgelenmiş`
+    `reference/api.md kapsamı — ${routeMounts.length} üst mount + ${documentedMounts.length - routeMounts.length} alt kaynak belgelenmiş`
   );
 } else {
   for (const r of missingInApiMd) {
-    fail(`API.md'de bölüm yok: app.route("${r}")`);
+    fail(`reference/api.md'de bölüm yok: app.route("${r}")`);
   }
   for (const r of extraInApiMd) {
-    fail(`API.md'de var ama kodda böyle bir mount yok: ${r}`);
+    fail(`reference/api.md'de var ama kodda böyle bir mount yok: ${r}`);
   }
+}
+
+// ── 4. Bilinen ölü path referansları ────────────────────────────────────────
+
+const DEAD_PATH_PATTERNS = [
+  /docs\/yonetim\//,
+  /GOREV_PANOSU\.md/,
+  /docs\/frontend\//,
+  /docs\/API\.md/,
+  /docs\/DATA_MODEL\.md/,
+  /docs\/KVKK\.md/,
+  /docs\/LOGLAMA\.md/,
+  /docs\/MAKINE_KURULUMU\.md/,
+  /docs\/operations\.md/,
+  /docs\/architecture\.md/,
+  /docs\/CORE_MIDDLEWARE\.md/,
+  /docs\/GUVENLIK_YOL_HARITASI\.md/,
+  /docs\/SEMA_VE_URUN_YOL_HARITASI\.md/,
+  /docs\/ONBOARDING_TENANT\.md/,
+  /docs\/PERFORMANS\.md/,
+  /docs\/MAIL_DOGRULAMA\.md/,
+  /docs\/BILDIRIMLER\.md/,
+  /docs\/DENETIM_VE_HATA\.md/,
+  /docs\/cache\//,
+  /design\/05-eksikler-ve-onerilen-endpointler\.md/,
+];
+const scanExts = [".md", ".ts", ".yml"];
+let deadRefCount = 0;
+
+function scanDeadPaths(dir: string) {
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) {
+      if (entry === "node_modules" || entry === ".git" || entry === "src/db/migrations") continue;
+      scanDeadPaths(p);
+    } else if (scanExts.some((ext) => entry.endsWith(ext))) {
+      if (relative(ROOT, p) === "scripts/update-doc-links.ts") continue;
+      if (relative(ROOT, p) === "scripts/patch-auth-doc.ts") continue;
+      const text = readFileSync(p, "utf8");
+      for (const pat of DEAD_PATH_PATTERNS) {
+        if (pat.test(text)) {
+          deadRefCount++;
+          fail(`${relative(ROOT, p)} → ölü path referansı: ${pat}`);
+        }
+      }
+    }
+  }
+}
+
+scanDeadPaths(ROOT);
+
+if (deadRefCount === 0) {
+  ok("Ölü docs path referansı yok");
 }
 
 // ── Sonuç ───────────────────────────────────────────────────────────────────

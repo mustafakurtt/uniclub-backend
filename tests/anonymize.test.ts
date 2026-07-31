@@ -1,5 +1,5 @@
 /**
- * KVKK anonimleştirme (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §1.2).
+ * KVKK anonimleştirme (bkz. docs/planning/schema-product.md §1.2).
  *
  * Sınanan sözleşme üç parçalı:
  *   1. Kimliği tanımlayan alanlar gerçekten maskeleniyor mu,

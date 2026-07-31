@@ -2,7 +2,7 @@
 
 Bu klasör **CI'da koşmaz** ve `tests/`ten ayrıdır: `tests/` doğruluğu sınar,
 burası kapasiteyi ölçer. Ölçüm sonuçları ve çıkarımlar →
-[docs/PERFORMANS.md](../docs/PERFORMANS.md).
+[docs/operations/performance.md](../docs/operations/performance.md).
 
 | Dosya | İş |
 |---|---|
@@ -45,6 +45,6 @@ sınırlayıcı olur.
 - **SINGLE-FLIGHT TUZAĞI.** Tüm sanal kullanıcılar aynı anahtarı isterse
   `getOrSet` eşzamanlı miss'leri tek yüklemeye çökertir; cache'siz yapılandırma
   yapay olarak hızlı görünür. **Cache'li/cache'siz karşılaştırmayı eşzamanlılık
-  1'de yapın.** (Bu tuzağa bir kez düşüldü, bkz. docs/PERFORMANS.md §2.)
+  1'de yapın.** (Bu tuzağa bir kez düşüldü, bkz. docs/operations/performance.md §2.)
 - **Yük üreteci aynı makinede** CPU paylaşır → mutlak sayılar değil,
   karşılaştırmalar anlamlıdır.

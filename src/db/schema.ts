@@ -119,7 +119,7 @@ export const users = table("users", {
   // değiştirmeye zorlanır (moderation feature'ı set eder, self change-password sıfırlar).
   mustChangePassword: t.boolean("must_change_password").default(false).notNull(),
   ...timestamps,
-  // KVKK silme talebi = ANONİMLEŞTİRME (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §1.2).
+  // KVKK silme talebi = ANONİMLEŞTİRME (bkz. docs/planning/schema-product.md §1.2).
   // Satır fiziksel olarak silinmez: `auditLogs`, `announcements`, moderasyon
   // geçmişi gibi KAYITLARIN aktörü olarak ayakta kalması gerekir (o FK'ler
   // bilerek `restrict`). Bunun yerine kimliği tanımlayan alanlar maskelenir ve
@@ -337,7 +337,7 @@ export const clubRoleEnum = pgEnum("club_role", ["member", "officer", "president
 export const membershipStatusEnum = pgEnum("membership_status", ["pending", "approved", "rejected"]);
 
 /**
- * ÇAPRAZ-TENANT KİLİDİ (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §1.1)
+ * ÇAPRAZ-TENANT KİLİDİ (bkz. docs/planning/schema-product.md §1.1)
  *
  * Bu tablo eskiden yalnızca (club_id, user_id) tutuyordu. O halde A üniversitesindeki
  * bir kullanıcıyı B üniversitesinin kulübüne yazan bir servis hatası, veritabanı

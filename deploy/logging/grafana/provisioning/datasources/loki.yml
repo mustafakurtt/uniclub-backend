@@ -1,5 +1,5 @@
 # Grafana açılışta Loki'yi otomatik veri kaynağı olarak tanır — arayüzde elle
-# kurulum yok. Bkz. docker-compose.yml (grafana servisi) + docs/LOGLAMA.md.
+# kurulum yok. Bkz. docker-compose.yml (grafana servisi) + docs/operations/logging.md.
 apiVersion: 1
 
 datasources:
