@@ -45,7 +45,7 @@ export const activities = table("activities", {
   status: activityStatusEnum().default("draft").notNull(),
   visibility: activityVisibilityEnum().default("university").notNull(),
 
-  createdBy: t.uuid("created_by").references(() => users.id).notNull(),
+  createdBy: t.uuid("created_by").references(() => users.id, { onDelete: "restrict" }).notNull(),
   ...timestamps,
 }, (cols) => [
   // "Yaklaşan etkinlikler" zaman sorgusu (keşif akışında da kullanılır).
@@ -63,8 +63,8 @@ export const activityClubRoleEnum = pgEnum("activity_club_role", ["host", "co_ho
 export const activityClubStatusEnum = pgEnum("activity_club_status", ["invited", "accepted"]);
 
 export const activityClubs = table("activity_clubs", {
-  activityId: t.uuid("activity_id").references(() => activities.id).notNull(),
-  clubId: t.uuid("club_id").references(() => clubs.id).notNull(),
+  activityId: t.uuid("activity_id").references(() => activities.id, { onDelete: "cascade" }).notNull(),
+  clubId: t.uuid("club_id").references(() => clubs.id, { onDelete: "restrict" }).notNull(),
   role: activityClubRoleEnum().default("host").notNull(),
   status: activityClubStatusEnum().default("accepted").notNull(),
   ...timestamps,
@@ -83,8 +83,8 @@ export const activityClubs = table("activity_clubs", {
 export const rsvpStatusEnum = pgEnum("rsvp_status", ["going", "interested", "waitlist"]);
 
 export const activityAttendees = table("activity_attendees", {
-  activityId: t.uuid("activity_id").references(() => activities.id).notNull(),
-  userId: t.uuid("user_id").references(() => users.id).notNull(),
+  activityId: t.uuid("activity_id").references(() => activities.id, { onDelete: "cascade" }).notNull(),
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "restrict" }).notNull(),
 
   status: rsvpStatusEnum().default("going").notNull(),
   checkedInAt: t.timestamp("checked_in_at", { withTimezone: true }), // NULL = yoklamada işaretlenmedi (RSVP ≠ katılım)
