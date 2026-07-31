@@ -2,7 +2,9 @@ import { pgTable as table } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
 import { timestamps } from "../../core/db/base.entity";
+import { createdAtColumn } from "./helpers";
 import { users } from "./users";
+import { clubs } from "./clubs";
 
 // ═══════════════════════════════════════════════
 // NOTIFICATIONS (kalıcı bildirimler + gerçek zamanlı WS teslimatı)
@@ -50,4 +52,21 @@ export const pushSubscriptions = table("push_subscriptions", {
 }, (cols) => [
   // Bir kullanıcının tüm cihazları (bildirim gönderiminde list, çıkışta delete).
   t.index("push_subscriptions_user_idx").on(cols.userId),
+]);
+
+// ═══════════════════════════════════════════════
+// NOTIFICATION MUTES (seyrek opt-out — varsayılan her şey açık)
+// ═══════════════════════════════════════════════
+// Satır = sapma: (user, type, club) kombinasyonunu sustur. NULL type → tüm tipler;
+// NULL club → tüm kulüpler; ikisi birlikte → kesişim. UNIQUE NULLS NOT DISTINCT
+// (migration.sql) — aynı kural iki kez yazılamaz.
+export const notificationMutes = table("notification_mutes", {
+  id: t.uuid().primaryKey().defaultRandom(),
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  type: t.varchar({ length: 64 }), // NULL = tüm bildirim tipleri
+  clubId: t.uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }), // NULL = tüm kulüpler
+  ...createdAtColumn,
+}, (cols) => [
+  t.index("notification_mutes_user_idx").on(cols.userId),
+  t.unique("notification_mutes_user_type_club_unique").on(cols.userId, cols.type, cols.clubId),
 ]);

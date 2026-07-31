@@ -50,6 +50,8 @@ erDiagram
     users      ||--o{ media : "yükleyen"
 
     users ||--o{ notifications : ""
+    users ||--o{ notification_mutes : "opt-out"
+    clubs ||--o{ notification_mutes : ""
     users ||--o{ push_subscriptions : ""
     users ||--o{ email_verifications : ""
     users ||--o{ user_moderation_actions : "hedef + aktör"
@@ -67,7 +69,7 @@ Her tablo tenant'a aynı şekilde bağlanmaz; üç kalıp var:
 |---|---|---|
 | **Doğrudan `university_id`** | `users`, `clubs`, `faculties`, `roles`, `club_applications`, `audit_logs`, `university_domains` | Satır bir tenant'a aittir (bazılarında NULL = platform seviyesi) |
 | **Bileşik FK ile kilitli `university_id`** | `club_members`, `club_advisors`, `club_gallery`, `announcements` | Satırın tenant'ı **hem kulübün hem kullanıcının** tenant'ıyla eşit olmaya DB tarafından zorlanır (bkz. [ADR 0006](../adr/0006-composite-fk-cross-tenant-lock.md)) |
-| **Dolaylı** | `departments` (→ faculty), `club_contact_links` (→ club), `notifications`/`push_subscriptions`/`email_verifications` (→ user), `role_permissions`/`user_roles`/`user_permissions`, `club_application_approvals` | Tenant üst kayıttan türetilir; tekrar tutmak sapma riski yaratırdı |
+| **Dolaylı** | `departments` (→ faculty), `club_contact_links` (→ club), `notifications`/`notification_mutes`/`push_subscriptions`/`email_verifications` (→ user), `role_permissions`/`user_roles`/`user_permissions`, `club_application_approvals` | Tenant üst kayıttan türetilir; tekrar tutmak sapma riski yaratırdı |
 
 ---
 
@@ -131,6 +133,7 @@ Her tablo tenant'a aynı şekilde bağlanmaz; üç kalıp var:
 | Tablo | Ne tutar | Notlar |
 |---|---|---|
 | `notifications` | Kalıcı bildirimler | `type` varchar + kod kataloğu. Okunmamışlar için kısmi index |
+| `notification_mutes` | Seyrek opt-out susturmalar | Varsayılan her şey açık; satır = sapma. `UNIQUE NULLS NOT DISTINCT (user_id, type, club_id)` |
 | `push_subscriptions` | Web Push abonelikleri | `endpoint` tekil = cihaz kimliği |
 | `audit_logs` | **Append-only** denetim izi | `guard()` otomatik yazar; reddedilen denemeler (403) de düşer. Yazma/silme endpoint'i **yok**. FK'ler `restrict` |
 | `user_moderation_actions` | **Append-only** moderasyon geçmişi | `users.status` anlık durumu, bu tablo tarihçeyi tutar |

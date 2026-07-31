@@ -3,8 +3,9 @@ import { authMiddleware, Variables } from "../../core/auth/auth.middleware";
 import { requireActiveUser } from "../../middlewares/active-user.middleware";
 import { validate } from "../../shared/utils/validate";
 import { ok, done } from "../../shared/utils/respond";
-import { updateProfileSchema, changePasswordSchema } from "./users.schema";
+import { updateProfileSchema, changePasswordSchema, updateNotificationPreferenceSchema } from "./users.schema";
 import { usersService } from "./users.service";
+import { notificationPreferencesService } from "../notifications/notification-preferences.service";
 
 // Bu feature tamamen self-service'tir: her rota, giriş yapmış kullanıcının
 // SADECE kendi hesabı üzerinde işlem yapar (başka kullanıcıları görüntüleme/
@@ -81,3 +82,21 @@ usersRoutes.get("/me/dashboard", async (c) => {
   const summary = await usersService.getDashboard(actor.userId);
   return ok(c, summary, "dashboard.summaryLoaded");
 });
+
+// 9. BİLDİRİM TERCİHLERİ (seyrek opt-out susturmalar)
+usersRoutes.get("/me/notification-preferences", async (c) => {
+  const actor = c.get("user");
+  const data = await notificationPreferencesService.getPreferences(actor.userId);
+  return ok(c, data, "user.notificationPreferencesListed");
+});
+
+usersRoutes.put(
+  "/me/notification-preferences",
+  validate("json", updateNotificationPreferenceSchema),
+  async (c) => {
+    const actor = c.get("user");
+    const body = c.req.valid("json");
+    const updated = await notificationPreferencesService.updatePreference(actor.userId, body);
+    return ok(c, updated, "user.notificationPreferenceUpdated");
+  }
+);

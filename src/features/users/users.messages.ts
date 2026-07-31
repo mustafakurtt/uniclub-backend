@@ -18,6 +18,10 @@ export const usersMessages = defineCatalog({
     "user.clubMembershipsListed": "Kulüp üyelikleri listelendi.",
     "user.applicationsListed": "Başvurularım listelendi.",
     "user.advisedClubsListed": "Danışmanı olduğunuz kulüpler listelendi.",
+    "user.notificationPreferencesListed": "Bildirim tercihleri listelendi.",
+    "user.notificationPreferenceUpdated": "Bildirim tercihi güncellendi.",
+    "user.notificationPreferenceNotOptOutable": "Bu bildirim tipi susturulamaz.",
+    "user.notificationPreferenceInvalid": "Geçersiz susturma kuralı.",
   },
   en: {
     // error
@@ -31,6 +35,10 @@ export const usersMessages = defineCatalog({
     "user.clubMembershipsListed": "Club memberships listed.",
     "user.applicationsListed": "Applications listed.",
     "user.advisedClubsListed": "Advised clubs listed.",
+    "user.notificationPreferencesListed": "Notification preferences listed.",
+    "user.notificationPreferenceUpdated": "Notification preference updated.",
+    "user.notificationPreferenceNotOptOutable": "This notification type cannot be muted.",
+    "user.notificationPreferenceInvalid": "Invalid mute rule.",
   },
 });
 

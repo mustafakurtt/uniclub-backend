@@ -172,7 +172,56 @@ ikonla `title`/`body`'yi göster.
 
 ---
 
-## 5. Bilinen sınırlar
+## 6. Bildirim tercihleri (ayar ekranı)
+
+Üniversite geneli duyuru fan-out'u öncesinde kullanıcıların opt-out yapabilmesi için
+self-service tercih uçları eklendi. Varsayılan: **tüm susturulabilir tipler açık**.
+
+### GET `/api/users/me/notification-preferences`
+
+```jsonc
+{
+  "success": true,
+  "messageKey": "user.notificationPreferencesListed",
+  "data": {
+    "mutes": [
+      { "type": "announcement.published", "clubId": null, "createdAt": "..." }
+    ],
+    "optOutableTypes": [
+      { "type": "announcement.published", "labelTr": "Yeni duyuru", "labelEn": "New announcement" }
+    ],
+    "typeCatalog": { /* NotificationTypeMeta — tüm tipler + optOutable */ }
+  }
+}
+```
+
+`mutes` = mevcut susturmalar. Ayar ekranını `optOutableTypes` + `mutes` ile kurun;
+susturulamaz tipler listede yok.
+
+### PUT `/api/users/me/notification-preferences`
+
+Idempotent — aynı kuralı iki kez yazmak hata üretmez.
+
+```jsonc
+// Tip bazlı susturma
+{ "type": "announcement.published", "muted": true }
+
+// Kulüp bazlı susturma (üyelik şart değil — co-host daveti vb.)
+{ "clubId": "<uuid>", "muted": true }
+
+// Kesişim
+{ "type": "announcement.published", "clubId": "<uuid>", "muted": true }
+
+// Susturmayı kaldır
+{ "type": "announcement.published", "muted": false }
+```
+
+En az `type` veya `clubId` zorunlu (ikisi de `null` → `400`). Susturulamaz tip
+(`account.suspended` vb.) → `400` + `user.notificationPreferenceNotOptOutable`.
+
+---
+
+## 7. Bilinen sınırlar
 
 - **Uygulama kapalıyken push yok.** WS yalnızca sayfa açıkken çalışır. Gerçek push
   (kapalı uygulama/mobil) için Web Push (VAPID) ayrı bir katman — henüz yok.

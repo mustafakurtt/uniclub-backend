@@ -1,4 +1,5 @@
 import { notificationsRepository } from "./notifications.repository";
+import { notificationMutesRepository } from "./notification-mutes.repository";
 import { publish } from "./notifications.gateway";
 import { webPushSender } from "./push.gateway";
 import { pushSubscriptionStore } from "./push.store";
@@ -10,6 +11,14 @@ import type { WebPushPayload, WebPushSubscription } from "../../core/notificatio
 const log = logger.child({ module: "notifications.service" });
 
 const DELIVERY_CHUNK = 50;
+
+/** Bildirim data'sından kulüp bağlamını çıkarır (susturma eşlemesi için). */
+function extractClubIdFromPayload(payload: CreateNotificationPayload): string | null {
+  const data = payload.data;
+  if (!data || typeof data !== "object") return null;
+  const clubId = data.clubId;
+  return typeof clubId === "string" ? clubId : null;
+}
 
 /** Tek bildirimin WS + push teslimatı — hata yutulur (fan-out parçasında). */
 async function deliverNotificationSafe(notification: Notification): Promise<void> {
@@ -53,7 +62,11 @@ export const notificationsService = {
    *
    * `notifySafe`'i tercih edin — bu fonksiyon hata FIRLATIR.
    */
-  async notify(userId: string, payload: CreateNotificationPayload): Promise<Notification> {
+  async notify(userId: string, payload: CreateNotificationPayload): Promise<Notification | null> {
+    const clubId = extractClubIdFromPayload(payload);
+    const muted = await notificationMutesRepository.findMutedUserIds([userId], payload.type, clubId);
+    if (muted.has(userId)) return null;
+
     // 1. Önce DB (kalıcılık): çevrimdışı cihaz sonra bağlanınca geçmişi görsün.
     const notification = await notificationsRepository.add(userId, payload);
     // 2. Web push'ı ERKEN ve fire-and-forget başlat: WS/Redis'ten BAĞIMSIZDIR
@@ -99,7 +112,16 @@ export const notificationsService = {
   async notifyManySafe(userIds: string[], payload: CreateNotificationPayload): Promise<void> {
     if (userIds.length === 0) return;
     try {
-      const rows = await notificationsRepository.addMany(userIds, payload);
+      const clubId = extractClubIdFromPayload(payload);
+      const muted = await notificationMutesRepository.findMutedUserIds(
+        userIds,
+        payload.type,
+        clubId
+      );
+      const recipients = userIds.filter((id) => !muted.has(id));
+      if (recipients.length === 0) return;
+
+      const rows = await notificationsRepository.addMany(recipients, payload);
       for (let i = 0; i < rows.length; i += DELIVERY_CHUNK) {
         const chunk = rows.slice(i, i + DELIVERY_CHUNK);
         await Promise.all(chunk.map((notification) => deliverNotificationSafe(notification)));

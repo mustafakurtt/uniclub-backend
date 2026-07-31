@@ -47,6 +47,46 @@ sayaçları kırılırdı → `shared/redis/redis.subscriber.ts`.
 | `features/notifications/notifications.gateway.ts` | Soket kaydı (çoklu cihaz), heartbeat, pub/sub fanout, WS ticket |
 | `features/notifications/notifications.service.ts` | `notify` / `notifySafe`, liste, okundu |
 | `features/notifications/notifications.repository.ts` | DB (keyset sayfalama, okunmamış sayacı) |
+| `features/notifications/notification-mutes.repository.ts` | Susturma kayıtları + fan-out filtresi sorgusu |
+| `features/notifications/notification-preferences.service.ts` | Self-service tercih API mantığı |
+
+---
+
+## Bildirim tercihleri (seyrek opt-out)
+
+Varsayılan: **her şey açık**. Kullanıcı yalnızca istemediği kombinasyonlar için
+`notification_mutes` tablosuna satır yazar; satır yoksa bildirim normal akar.
+
+| Satır `(type, club_id)` | Anlamı |
+|---|---|
+| `(T, NULL)` | Tip `T` tamamen susturuldu (tüm kulüpler) |
+| `(NULL, C)` | Kulüp `C` tamamen susturuldu (tüm tipler) |
+| `(T, C)` | Yalnızca kulüp `C`'nin tip `T` bildirimleri susturuldu |
+
+`UNIQUE NULLS NOT DISTINCT (user_id, type, club_id)` — aynı kural iki kez yazılamaz;
+API idempotent (`onConflictDoNothing` / silme no-op).
+
+### Susturulamaz tipler
+
+Bunlar **tebligat** bildirimidir; kullanıcı kapatamaz (`optOutable: false`):
+
+`account.suspended`, `account.unsuspended`, `account.passwordReset`, `account.verified`,
+`club.application.decided`, `club.membership.decided`, `role.assigned`.
+
+Susturulabilir: `announcement.published`, `activity.published`, `activity.cancelled`,
+`activity.coHostInvited`. Katalog: `NotificationTypeMeta` (`notifications.types.ts`).
+
+### Fan-out filtresi
+
+`notify`, `notifySafe` ve `notifyManySafe` **kalıcılık öncesinde** susturulmuş
+alıcıları çıkarır. Susturulan kullanıcıya ne DB satırı ne WS/push teslimatı gider —
+uygulama içi listede de görünmez.
+
+`notifyManySafe` aday `userIds` listesini aldıktan sonra **tek indeksli sorgu**
+(`notificationMutesRepository.findMutedUserIds`) ile susturulmuş `user_id` kümesini
+çeker; kullanıcı başına tercih okuması yok. Uygulama: `notifications.service.ts`.
+
+Self-service API: `GET/PUT /api/users/me/notification-preferences` (`users.routes.ts`).
 
 ---
 

@@ -197,6 +197,8 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 | GET | `/api/users/me/advised-clubs` | Bearer | Danışmanı olduğum kulüpler (advisor rolü) |
 | GET | `/api/users/me/activities` | Bearer | Katılım bildirdiğim etkinlikler (takvimim) — bkz. [Activities](#11-activities--apiactivities) |
 | GET | `/api/users/me/dashboard` | Bearer | Öğrenci panel özeti (kulüp/etkinlik/istek sayaçları) — bkz. [Dashboard](#12-dashboard--feed) |
+| GET | `/api/users/me/notification-preferences` | Bearer | Bildirim susturmaları + susturulabilir tip kataloğu |
+| PUT | `/api/users/me/notification-preferences` | Bearer | Susturma ekle/kaldır (idempotent) — bkz. [notifications-and-limits.md](../integration/notifications-and-limits.md) §6 |
 
 **PATCH /api/users/me** body (en az bir alan zorunlu):
 ```jsonc
