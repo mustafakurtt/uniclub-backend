@@ -35,16 +35,20 @@ describe("core/ taşınabilirlik sınırı", () => {
     for await (const file of new Glob("**/*.ts").scan({ cwd: CORE_DIR, absolute: true })) {
       const source = await Bun.file(file).text();
 
-      for (const specifier of relativeImports(source)) {
-        // Import'u mutlak yola çevir: core'dan çıkıyor mu, çıkıyorsa nereye?
+      for (const [lineIndex, line] of source.split("\n").entries()) {
+      const pattern = /(?:\bfrom\s*|\bimport\s*\(\s*)["'](\.[^"']*)["']/g;
+      for (const match of line.matchAll(pattern)) {
+        const specifier = match[1];
         const target = resolve(dirname(file), specifier);
-        if (target.startsWith(CORE_DIR)) continue; // core içi → serbest
+        if (target.startsWith(CORE_DIR)) continue;
 
         const fromSrc = relative(SRC_DIR, target).split(/[\\/]/)[0];
         if (FORBIDDEN.includes(fromSrc)) {
-          violations.push(`${relative(SRC_DIR, file)} → ${specifier}`);
+          const relFile = relative(SRC_DIR, file);
+          violations.push(`${relFile}:${lineIndex + 1} → ${specifier}`);
         }
       }
+    }
     }
 
     expect(violations).toEqual([]);

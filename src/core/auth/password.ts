@@ -12,6 +12,27 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
   await Bun.password.verify(password, hash);
 
 /**
+ * Kullanıcı yoksa bile sabit dummy hash'e karşı doğrulama yapar — login timing
+ * enumeration'ını önler. hash null/undefined ise sonuç her zaman false.
+ */
+let timingDummyHash: string | undefined;
+
+async function timingDummyHashValue(): Promise<string> {
+  if (!timingDummyHash) {
+    timingDummyHash = await Bun.password.hash("uniclub-timing-equalizer-v1");
+  }
+  return timingDummyHash;
+}
+
+export async function verifyPasswordOrDummy(password: string, hash: string | null | undefined): Promise<boolean> {
+  if (!hash) {
+    await Bun.password.verify(password, await timingDummyHashValue());
+    return false;
+  }
+  return await verifyPassword(password, hash);
+}
+
+/**
  * Karakter sınıfları AYRI sabitler olarak durur; tek bir birleşik alfabede
  * "büyük harfler 0-25 arasındadır" gibi varsayımlar yapılamasın diye. Karışması
  * kolay karakterler bilinçli olarak DIŞARIDA: `I`/`O` (büyük), `l` (küçük),

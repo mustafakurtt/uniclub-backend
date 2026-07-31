@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { createEnv, envBoolean } from "../core/config/env";
+import { validateJwtSecret } from "./jwt-secret";
 
-const envSchema = z.object({
+const envSchema = z
+  .object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   DATABASE_URL: z.string().url("Geçerli bir veritabanı URL'si girilmelidir."),
   REDIS_URL: z.string().url("Geçerli bir Redis URL'si girilmelidir."),
-  JWT_SECRET: z.string().min(10, "JWT secret çok kısa olamaz!"),
+  JWT_SECRET: z.string().min(1),
 
   // ── E-POSTA (doğrulama maili) ────────────────────────────────────────────
   // Yerelde docker-compose'daki Mailpit'e bağlanır (SMTP :1025, arayüz :8025).
@@ -107,7 +109,13 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().optional(),
   /** Push servislerinin iletişim için istediği kimlik (mailto: veya https:). */
   VAPID_SUBJECT: z.string().default("mailto:admin@uniclub.local"),
-});
+})
+  .superRefine((data, ctx) => {
+    const jwtError = validateJwtSecret(data.JWT_SECRET, data.NODE_ENV);
+    if (jwtError) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: jwtError, path: ["JWT_SECRET"] });
+    }
+  });
 
 // process.env'yi şemadan geçiriyoruz. Eğer .env içinde hata varsa uygulama burada
 // patlar ve HANGİ alanların neden geçersiz olduğunu tek tek listeler (bkz. core/config/env).

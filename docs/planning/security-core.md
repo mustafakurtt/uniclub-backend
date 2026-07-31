@@ -11,15 +11,11 @@ Tamamlanan mekanizmalar (rate limit core'a taşındı, core unit testleri, healt
 
 ### 1.1 Login timing / kullanıcı enumeration
 
-`auth.service.ts` → `login()`: kullanıcı yokken bcrypt atlanıyor (~5 ms vs ~100 ms).
-
-**Yapılacak:** `core/auth/password.ts` → `verifyPasswordOrDummy(password, hash | null)`.
+Uygulandı: `verifyPasswordOrDummy` (`core/auth/password.ts`) + login her istekte hash doğrular.
 
 ### 1.2 `JWT_SECRET` alt sınırı
 
-`config/env.ts` → `z.string().min(10)` çok gevşek.
-
-**Yapılacak:** min 32 karakter + placeholder reddi + prod'da varsayılan yasak.
+Uygulandı: min 32 karakter, placeholder reddi, prod örnek yasak (`config/jwt-secret.ts`).
 
 ### 1.3 Token iptali (revocation)
 
@@ -44,7 +40,7 @@ Hesap askıya alma çalışıyor (`attachAuthz` + authz cache `status`).
 | 2.9 | Refresh token rotation | 15 dk access + rotating refresh + reuse detection |
 | 2.10 | Secret rotation | `kid` ile çok-anahtarlı JWT verify |
 
-**Sınır testi:** `core/**` → `shared|config|features` import yasağı (otomatik test yok).
+**Sınır testi:** `core/**` → `shared|config|features` import yasağı — `tests/unit/core-boundary.test.ts`.
 
 ---
 

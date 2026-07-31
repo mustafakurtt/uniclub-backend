@@ -68,7 +68,7 @@ bun install
 cp .env.example .env
 ```
 
-`.env` içindeki `JWT_SECRET`'ı doldur — laptop'takinden **farklı** olsun:
+`.env` içindeki `JWT_SECRET`'ı doldur — laptop'takinden **farklı** olsun, **en az 32 karakter** ve örnek/placeholder değer olmasın (başlangıçta reddedilir):
 
 ```sh
 openssl rand -base64 48

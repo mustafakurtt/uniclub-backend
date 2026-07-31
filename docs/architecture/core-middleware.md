@@ -155,4 +155,4 @@ Bunları sarmalamak net zarar: bir katman daha, sıfır kazanç.
 5. Gerisi (3.4 ETag, 3.6 IP filter, 3.7 maintenance, 3.8 tracing) ihtiyaç doğunca.
 
 Bağlantılı: [security-core.md](../planning/security-core.md) — Tier 1 (login
-timing, JWT_SECRET, token iptali) hâlâ açık ve bu listeden önce gelir.
+timing, token iptali) — Tier 1.1–1.2 kapandı; bkz. [planning/README.md](../planning/README.md) A1.

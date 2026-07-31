@@ -44,6 +44,7 @@ Changelog: [CHANGELOG.md](../CHANGELOG.md).
 
 | Doc | Covers |
 | --- | --- |
+| [README.md](planning/README.md) | **Ürün sırası** — A1→G yol haritası (ilerleme CHANGELOG'da) |
 | [schema-product.md](planning/schema-product.md) | Active schema/product backlog |
 | [platform-ops-roadmap.md](planning/platform-ops-roadmap.md) | SaaS platform panel roadmap (phases, backend gaps) |
 | [platform-rbac.md](planning/platform-rbac.md) | Platform rol/yetki modeli (kaç rol, permission demetleri) |

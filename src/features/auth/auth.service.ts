@@ -2,7 +2,7 @@ import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDT
 import { authRepository } from "./auth.repository";
 import { tenantAdminInvitationsRepository } from "./tenant-admin-invitations.repository";
 import { toTenantAdminInvitationPublic, type TenantAdminInvitationPublic } from "./tenant-admin-invitations.types";
-import { hashPassword, verifyPassword } from "../../shared/utils/password.util"; // verifyPassword eklendi
+import { hashPassword, verifyPasswordOrDummy } from "../../shared/utils/password.util"; // verifyPasswordOrDummy — timing-safe login
 import { generateToken } from "../../shared/utils/jwt.util"; // JWT üreteci eklendi
 import { generateOneTimeToken, hashToken } from "../../core/auth/token"; // e-posta doğrulama token'ı (JWT DEĞİL)
 import { emailQueue } from "./auth.queue";
@@ -699,18 +699,11 @@ export const authService = {
    * E-posta ve şifreyi kontrol eder, başarılıysa JWT döner.
    */
   async login(data: LoginDTO) {
-    // 1. Kullanıcıyı veritabanında bul
     const user = await authRepository.findUserByEmail(data.email);
-    
-    // Güvenlik Kuralı: "E-posta bulunamadı" veya "Şifre yanlış" diye detay vermiyoruz ki
-    // kötü niyetli kişiler sistemde hangi e-postaların kayıtlı olduğunu tahmin edemesin.
-    if (!user) {
-      throw unauthorized("auth.invalidCredentials");
-    }
 
-    // 2. Şifreyi doğrula (Bun.password kullanarak)
-    const isPasswordValid = await verifyPassword(data.password, user.passwordHash);
-    if (!isPasswordValid) {
+    // Güvenlik: aynı hata mesajı + her istekte hash doğrulama (dummy hash ile timing eşitlenir).
+    const isPasswordValid = await verifyPasswordOrDummy(data.password, user?.passwordHash);
+    if (!user || !isPasswordValid) {
       throw unauthorized("auth.invalidCredentials");
     }
 
