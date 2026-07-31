@@ -15,6 +15,7 @@ Hata zarfı ve i18n: [reference/error-and-audit.md](../reference/error-and-audit
 | [tenant-settings.md](tenant-settings.md) | Tenant yapılandırma ayarları (sabitleme kotası, yayın hızı) |
 | [clubs.md](clubs.md) | Kulüpler, üyelik, başvurular |
 | [activities.md](activities.md) | Etkinlikler, RSVP, co-host |
+| [public.md](public.md) | Kamuya açık kulüp/etkinlik okuma (QR, tanıtım günü) |
 | [dashboard.md](dashboard.md) | Öğrenci feed ve özet paneller |
 | [media.md](media.md) | Dosya yükleme |
 | [moderation.md](moderation.md) | Ban, şifre sıfırlama, anonimleştirme |

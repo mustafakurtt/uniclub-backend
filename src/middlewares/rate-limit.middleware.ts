@@ -204,6 +204,17 @@ export const resetPasswordIpLimit = limiter({
 });
 
 /**
+ * Kamuya açık okuma (T10.5) — IP başına. Kimlik yok; kampüs NAT riski için
+ * cömert tavan (dakikada 120) ama bot taramasını yavaşlatır.
+ */
+export const publicReadIpLimit = limiter({
+  keyPrefix: "public:ip",
+  limit: 120,
+  windowSeconds: 60,
+  keyFn: (c) => clientIp(c),
+});
+
+/**
  * Okul geneli duyuru yayınlama — tenant + yayıncı başına (saatte 5).
  * Büyük fan-out'un kötüye kullanımını yavaşlatır.
  */

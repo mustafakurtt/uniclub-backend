@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, sql, getTableColumns, type SQL } from "drizzle-orm";
+import { and, eq, gte, lt, sql, getTableColumns, isNotNull, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import { activities, activityClubs, activityAttendees, clubs, clubMembers } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
@@ -365,6 +365,17 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
       .where(and(eq(activityAttendees.activityId, activityId), eq(activityAttendees.userId, userId)))
       .returning();
     return row;
+  }
+
+  /** Mutabakat taraması: zamanlanmış taslak etkinlikler. */
+  findScheduledDrafts() {
+    return db
+      .select({
+        id: activities.id,
+        scheduledPublishAt: activities.scheduledPublishAt,
+      })
+      .from(activities)
+      .where(and(eq(activities.status, "draft"), isNotNull(activities.scheduledPublishAt)));
   }
 }
 

@@ -508,9 +508,12 @@ Afiş QR'ının ayırt edici özellikleri:
 Yoklama QR'ı bugünkü `checkedInAt` alanının üstüne oturur; dönen kod olmazsa
 öğrenciler QR'ı birbirine gönderir ve yoklama anlamsızlaşır.
 
-### T10.2 Kulüp tanıtım sayfası ★
+### T10.2 Kulüp tanıtım sayfası — **okuma yüzeyi kısmi (v1)**
 
-Her kulübün kamuya açık, paylaşılabilir sayfası:
+- `GET /api/public/universities/:slug/clubs/:clubSlug` — kimlik, iletişim, yaklaşan etkinlikler
+- (Sonraki: galeri vitrini, geçmiş etkinlikler, katıl CTA, paylaşım kartları, editör)
+
+Her kulübün kamuya açık, paylaşılabilir sayfası (tam vizyon):
 
 - Kulüp kimliği: logo, kapak, tanıtım metni, sosyal medya
 - Yaklaşan etkinlikler, geçmiş etkinlik vitrini, galeri
@@ -522,12 +525,11 @@ Her kulübün kamuya açık, paylaşılabilir sayfası:
 **Karar:** Sayfa varsayılan olarak herkese açık mı, kurum onayıyla mı açılıyor?
 Kurumsal ses söz konusu olduğu için moderasyon gerekebilir (T2.7).
 
-### T10.3 Kamuya açık etkinlik sayfası
+### T10.3 Kamuya açık etkinlik sayfası — **okuma yüzeyi tamamlandı (v1)**
 
-- Etkinlik detayı, tarih, yer, harita
-- Takvime ekle (.ics)
-- Kayıtsız kullanıcı için "ilgileniyorum" (yalnızca e-posta) — hesap zorunlu olmasın
-- Etkinliğin görünürlük ayarına saygı: `members` etkinlik kamuya çıkmaz
+- `GET /api/public/universities/:slug/activities/:id` — yalnızca `published` + `university`
+- Public DTO; `members`/draft/zamanlanmış taslak 404
+- (Sonraki: .ics, kayıtsız ilgi e-postası)
 
 ### T10.4 Tanıtım günleri ve aday öğrenci ★
 
@@ -544,17 +546,20 @@ altyapısı hazır; dış kitle için hesap gerektirmeyen yüzey gerekiyor.
 - Aday öğrenci ilgi kaydı (e-posta) ve sonrasında bilgilendirme izni (KVKK açık rıza)
 - Tanıtım günü programı (çok oturumlu etkinlik — T2.2)
 
-### T10.5 Kamuya açık yüzeyin güvenlik ve uyum yükü
+### T10.5 Kamuya açık yüzeyin güvenlik ve uyum yükü — **kısmi (okuma v1)**
 
-Bu yüzey açıldığında ortaya çıkan, kolayca atlanan gereksinimler:
+Tamamlandı (bu tur):
 
-- **Kimlik gerektirmeyen uçlarda hız sınırı ve bot koruması** (mevcut limiter
-  kimliğe göre çalışıyor; burada IP/challenge gerekiyor)
-- **Önbellekleme ve CDN** — kamuya açık sayfa trafiği kimlik doğrulamalı
-  trafikten farklı ölçeklenir
-- **KVKK:** kamuya açık sayfada hangi kişisel veri görünür? Kulüp başkanının
-  adı görünsün mü, öğrenci listesi kesinlikle görünmemeli
-- **Tenant izolasyonu:** kamuya açık yüzeyde de tenant sınırı korunmalı
+- IP başına hız sınırı (`publicReadIpLimit`, 120/dk)
+- Public cache (TTL 300s)
+- KVKK: v1'de kulüp yönetici adları kamuya açık yüzeyde **gösterilmez**
+- Tenant izolasyonu URL + sunucu doğrulaması
+
+Kalan:
+
+- Bot/challenge katmanı
+- CDN kenar önbelleği
+- SEO görünürlük kontrolleri
 - Arama motoru görünürlüğü ve kurumun bunu kontrol edebilmesi
 
 ---

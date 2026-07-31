@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { announcements, clubAdvisors, clubMembers } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
@@ -239,6 +239,17 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
           isNull(announcements.clubId)
         )
       );
+  }
+
+  /** Mutabakat taraması: zamanlanmış taslak duyurular. */
+  findScheduledDrafts() {
+    return db
+      .select({
+        id: announcements.id,
+        scheduledPublishAt: announcements.scheduledPublishAt,
+      })
+      .from(announcements)
+      .where(and(eq(announcements.status, "draft"), isNotNull(announcements.scheduledPublishAt)));
   }
 }
 

@@ -57,6 +57,12 @@ export async function cancelScheduledPublish(kind: ScheduledPublishKind, id: str
   }
 }
 
+/** Mutabakat: kuyrukta iş var mı? (yeniden kuyruğa alma kararı için). */
+export async function hasScheduledPublishJob(kind: ScheduledPublishKind, id: string): Promise<boolean> {
+  const job = await scheduledPublishQueue.getJob(jobIdFor(kind, id));
+  return job != null;
+}
+
 const scheduledPublishWorker = new Worker<ScheduledPublishJob>(
   "scheduled-publish",
   async (job) => {

@@ -30,6 +30,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Activities (etkinlikler)](#12-activities--apiactivities)
   - [Dashboard & Feed](#13-dashboard--feed--apifeed)
   - [Media (dosya yükleme)](#14-media--apiuploads)
+  - [Public (kamuya açık okuma)](#15-public--apipublic)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -37,7 +38,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/public`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -622,6 +623,19 @@ Akış: **yükle → dönen URL'yi mevcut `*Url` alanına yaz** (endpoint'ler h�
 | GET | `/uploads/:key` | Public | Servis (`Cache-Control: immutable`) |
 
 `purpose`: `avatar\|club_logo\|club_cover\|gallery\|other`. Boyut aşımı → `413`; görsel değil → `400`.
+
+---
+
+### 15) Public — `/api/public`
+
+Kimlik doğrulama **yok**. IP başına hız sınırı (120/dk). Tam sözleşme: [`docs/integration/public.md`](../integration/public.md).
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/public/universities/:universitySlug/clubs/:clubSlug` | Kulüp tanıtım + yaklaşan `university` etkinlikleri |
+| GET | `/api/public/universities/:universitySlug/activities/:activityId` | Yayınlanmış `university` etkinlik detayı |
+
+Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404**.
 
 ---
 

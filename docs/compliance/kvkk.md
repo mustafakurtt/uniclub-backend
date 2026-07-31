@@ -126,6 +126,7 @@ süreler önerilir ve uygulanmadan önce hem hukuk onayı hem bir temizlik işi
 | Rol | Erişim |
 |---|---|
 | `student` | Yalnızca kendi verisi + kulüplerin herkese açık bilgileri |
+| Kamuya açık yüzey (`/api/public`) | **Kimlik yok** — yalnızca public DTO (kulüp/etkinlik meta, iletişim linkleri). Üye/danışman/yönetici adı, katılımcı listesi **yok** (v1 kararı) |
 | Kulüp `officer`/`president` | Kendi kulübünün üye listesi |
 | `university_admin`, `student_affairs` | **Kendi üniversitesinin** kullanıcıları (tenant scope) |
 | `auditor` | Kendi tenant'ının denetim izi (salt-okunur) |
