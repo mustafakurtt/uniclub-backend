@@ -57,3 +57,5 @@ feature'ların sahip tablolarına doğrudan yazım yapmaz.
 - **Auth provizyon niyetleri:** `registerSelfService`, `provisionStaffAccount`,
   `provisionPlatformAccount` — `skipVerify` gibi politika bayrakları yok; doğrulama politikası
   auth'un kararıdır.
+- **Tenant yönetici daveti:** operatör şifre belirlemez; `tenant_admin_invitations` +
+  `POST /api/auth/accept-tenant-admin-invitation` (public, token hash'li, 7 gün TTL).

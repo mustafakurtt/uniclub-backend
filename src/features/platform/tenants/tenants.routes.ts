@@ -3,18 +3,18 @@ import { guard } from "../../../core/rbac/guard";
 import { invalidates } from "../../../core/cache";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { validate } from "../../../shared/utils/validate";
-import { ok, created } from "../../../shared/utils/respond";
+import { ok, created, done } from "../../../shared/utils/respond";
 import { forbidden } from "../../../shared/utils/errors";
 import { UniversityPermission } from "../../university/university.permissions";
 import { universityEffects } from "../../university/university.cache";
 import { PlatformPermission } from "../platform.permissions";
-import { onboardTenantSchema, provisionTenantAdminSchema, updateTenantStatusSchema } from "./tenants.schema";
+import { onboardTenantSchema, inviteTenantAdminSchema, updateTenantStatusSchema } from "./tenants.schema";
 import { tenantsService } from "./tenants.service";
 
 export const tenantsRoutes = new Hono<{ Variables: RbacVariables }>();
 
 /**
- * SaaS operatörü — tenant listesi, yaşam döngüsü ve provision.
+ * SaaS operatörü — tenant listesi, yaşam döngüsü ve yönetici davetleri.
  * Tenant-scoped DEĞİL; yetki `platform.tenant.*` anahtarlarıyla korunur.
  */
 tenantsRoutes.get(
@@ -40,20 +40,40 @@ tenantsRoutes.post(
   },
   async (c) => {
     const body = c.req.valid("json");
-    const result = await tenantsService.onboardTenant(body);
+    const result = await tenantsService.onboardTenant(body, c.get("user").userId);
     return created(c, result, "platform.tenantOnboarded");
+  }
+);
+
+tenantsRoutes.get(
+  "/tenants/:universityId/invitations",
+  ...guard(PlatformPermission.TENANT_INVITE),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const invitations = await tenantsService.listTenantAdminInvitations(universityId);
+    return ok(c, invitations, "platform.invitationsListed");
   }
 );
 
 tenantsRoutes.post(
   "/tenants/:universityId/invite-admin",
   ...guard(PlatformPermission.TENANT_INVITE),
-  validate("json", provisionTenantAdminSchema),
+  validate("json", inviteTenantAdminSchema),
   async (c) => {
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
-    const admin = await tenantsService.inviteTenantAdmin(universityId, body);
-    return created(c, admin, "platform.adminInvited");
+    const invitation = await tenantsService.inviteTenantAdmin(universityId, body, c.get("user").userId);
+    return created(c, invitation, "platform.adminInvited");
+  }
+);
+
+tenantsRoutes.post(
+  "/tenants/:universityId/invitations/:invitationId/cancel",
+  ...guard(PlatformPermission.TENANT_INVITE),
+  async (c) => {
+    const { universityId, invitationId } = c.req.param();
+    const invitation = await tenantsService.cancelTenantAdminInvitation(universityId, invitationId);
+    return ok(c, invitation, "platform.invitationCancelled");
   }
 );
 

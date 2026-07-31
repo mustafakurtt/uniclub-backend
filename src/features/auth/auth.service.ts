@@ -1,5 +1,7 @@
-import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDTO, UpdatePermissionDTO, SetUserPermissionDTO, ResendVerificationDTO } from "./auth.schema"; // LoginDTO'yu ekle
+import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDTO, UpdatePermissionDTO, SetUserPermissionDTO, ResendVerificationDTO, AcceptTenantAdminInvitationDTO } from "./auth.schema";
 import { authRepository } from "./auth.repository";
+import { tenantAdminInvitationsRepository } from "./tenant-admin-invitations.repository";
+import { toTenantAdminInvitationPublic, type TenantAdminInvitationPublic } from "./tenant-admin-invitations.types";
 import { hashPassword, verifyPassword } from "../../shared/utils/password.util"; // verifyPassword eklendi
 import { generateToken } from "../../shared/utils/jwt.util"; // JWT üreteci eklendi
 import { generateOneTimeToken, hashToken } from "../../core/auth/token"; // e-posta doğrulama token'ı (JWT DEĞİL)
@@ -218,6 +220,7 @@ async function assertNotLastAdminOfScope(
 
 /** Doğrulama linkinin geçerlilik süresi. Mail şablonundaki "24 saat" ile eşleşmelidir. */
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const TENANT_ADMIN_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Kullanıcıya yeni bir doğrulama token'ı üretir ve mailini kuyruğa atar.
@@ -246,6 +249,39 @@ async function issueVerificationEmail(user: { id: string; email: string; firstNa
     firstName: user.firstName,
     token: verificationToken,
   });
+}
+
+async function queueTenantAdminInvitationEmail(email: string, firstName: string, token: string) {
+  await emailQueue.add("send-tenant-admin-invitation", {
+    email,
+    firstName,
+    token,
+  });
+}
+
+function namesMatchInvitation(
+  invitation: { firstName: string; lastName: string },
+  firstName: string,
+  lastName: string
+): boolean {
+  const norm = (value: string) => value.trim().toLocaleLowerCase("tr-TR");
+  return norm(invitation.firstName) === norm(firstName) && norm(invitation.lastName) === norm(lastName);
+}
+
+function assertInvitationAcceptable(invitation: {
+  acceptedAt: Date | null;
+  cancelledAt: Date | null;
+  expiresAt: Date;
+}) {
+  if (invitation.acceptedAt) {
+    throw badRequest("auth.invitationAlreadyUsed");
+  }
+  if (invitation.cancelledAt) {
+    throw badRequest("auth.invitationCancelled");
+  }
+  if (invitation.expiresAt < new Date()) {
+    throw badRequest("auth.invitationExpired");
+  }
 }
 
 /**
@@ -504,6 +540,147 @@ export const authService = {
 
   async listPlatformUsers() {
     return await authRepository.listPlatformUsers();
+  },
+
+  /**
+   * Tenant yöneticisi daveti — tx içinde yalnızca DB yazımı; mail commit sonrası.
+   */
+  async createTenantAdminInvitationInTx(params: {
+    tx: DbExecutor;
+    universityId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+    invitedBy: string | null;
+  }): Promise<WithAfterCommit<TenantAdminInvitationPublic>> {
+    const existingUser = await authRepository.findUserByEmailInTx(params.tx, params.email);
+    if (existingUser) {
+      throw badRequest("auth.emailAlreadyInUse");
+    }
+
+    const pending = await tenantAdminInvitationsRepository.findPendingByUniversityAndEmailInTx(
+      params.tx,
+      params.universityId,
+      params.email
+    );
+    if (pending) {
+      throw badRequest("auth.invitationPendingExists");
+    }
+
+    const token = generateOneTimeToken();
+    const tokenHash = await hashToken(token);
+    const expiresAt = new Date(Date.now() + TENANT_ADMIN_INVITATION_TTL_MS);
+
+    const row = await tenantAdminInvitationsRepository.createInTx(params.tx, {
+      universityId: params.universityId,
+      email: params.email,
+      firstName: params.firstName,
+      lastName: params.lastName,
+      roleName: params.roleName,
+      tokenHash,
+      invitedBy: params.invitedBy,
+      expiresAt,
+    });
+
+    const publicInvitation = toTenantAdminInvitationPublic(row);
+    return {
+      result: publicInvitation,
+      afterCommit: async () => {
+        await queueTenantAdminInvitationEmail(params.email, params.firstName, token);
+      },
+    };
+  },
+
+  async createTenantAdminInvitation(params: {
+    universityId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+    invitedBy: string | null;
+  }): Promise<TenantAdminInvitationPublic> {
+    const afterCommits: Array<() => Promise<void>> = [];
+    const result = await db.transaction(async (tx) => {
+      const wrapped = await authService.createTenantAdminInvitationInTx({ tx, ...params });
+      if (wrapped.afterCommit) {
+        afterCommits.push(wrapped.afterCommit);
+      }
+      return wrapped.result;
+    });
+    for (const runAfterCommit of afterCommits) {
+      await runAfterCommit();
+    }
+    return result;
+  },
+
+  async listPendingTenantAdminInvitations(universityId: string): Promise<TenantAdminInvitationPublic[]> {
+    const rows = await tenantAdminInvitationsRepository.listPendingByUniversity(universityId);
+    return rows.map(toTenantAdminInvitationPublic);
+  },
+
+  async cancelTenantAdminInvitation(universityId: string, invitationId: string): Promise<TenantAdminInvitationPublic> {
+    const invitation = await tenantAdminInvitationsRepository.findByIdInUniversity(invitationId, universityId);
+    if (!invitation) {
+      throw notFound("auth.invitationNotFound");
+    }
+    if (invitation.acceptedAt || invitation.cancelledAt || invitation.expiresAt < new Date()) {
+      throw badRequest("auth.invitationNotPending");
+    }
+    const cancelled = await tenantAdminInvitationsRepository.markCancelled(invitationId);
+    if (!cancelled) {
+      throw badRequest("auth.invitationNotPending");
+    }
+    return toTenantAdminInvitationPublic(cancelled);
+  },
+
+  /**
+   * Public davet kabul — tenant ve rol token'dan okunur; şifre tx öncesi hash'lenir.
+   */
+  async acceptTenantAdminInvitation(data: AcceptTenantAdminInvitationDTO) {
+    const tokenHash = await hashToken(data.token);
+    const invitation = await tenantAdminInvitationsRepository.findByTokenHash(tokenHash);
+    if (!invitation) {
+      throw badRequest("auth.invalidInvitationLink");
+    }
+
+    assertInvitationAcceptable(invitation);
+
+    if (!namesMatchInvitation(invitation, data.firstName, data.lastName)) {
+      throw badRequest("auth.invitationNameMismatch");
+    }
+
+    const passwordHash = await hashPassword(data.password);
+
+    const user = await db.transaction(async (tx) => {
+      const existing = await authRepository.findUserByEmailInTx(tx, invitation.email);
+      if (existing) {
+        throw badRequest("auth.emailAlreadyInUse");
+      }
+
+      const created = await authRepository.provisionUserWithRoleInTx(
+        tx,
+        {
+          universityId: invitation.universityId,
+          email: invitation.email,
+          passwordHash,
+          firstName: invitation.firstName,
+          lastName: invitation.lastName,
+          studentNumber: null,
+          status: "active",
+          mustChangePassword: false,
+        },
+        invitation.roleName
+      );
+
+      await tenantAdminInvitationsRepository.markAcceptedInTx(tx, invitation.id);
+      return created;
+    });
+
+    await invalidateUserPermissions(user.id);
+
+    const { passwordHash: _, ...safeUser } = user;
+    return safeUser;
   },
 
 

@@ -167,3 +167,15 @@ export const registerLimit = limiter({
   windowSeconds: 60,
   keyFn: (c) => clientIp(c),
 });
+
+/**
+ * Tenant yönetici davet kabulü — IP başına (public uç, kimlik yok).
+ * Token yüksek entropili ve hash'li; asıl koruma budur. IP limiti kaba kuvvet
+ * denemelerini yavaşlatır; enumeration için tüm hata durumları aynı mesajı döner.
+ */
+export const acceptTenantAdminInvitationIpLimit = limiter({
+  keyPrefix: "invite-accept:ip",
+  limit: 30,
+  windowSeconds: 60,
+  keyFn: (c) => clientIp(c),
+});

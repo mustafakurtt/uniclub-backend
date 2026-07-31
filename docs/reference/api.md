@@ -149,6 +149,7 @@ Ayrıntılı request/response örnekleri için [auth.md](../integration/auth.md)
 | POST | `/api/auth/register` | Yok | Kayıt olma |
 | POST | `/api/auth/login` | Yok | Giriş, JWT döner |
 | GET | `/api/auth/verify?token=...` | Yok | E-posta doğrulama linki |
+| POST | `/api/auth/accept-tenant-admin-invitation` | Yok | Tenant yönetici davet kabul (token + ad/soyad teyidi + şifre min 12) |
 | GET | `/api/auth/me` | Bearer | `{ userId, universityId }` döner (minimal) |
 
 **Sistem yönetimi rotaları** (normal kullanıcı arayüzünde gösterilmez; yalnızca sistem yönetim paneli için):
@@ -171,6 +172,7 @@ Ayrıntılı request/response örnekleri için [auth.md](../integration/auth.md)
 Body şemaları:
 - `POST /register`: `{ firstName (2-100), lastName (2-100), email, studentNumber?, password (min 8) }`
 - `POST /login`: `{ email, password }`
+- `POST /accept-tenant-admin-invitation`: `{ token, firstName (2-100), lastName (2-100), password (min 12) }` — tenant ve rol token'dan okunur
 - Promote/demote rotaları body almaz.
 - `POST /permissions`: `{ key (3-100), description? (max 256) }`
 - `PATCH /permissions/:id`: `{ description }` (key sabit)
@@ -410,8 +412,10 @@ Ayrıntı: `docs/integration/platform-panel.md`.
 | Method | Path | Permission | Açıklama |
 |---|---|---|---|
 | GET | `/api/platform/tenants` | `platform.tenant.view` | Tenant listesi + özet istatistikler |
-| POST | `/api/platform/tenants/onboard` | `university.create` (+ `platform.tenant.invite` if `initialAdmin`) | Atomik tenant açma |
-| POST | `/api/platform/tenants/:universityId/invite-admin` | `platform.tenant.invite` | Tenant yöneticisi provision |
+| POST | `/api/platform/tenants/onboard` | `university.create` (+ `platform.tenant.invite` if `initialAdmin`) | Atomik tenant açma + opsiyonel ilk yönetici **daveti** (şifre yok) |
+| GET | `/api/platform/tenants/:universityId/invitations` | `platform.tenant.invite` | Bekleyen tenant yönetici davetleri |
+| POST | `/api/platform/tenants/:universityId/invite-admin` | `platform.tenant.invite` | Tenant yöneticisi daveti (şifre yok; mail commit sonrası) |
+| POST | `/api/platform/tenants/:universityId/invitations/:invitationId/cancel` | `platform.tenant.invite` | Bekleyen daveti iptal |
 | PATCH | `/api/platform/tenants/:universityId/status` | `platform.tenant.manage` | Tenant durumu (`reason` zorunlu) |
 | GET | `/api/platform/users` | `platform.user.view` | Platform hesap listesi |
 | POST | `/api/platform/users` | `super_admin` rolü | Platform hesabı oluştur |

@@ -10,6 +10,7 @@ import {
   assignRoleSchema,
   setUserPermissionSchema,
   resendVerificationSchema,
+  acceptTenantAdminInvitationSchema,
 } from "./auth.schema";
 import { authService } from "./auth.service";
 import { authMiddleware } from "../../core/auth/auth.middleware";
@@ -26,6 +27,7 @@ import {
   registerLimit,
   resendVerificationEmailLimit,
   resendVerificationIpLimit,
+  acceptTenantAdminInvitationIpLimit,
 } from "../../middlewares/rate-limit.middleware";
 
 // Hono rotasına RbacVariables tipini tanıtıyoruz ki 'c.get("user")'/'c.get("authz")' tamamlansın
@@ -105,6 +107,21 @@ authRoutes.post(
     const body = c.req.valid("json");
     await authService.resendVerification(body);
     return done(c, "auth.resendVerificationSent");
+  }
+);
+
+// 3C. TENANT YÖNETİCİSİ DAVET KABUL (public — kimlik yok)
+// Token 128 bit entropi (UUID); DB'de SHA-256 özeti. Geçersiz/süresi dolmuş/kullanılmış
+// tüm durumlar aynı genel hata mesajıyla reddedilir (enumeration önleme).
+// Kimlik tabanlı rate limit uygulanamaz; IP başına kaba tavan (registerLimit ile aynı ilke).
+authRoutes.post(
+  "/accept-tenant-admin-invitation",
+  acceptTenantAdminInvitationIpLimit,
+  validate("json", acceptTenantAdminInvitationSchema),
+  async (c) => {
+    const body = c.req.valid("json");
+    const user = await authService.acceptTenantAdminInvitation(body);
+    return created(c, user, "auth.tenantAdminInvitationAccepted");
   }
 );
 

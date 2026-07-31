@@ -15,6 +15,7 @@ export default defineConfig({
     "./src/db/schema/audit.ts",
     "./src/db/schema/activities.ts",
     "./src/db/schema/media.ts",
+    "./src/db/schema/invitations.ts",
   ],
   out: "./src/db/migrations",     // SQL dosyalarının üretileceği yer
   dialect: "postgresql",          // Veritabanı türü

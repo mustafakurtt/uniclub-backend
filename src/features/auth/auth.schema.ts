@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { selfServicePasswordSchema } from "../../shared/schemas/password.schema";
+import { selfServicePasswordSchema, provisionPasswordSchema } from "../../shared/schemas/password.schema";
 
 /**
  * E-posta alanı — kırpılır ve HER ZAMAN küçük harfe indirgenir.
@@ -42,6 +42,14 @@ export const resendVerificationSchema = z.object({
   email: emailField,
 });
 export type ResendVerificationDTO = z.infer<typeof resendVerificationSchema>;
+
+export const acceptTenantAdminInvitationSchema = z.object({
+  token: z.string().min(1, "Davet token'ı eksik."),
+  firstName: z.string().min(2).max(100),
+  lastName: z.string().min(2).max(100),
+  password: provisionPasswordSchema,
+});
+export type AcceptTenantAdminInvitationDTO = z.infer<typeof acceptTenantAdminInvitationSchema>;
 
 export const createPermissionSchema = z.object({
   key: z.string().min(3).max(100),

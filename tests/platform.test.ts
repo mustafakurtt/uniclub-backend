@@ -3,8 +3,33 @@ import { data, get, login, me, reqAuth, app } from "./helpers";
 import { SEED_PASSWORD } from "./config";
 import { db } from "../src/db";
 import { eq } from "drizzle-orm";
-import { universities } from "../src/db/schema";
-import { emailQueue } from "../src/features/auth/auth.queue";
+import { universities, tenantAdminInvitations } from "../src/db/schema";
+import { emailQueue, type TenantAdminInvitationEmailJob } from "../src/features/auth/auth.queue";
+import { generateOneTimeToken, hashToken } from "../src/core/auth/token";
+
+async function getInvitationTokenForEmail(email: string): Promise<string> {
+  const jobs = await emailQueue.getJobs(["waiting", "delayed", "active", "completed"]);
+  const job = jobs.find(
+    (j) =>
+      j.name === "send-tenant-admin-invitation" &&
+      (j.data as TenantAdminInvitationEmailJob).email === email
+  );
+  expect(job).toBeDefined();
+  return (job!.data as TenantAdminInvitationEmailJob).token;
+}
+
+async function acceptTenantAdminInvitation(params: {
+  token: string;
+  firstName: string;
+  lastName: string;
+  password: string;
+}) {
+  return await app.request("/api/auth/accept-tenant-admin-invitation", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
 
 describe("platform operasyonları (/api/platform)", () => {
   let superAdmin: string;
@@ -153,11 +178,12 @@ describe("platform operasyonları (/api/platform)", () => {
     await db.update(universities).set({ deletedAt: null }).where(eq(universities.id, ege!.id));
   });
 
-  it("super_admin tenant onboard + invite-admin akışını tamamlar", async () => {
+  it("super_admin tenant onboard + davet kabul + ikinci davet akışını tamamlar", async () => {
     const slug = `onboard-test-${Date.now()}`;
     const staffDomain = `staff.${slug}.edu.tr`;
     const studentDomain = `std.${slug}.edu.tr`;
     const adminEmail = `yonetici@${staffDomain}`;
+    const adminPassword = "OnboardAdmin123!";
 
     const onboardRes = await reqAuth("POST", "/api/platform/tenants/onboard", superAdmin, {
       name: "Onboard Test Üniversitesi",
@@ -177,7 +203,6 @@ describe("platform operasyonları (/api/platform)", () => {
         firstName: "Test",
         lastName: "Yönetici",
         email: adminEmail,
-        password: "OnboardAdmin123!",
       },
     });
     expect(onboardRes.status).toBe(201);
@@ -186,25 +211,36 @@ describe("platform operasyonları (/api/platform)", () => {
       university: { id: string; slug: string; status: string };
       domains: Array<{ domain: string }>;
       faculties: Array<{ name: string; departments: Array<{ name: string }> }>;
-      initialAdmin: { id: string; email: string; status: string };
+      initialAdminInvitation: { id: string; email: string; status: string; universityId: string };
     }>(onboardRes);
 
     expect(onboarded.university.slug).toBe(slug);
     expect(onboarded.university.status).toBe("trial");
     expect(onboarded.domains.length).toBe(2);
     expect(onboarded.faculties[0].departments[0].name).toBe("Bilgisayar Mühendisliği");
-    expect(onboarded.initialAdmin.email).toBe(adminEmail);
-    expect(onboarded.initialAdmin.status).toBe("active");
+    expect(onboarded.initialAdminInvitation.email).toBe(adminEmail);
+    expect(onboarded.initialAdminInvitation.status).toBe("pending");
+    expect(onboarded.initialAdminInvitation.universityId).toBe(onboarded.university.id);
 
-    const adminToken = await login(adminEmail, "OnboardAdmin123!");
-    const adminMe = await me(adminToken);
+    const adminToken = await getInvitationTokenForEmail(adminEmail);
+    const acceptRes = await acceptTenantAdminInvitation({
+      token: adminToken,
+      firstName: "Test",
+      lastName: "Yönetici",
+      password: adminPassword,
+    });
+    expect(acceptRes.status).toBe(201);
+
+    const adminLoginToken = await login(adminEmail, adminPassword);
+    const adminMe = await me(adminLoginToken);
     expect(adminMe.universityId).toBe(onboarded.university.id);
 
-    const permsRes = await get("/api/users/me/permissions", adminToken);
+    const permsRes = await get("/api/users/me/permissions", adminLoginToken);
     const perms = await data<{ roles: string[] }>(permsRes);
     expect(perms.roles).toContain("university_admin");
 
     const inviteEmail = `ikinci.yonetici@${staffDomain}`;
+    const invitePassword = "InviteAdmin123!";
     const inviteRes = await reqAuth(
       "POST",
       `/api/platform/tenants/${onboarded.university.id}/invite-admin`,
@@ -213,20 +249,40 @@ describe("platform operasyonları (/api/platform)", () => {
         firstName: "İkinci",
         lastName: "Yönetici",
         email: inviteEmail,
-        password: "InviteAdmin123!",
       }
     );
     expect(inviteRes.status).toBe(201);
-    expect((await inviteRes.json()).data.email).toBe(inviteEmail);
+    const invited = await data<{ email: string; status: string }>(inviteRes);
+    expect(invited.email).toBe(inviteEmail);
+    expect(invited.status).toBe("pending");
 
-    const invitedToken = await login(inviteEmail, "InviteAdmin123!");
-    expect((await me(invitedToken)).universityId).toBe(onboarded.university.id);
+    const listRes = await get(`/api/platform/tenants/${onboarded.university.id}/invitations`, superAdmin);
+    expect(listRes.status).toBe(200);
+    const pending = await data<Array<{ email: string }>>(listRes);
+    expect(pending.some((i) => i.email === inviteEmail)).toBe(true);
+
+    const inviteAcceptToken = await getInvitationTokenForEmail(inviteEmail);
+    const inviteAcceptRes = await acceptTenantAdminInvitation({
+      token: inviteAcceptToken,
+      firstName: "İkinci",
+      lastName: "Yönetici",
+      password: invitePassword,
+    });
+    expect(inviteAcceptRes.status).toBe(201);
+    expect((await me(await login(inviteEmail, invitePassword))).universityId).toBe(
+      onboarded.university.id
+    );
   });
 
-  it("onboard çakışan e-posta ile başarısız olursa rollback olur ve doğrulama maili kuyruğa girmez", async () => {
-    const countsBefore = await emailQueue.getJobCounts();
+  it("onboard çakışan e-posta ile başarısız olursa rollback olur ve davet maili kuyruğa girmez", async () => {
     const slug = `rollback-onboard-${Date.now()}`;
     const staffDomain = `staff.${slug}.edu.tr`;
+    const dupEmail = "superadmin@platform.local";
+
+    const jobsBefore = await emailQueue.getJobs(["waiting", "delayed", "active"]);
+    const inviteJobsBefore = jobsBefore.filter(
+      (j) => j.name === "send-tenant-admin-invitation" && (j.data as TenantAdminInvitationEmailJob).email === dupEmail
+    ).length;
 
     const res = await reqAuth("POST", "/api/platform/tenants/onboard", superAdmin, {
       name: "Rollback Tenant",
@@ -246,7 +302,6 @@ describe("platform operasyonları (/api/platform)", () => {
         firstName: "Dup",
         lastName: "Admin",
         email: "superadmin@platform.local",
-        password: "OnboardAdmin123!",
       },
     });
     expect(res.status).toBe(400);
@@ -259,10 +314,11 @@ describe("platform operasyonları (/api/platform)", () => {
     });
     expect(domainRow).toBeUndefined();
 
-    const countsAfter = await emailQueue.getJobCounts();
-    expect(countsAfter.waiting).toBe(countsBefore.waiting);
-    expect(countsAfter.active).toBe(countsBefore.active);
-    expect(countsAfter.delayed).toBe(countsBefore.delayed);
+    const jobsAfter = await emailQueue.getJobs(["waiting", "delayed", "active"]);
+    const inviteJobsAfter = jobsAfter.filter(
+      (j) => j.name === "send-tenant-admin-invitation" && (j.data as TenantAdminInvitationEmailJob).email === dupEmail
+    ).length;
+    expect(inviteJobsAfter).toBe(inviteJobsBefore);
   });
 
   it("platform_support onboard ve invite-admin yapamaz", async () => {
@@ -281,7 +337,6 @@ describe("platform operasyonları (/api/platform)", () => {
         firstName: "X",
         lastName: "Y",
         email: `x.${Date.now()}@antalya.edu.tr`,
-        password: "Password123!",
       }
     );
     expect(inviteRes.status).toBe(403);
@@ -296,7 +351,6 @@ describe("platform operasyonları (/api/platform)", () => {
         firstName: "Yanlış",
         lastName: "Domain",
         email: `yanlis@${Date.now()}.com`,
-        password: "Password123!",
       }
     );
     expect(res.status).toBe(400);
@@ -340,5 +394,150 @@ describe("platform operasyonları (/api/platform)", () => {
       role: "platform_support",
     });
     expect(createRes.status).toBe(403);
+  });
+});
+
+describe("tenant yönetici davet kabulü", () => {
+  let superAdmin: string;
+  let antalyaUni: string;
+
+  beforeAll(async () => {
+    superAdmin = await login("superadmin@platform.local");
+    const tenantAdmin = await login("elif.demir@antalya.edu.tr");
+    antalyaUni = (await me(tenantAdmin)).universityId as string;
+  });
+
+  it("süresi dolmuş token reddedilir", async () => {
+    const token = generateOneTimeToken();
+    const email = `expired.${Date.now()}@antalya.edu.tr`;
+    await db.insert(tenantAdminInvitations).values({
+      universityId: antalyaUni,
+      email,
+      firstName: "Expired",
+      lastName: "Admin",
+      roleName: "university_admin",
+      tokenHash: await hashToken(token),
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    const res = await acceptTenantAdminInvitation({
+      token,
+      firstName: "Expired",
+      lastName: "Admin",
+      password: "ExpiredAdmin123!",
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).message).toContain("süresi");
+  });
+
+  it("ikinci kez kullanılan token reddedilir", async () => {
+    const email = `reuse.${Date.now()}@antalya.edu.tr`;
+    const inviteRes = await reqAuth(
+      "POST",
+      `/api/platform/tenants/${antalyaUni}/invite-admin`,
+      superAdmin,
+      { firstName: "Reuse", lastName: "Test", email }
+    );
+    expect(inviteRes.status).toBe(201);
+
+    const token = await getInvitationTokenForEmail(email);
+    const password = "ReuseAdmin123!";
+    const first = await acceptTenantAdminInvitation({
+      token,
+      firstName: "Reuse",
+      lastName: "Test",
+      password,
+    });
+    expect(first.status).toBe(201);
+
+    const second = await acceptTenantAdminInvitation({
+      token,
+      firstName: "Reuse",
+      lastName: "Test",
+      password,
+    });
+    expect(second.status).toBe(400);
+    expect((await second.json()).message).toContain("kullanılmış");
+  });
+
+  it("iptal edilmiş token reddedilir", async () => {
+    const email = `cancel.${Date.now()}@antalya.edu.tr`;
+    const inviteRes = await reqAuth(
+      "POST",
+      `/api/platform/tenants/${antalyaUni}/invite-admin`,
+      superAdmin,
+      { firstName: "Cancel", lastName: "Test", email }
+    );
+    const invitation = await data<{ id: string }>(inviteRes);
+
+    const cancelRes = await reqAuth(
+      "POST",
+      `/api/platform/tenants/${antalyaUni}/invitations/${invitation.id}/cancel`,
+      superAdmin
+    );
+    expect(cancelRes.status).toBe(200);
+
+    const token = await getInvitationTokenForEmail(email);
+    const res = await acceptTenantAdminInvitation({
+      token,
+      firstName: "Cancel",
+      lastName: "Test",
+      password: "CancelAdmin123!",
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).message).toContain("iptal");
+  });
+
+  it("token hedef tenant'a bağlıdır — başka tenant bağlamında kabul tenant'ı token'dan okur", async () => {
+    const slug = `invite-scope-${Date.now()}`;
+    const staffDomain = `staff.${slug}.edu.tr`;
+    const email = `scoped.admin@${staffDomain}`;
+
+    const onboardRes = await reqAuth("POST", "/api/platform/tenants/onboard", superAdmin, {
+      name: "Invite Scope Uni",
+      slug,
+      status: "trial",
+      domains: [
+        { domain: `std.${slug}.edu.tr`, domainType: "student" },
+        { domain: staffDomain, domainType: "staff" },
+      ],
+      initialAdmin: { firstName: "Scoped", lastName: "Admin", email },
+    });
+    const onboarded = await data<{ university: { id: string }; initialAdminInvitation: { universityId: string } }>(
+      onboardRes
+    );
+    expect(onboarded.university.id).not.toBe(antalyaUni);
+
+    const token = await getInvitationTokenForEmail(email);
+    const password = "ScopedAdmin123!";
+    const acceptRes = await acceptTenantAdminInvitation({
+      token,
+      firstName: "Scoped",
+      lastName: "Admin",
+      password,
+    });
+    expect(acceptRes.status).toBe(201);
+
+    const user = await data<{ universityId: string }>(acceptRes);
+    expect(user.universityId).toBe(onboarded.university.id);
+    expect(user.universityId).not.toBe(antalyaUni);
+  });
+
+  it("12 karakter altı şifre kabul sırasında reddedilir", async () => {
+    const email = `shortpw.${Date.now()}@antalya.edu.tr`;
+    await reqAuth("POST", `/api/platform/tenants/${antalyaUni}/invite-admin`, superAdmin, {
+      firstName: "Short",
+      lastName: "Password",
+      email,
+    });
+
+    const token = await getInvitationTokenForEmail(email);
+    const res = await acceptTenantAdminInvitation({
+      token,
+      firstName: "Short",
+      lastName: "Password",
+      password: "short1ab",
+    });
+    expect(res.status).toBe(400);
   });
 });

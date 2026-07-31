@@ -1,5 +1,5 @@
 import { db } from "../../../db";
-import { OnboardTenantDTO, ProvisionTenantAdminDTO, UpdateTenantStatusDTO } from "./tenants.schema";
+import { OnboardTenantDTO, InviteTenantAdminDTO, UpdateTenantStatusDTO } from "./tenants.schema";
 import type { OnboardTenantResult, TenantListItem, UniversityStatus } from "./tenants.types";
 import { notFound, badRequest } from "../../../shared/utils/errors";
 import { invalidateUsersPermissions } from "../../../shared/rbac/rbac.cache";
@@ -7,7 +7,6 @@ import { universityEffects } from "../../university/university.cache";
 import { universityService } from "../../university/university.service";
 import { authService } from "../../auth/auth.service";
 import { tenantsRepository } from "./tenants.repository";
-import { hashPassword } from "../../../shared/utils/password.util";
 
 const UNIVERSITY_ADMIN_ROLE = "university_admin";
 
@@ -60,14 +59,13 @@ export const tenantsService = {
     return updated;
   },
 
-  async onboardTenant(data: OnboardTenantDTO): Promise<OnboardTenantResult> {
+  async onboardTenant(data: OnboardTenantDTO, invitedBy: string | null): Promise<OnboardTenantResult> {
     if (data.initialAdmin) {
       universityService.assertStaffDomainsForAdmin(data.domains, data.initialAdmin.email);
     }
 
     await universityService.validateSlugAndDomains(data.slug, data.domains);
 
-    const passwordHash = data.initialAdmin ? await hashPassword(data.initialAdmin.password) : undefined;
     const afterCommits: Array<() => Promise<void>> = [];
 
     const result = await db.transaction(async (tx) => {
@@ -82,20 +80,20 @@ export const tenantsService = {
         { tx }
       );
 
-      let initialAdmin: OnboardTenantResult["initialAdmin"] = null;
-      if (data.initialAdmin && passwordHash) {
-        const provisioned = await authService.provisionStaffAccountInTx({
+      let initialAdminInvitation: OnboardTenantResult["initialAdminInvitation"] = null;
+      if (data.initialAdmin) {
+        const invited = await authService.createTenantAdminInvitationInTx({
           tx,
           universityId: pkg.university.id,
           email: data.initialAdmin.email,
-          passwordHash,
           firstName: data.initialAdmin.firstName,
           lastName: data.initialAdmin.lastName,
           roleName: UNIVERSITY_ADMIN_ROLE,
+          invitedBy,
         });
-        initialAdmin = provisioned.result;
-        if (provisioned.afterCommit) {
-          afterCommits.push(provisioned.afterCommit);
+        initialAdminInvitation = invited.result;
+        if (invited.afterCommit) {
+          afterCommits.push(invited.afterCommit);
         }
       }
 
@@ -103,7 +101,7 @@ export const tenantsService = {
         university: pkg.university,
         domains: pkg.domains,
         faculties: pkg.faculties,
-        initialAdmin,
+        initialAdminInvitation,
       };
     });
 
@@ -121,21 +119,28 @@ export const tenantsService = {
     return result;
   },
 
-  async inviteTenantAdmin(universityId: string, data: ProvisionTenantAdminDTO) {
+  async inviteTenantAdmin(universityId: string, data: InviteTenantAdminDTO, invitedBy: string) {
     await universityService.getUniversitySummary(universityId);
     await universityService.assertStaffEmailForTenant(universityId, data.email);
 
-    const passwordHash = await hashPassword(data.password);
-    const admin = await authService.provisionStaffAccount({
+    return await authService.createTenantAdminInvitation({
       universityId,
       email: data.email,
-      passwordHash,
       firstName: data.firstName,
       lastName: data.lastName,
       roleName: UNIVERSITY_ADMIN_ROLE,
+      invitedBy,
     });
+  },
 
-    return admin;
+  async listTenantAdminInvitations(universityId: string) {
+    await universityService.getUniversitySummary(universityId);
+    return await authService.listPendingTenantAdminInvitations(universityId);
+  },
+
+  async cancelTenantAdminInvitation(universityId: string, invitationId: string) {
+    await universityService.getUniversitySummary(universityId);
+    return await authService.cancelTenantAdminInvitation(universityId, invitationId);
   },
 };
 

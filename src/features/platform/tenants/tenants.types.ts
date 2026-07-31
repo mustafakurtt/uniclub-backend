@@ -1,5 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
-import type { universities, users } from "../../../db/schema";
+import type { universities } from "../../../db/schema";
+import type { TenantAdminInvitationPublic } from "../../auth/tenant-admin-invitations.types";
 
 export type UniversityStatus = InferSelectModel<typeof universities>["status"];
 
@@ -18,8 +19,6 @@ export type TenantListItem = {
   clubCount: number;
   pendingApplications: number;
 };
-
-export type ProvisionedTenantAdmin = Omit<InferSelectModel<typeof users>, "passwordHash">;
 
 export type OnboardTenantResult = {
   university: {
@@ -52,5 +51,5 @@ export type OnboardTenantResult = {
       updatedAt: Date;
     }>;
   }>;
-  initialAdmin: ProvisionedTenantAdmin | null;
+  initialAdminInvitation: TenantAdminInvitationPublic | null;
 };

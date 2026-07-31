@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { provisionPasswordSchema } from "../../../shared/schemas/password.schema";
 
 export const UNIVERSITY_STATUS_VALUES = ["trial", "active", "past_due", "suspended"] as const;
 
@@ -18,14 +17,14 @@ export const updateTenantStatusSchema = z.object({
 
 export type UpdateTenantStatusDTO = z.infer<typeof updateTenantStatusSchema>;
 
-export const provisionTenantAdminSchema = z.object({
+/** Tenant yöneticisi daveti — şifre operatör tarafından belirlenmez. */
+export const inviteTenantAdminSchema = z.object({
   firstName: z.string().min(2).max(100),
   lastName: z.string().min(2).max(100),
   email: emailField,
-  password: provisionPasswordSchema,
 });
 
-export type ProvisionTenantAdminDTO = z.infer<typeof provisionTenantAdminSchema>;
+export type InviteTenantAdminDTO = z.infer<typeof inviteTenantAdminSchema>;
 
 const onboardFacultySchema = z.object({
   name: z.string().min(2).max(256),
@@ -45,7 +44,7 @@ export const onboardTenantSchema = z.object({
     )
     .min(1, "En az bir domain girilmelidir."),
   faculties: z.array(onboardFacultySchema).optional().default([]),
-  initialAdmin: provisionTenantAdminSchema.optional(),
+  initialAdmin: inviteTenantAdminSchema.optional(),
 });
 
 export type OnboardTenantDTO = z.infer<typeof onboardTenantSchema>;

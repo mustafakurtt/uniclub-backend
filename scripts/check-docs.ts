@@ -251,27 +251,52 @@ if (deadRefCount === 0) {
   ok("Ölü docs path referansı yok");
 }
 
-// ── 5. Şifre minimum uzunlukları (kod sabitleriyle senkron) ─────────────────
+// ── 5. Şifre minimum uzunlukları — docs/ genelinde yanlış değer taraması ───
 
-const AUTH_MD = join(DOCS, "integration", "auth.md");
-const PLATFORM_PANEL_MD = join(DOCS, "integration", "platform-panel.md");
+const ALLOWED_PASSWORD_MIN_LENGTHS = new Set([
+  SELF_SERVICE_PASSWORD_MIN_LENGTH,
+  PROVISION_PASSWORD_MIN_LENGTH,
+]);
 
-const authText = readFileSync(AUTH_MD, "utf8");
-if (!authText.includes(`min ${SELF_SERVICE_PASSWORD_MIN_LENGTH} karakter`)) {
-  fail(
-    `auth.md self-service şifre minimumu kod sabitiyle uyumlu değil (beklenen: ${SELF_SERVICE_PASSWORD_MIN_LENGTH})`
-  );
-} else {
-  ok(`auth.md self-service şifre min ${SELF_SERVICE_PASSWORD_MIN_LENGTH} ile uyumlu`);
+/** Şifre bağlamı: satırda password/şifre geçiyorsa minimum uzunluk ifadesi denetlenir. */
+const PASSWORD_CONTEXT_RE = /password|şifre|newPassword|currentPassword/i;
+const PASSWORD_MIN_PATTERNS = [
+  /\bmin(?:imum)?\s+(\d+)/gi,
+  /\ben az\s+(\d+)\s*karakter/gi,
+  /\(\s*min\s+(\d+)\s*\)/gi,
+];
+
+let passwordMinViolationCount = 0;
+
+for (const file of collectMarkdownFiles(DOCS)) {
+  const text = readFileSync(file, "utf8");
+  const lines = text.split("\n");
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    if (!PASSWORD_CONTEXT_RE.test(line)) continue;
+
+    for (const pattern of PASSWORD_MIN_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(line))) {
+        const value = Number(match[1]);
+        if (!ALLOWED_PASSWORD_MIN_LENGTHS.has(value)) {
+          passwordMinViolationCount++;
+          const rel = relative(ROOT, file);
+          fail(
+            `${rel}:${lineIndex + 1} şifre minimumu ${value} — yalnızca ${SELF_SERVICE_PASSWORD_MIN_LENGTH} (self-service) veya ${PROVISION_PASSWORD_MIN_LENGTH} (provision) kabul edilir: ${line.trim()}`
+          );
+        }
+      }
+    }
+  }
 }
 
-const platformPanelText = readFileSync(PLATFORM_PANEL_MD, "utf8");
-if (!platformPanelText.includes(`en az **${PROVISION_PASSWORD_MIN_LENGTH}** karakter`)) {
-  fail(
-    `platform-panel.md provision şifre minimumu kod sabitiyle uyumlu değil (beklenen: ${PROVISION_PASSWORD_MIN_LENGTH})`
+if (passwordMinViolationCount === 0) {
+  ok(
+    `docs/ şifre minimum uzunlukları (${SELF_SERVICE_PASSWORD_MIN_LENGTH}/${PROVISION_PASSWORD_MIN_LENGTH}) ile uyumlu`
   );
-} else {
-  ok(`platform-panel.md provision şifre min ${PROVISION_PASSWORD_MIN_LENGTH} ile uyumlu`);
 }
 
 // ── Sonuç ───────────────────────────────────────────────────────────────────

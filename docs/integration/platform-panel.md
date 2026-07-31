@@ -16,6 +16,19 @@ panelinden **ayrı** layout (`/platform/*`) hedeflenir.
 
 `university.create` onboard için gerekir (`POST /tenants/onboard`). Platform hesabı oluşturma (`POST /users`) yalnızca `super_admin` rolüyle yapılır — ayrı permission yok.
 
+## Tenant yönetici daveti — operatör ne görür, davetli ne görür
+
+**Operatör asla tenant yöneticisinin şifresini bilmez ve belirleyemez.** Davet akışı:
+
+1. Operatör `invite-admin` veya onboard `initialAdmin` ile yalnızca ad, soyad ve e-posta girer.
+2. Sistem bekleyen davet kaydı oluşturur; davet maili commit sonrası kuyruğa girer.
+3. Operatör panelinde bekleyen davetler listelenir; iptal edilebilir.
+4. Davetli, maildeki linkten kendi şifresini belirler (`POST /api/auth/accept-tenant-admin-invitation`, min **12** karakter).
+5. Kabul sonrası hesap `active` + `university_admin` rolü atanmış olur.
+
+Token güvenliği: 128 bit entropi (UUID), DB'de SHA-256 özeti; tek kullanımlık, 7 gün TTL.
+Public kabul uçunda kimlik yok — IP başına kaba tavan rate limit uygulanır; geçersiz/süresi dolmuş token denemeleri enumeration yapmamak için aynı genel hata sınıfına düşer.
+
 ## `GET /api/platform/tenants`
 
 Tenant listesi + özet istatistikler. Yetki: `platform.tenant.view`.
@@ -61,7 +74,7 @@ Tenant durumu güncelleme. Yetki: `platform.tenant.manage`.
 ## `POST /api/platform/tenants/onboard`
 
 Yeni tenant'ı tek atomik çağrıda açar: üniversite + domainler + (opsiyonel)
-akademik ağaç + (opsiyonel) ilk `university_admin`. Yetki: `university.create`;
+akademik ağaç + (opsiyonel) ilk yönetici **daveti**. Yetki: `university.create`;
 `initialAdmin` verilirse ek olarak `platform.tenant.invite`.
 
 ```jsonc
@@ -80,8 +93,7 @@ akademik ağaç + (opsiyonel) ilk `university_admin`. Yetki: `university.create`
   "initialAdmin": {
     "firstName": "Ayşe",
     "lastName": "Yönetici",
-    "email": "ayse.yonetici@ornek.edu.tr",
-    "password": "GeciciSifre123!"
+    "email": "ayse.yonetici@ornek.edu.tr"
   }
 }
 
@@ -90,33 +102,99 @@ akademik ağaç + (opsiyonel) ilk `university_admin`. Yetki: `university.create`
   "university": { "id": "...", "name": "...", "slug": "...", "status": "trial", ... },
   "domains": [ ... ],
   "faculties": [{ "id": "...", "name": "...", "departments": [{ "id": "...", "name": "..." }] }],
-  "initialAdmin": { "id": "...", "email": "...", "status": "active", ... } // veya null
+  "initialAdminInvitation": {
+    "id": "...",
+    "universityId": "...",
+    "email": "...",
+    "firstName": "Ayşe",
+    "lastName": "Yönetici",
+    "roleName": "university_admin",
+    "status": "pending",
+    "expiresAt": "...",
+    "invitedBy": "...",
+    "createdAt": "...",
+    "updatedAt": "..."
+  } // veya null
 }
 ```
 
 - `status` varsayılan `trial`.
 - `initialAdmin` e-postası tenant'ın **staff** domainlerinden biriyle eşleşmeli.
-- Provision edilen yönetici `active` + `mustChangePassword: true` (hemen giriş, ilk girişte şifre değişimi önerilir).
+- Canlı hesap oluşturulmaz; davet maili commit sonrası gönderilir.
+
+## `GET /api/platform/tenants/:universityId/invitations`
+
+Bekleyen tenant yönetici davetleri. Yetki: `platform.tenant.invite`.
+
+```jsonc
+// 200 data — yalnızca pending (süresi dolmamış, iptal/kabul edilmemiş)
+[
+  {
+    "id": "...",
+    "universityId": "...",
+    "email": "...",
+    "firstName": "...",
+    "lastName": "...",
+    "roleName": "university_admin",
+    "status": "pending",
+    "expiresAt": "...",
+    "invitedBy": "...",
+    "createdAt": "...",
+    "updatedAt": "..."
+  }
+]
+```
 
 ## `POST /api/platform/tenants/:universityId/invite-admin`
 
-Mevcut tenant için `university_admin` provision. Yetki: `platform.tenant.invite`.
+Mevcut tenant için `university_admin` daveti. Yetki: `platform.tenant.invite`.
+
+```jsonc
+// Body — şifre YOK
+{
+  "firstName": "Ayşe",
+  "lastName": "Yönetici",
+  "email": "ayse.yonetici@ornek.edu.tr"
+}
+
+// 201 data — bekleyen davet (token yok)
+{
+  "id": "...",
+  "email": "...",
+  "status": "pending",
+  "roleName": "university_admin",
+  "expiresAt": "...",
+  ...
+}
+```
+
+- E-posta tenant'ın kayıtlı **staff** domainlerinden biriyle eşleşmeli.
+- E-posta zaten kayıtlıysa → `400 auth.emailAlreadyInUse`.
+- Bekleyen davet varsa → `400 auth.invitationPendingExists`.
+
+## `POST /api/platform/tenants/:universityId/invitations/:invitationId/cancel`
+
+Bekleyen daveti iptal. Yetki: `platform.tenant.invite`.
+
+```jsonc
+// 200 data — iptal edilmiş davet (status: "cancelled")
+```
+
+## `POST /api/auth/accept-tenant-admin-invitation` (public)
+
+Davet kabul — kimlik gerekmez. Tenant ve rol **token'dan** okunur.
 
 ```jsonc
 // Body
 {
-  "firstName": "Ayşe",
+  "token": "<maildeki token>",
+  "firstName": "Ayşe",   // davet kaydıyla birebir eşleşmeli
   "lastName": "Yönetici",
-  "email": "ayse.yonetici@ornek.edu.tr",
-  "password": "GeciciSifre123!"
+  "password": "KendiSifrem123!"  // min 12 karakter
 }
 
-// 201 data — kullanıcı özeti (passwordHash yok)
-{ "id": "...", "email": "...", "universityId": "...", "status": "active", ... }
+// 201 data — active kullanıcı (passwordHash yok)
 ```
-
-- E-posta tenant'ın kayıtlı **staff** domainlerinden biriyle eşleşmeli.
-- Aynı tenant'ta e-posta zaten varsa → `400 platform.adminEmailAlreadyInUse`.
 
 ## `GET /api/platform/users`
 

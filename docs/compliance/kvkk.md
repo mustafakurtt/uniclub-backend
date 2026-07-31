@@ -22,6 +22,7 @@ Hangi tabloda kişisel veri var, hangisinde yok:
 |---|:---:|---|
 | `users` | ✅ **doğrudan kimlik** | ad, soyad, e-posta, öğrenci numarası, fotoğraf URL'i, şifre özeti, bölüm |
 | `email_verifications` | ⚠️ dolaylı | `user_id` + token özeti; içerikte kimlik yok |
+| `tenant_admin_invitations` | ⚠️ dolaylı | hedef e-posta, ad/soyad, token özeti; **operatör şifreyi bilmez** |
 | `notifications` | ⚠️ dolaylı | `user_id`, başlık/gövde metni (kişiye özel ifadeler içerebilir) |
 | `push_subscriptions` | ✅ **cihaz** | endpoint + şifreleme anahtarları = cihaz tanımlayıcı |
 | `club_members`, `club_advisors` | ⚠️ dolaylı | kişinin bir kulüple ilişkisi (üyelik bilgisi) |
@@ -76,6 +77,11 @@ POST /api/moderation/universities/:universityId/users/:userId/anonymize
 
 `.invalid` uzantısı RFC 2606 gereği hiçbir zaman gerçek bir alan adı olamaz;
 maskelenmiş adresin kazara birine ait olma ihtimalini kapatır.
+
+**Tenant yönetici daveti:** Platform operatörü tenant yöneticisinin şifresini
+belirleyemez ve öğrenemez. Davet akışında yalnızca e-posta ve ad bilgisi girilir;
+şifre davetlinin kabul adımında kendi belirler. Operatör panelinde veya API yanıtında
+geçici şifre **hiçbir zaman** dönmez.
 
 ### Anonimleştirme sonrası geriye ne kalır
 
