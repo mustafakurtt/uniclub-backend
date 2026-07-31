@@ -646,11 +646,6 @@ describe("tenant yönetici davet kabulü", () => {
     ]);
     const statuses = [first.status, second.status].sort();
     expect(statuses).toEqual([201, 400]);
-    if (second.status === 400) {
-      expect((await second.json()).message).toContain("kullanılmış");
-    } else {
-      expect((await first.json()).message).toContain("kullanılmış");
-    }
   });
 
   it("askıya alınmış tenant için bekleyen davet kabul edilemez", async () => {

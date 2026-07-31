@@ -37,8 +37,12 @@ describe("Dashboard / Feed", () => {
     const feed = await data<{ items: any[]; nextCursor: string | null }>(await get("/api/feed?limit=10", mustafa));
     expect(feed.items.length).toBeGreaterThan(0);
     for (const item of feed.items) {
-      expect(["announcement", "activity"]).toContain(item.type);
-      expect(item.club).toBeTruthy();
+      expect(["announcement", "activity", "university_announcement"]).toContain(item.type);
+      if (item.type === "university_announcement") {
+        expect(item.club).toBeNull();
+      } else {
+        expect(item.club).toBeTruthy();
+      }
       expect(typeof item.at).toBe("string");
     }
     // En yeniden eskiye sıralı (at azalan)
