@@ -26,8 +26,12 @@ export const NotificationType = {
   CLUB_MEMBERSHIP_DECIDED: "club.membership.decided",
   /** Kullanıcıya global bir rol atandı. data: { roleId, roleName } */
   ROLE_ASSIGNED: "role.assigned",
-  /** Üye olunan kulüp yeni bir etkinlik yayınladı. data: { activityId, clubId } */
+  /** Yayınlanan etkinlik. data: { activityId, clubId } */
   ACTIVITY_PUBLISHED: "activity.published",
+  /** Kulüp yeni duyuru yayınladı. data: { announcementId, clubId } */
+  ANNOUNCEMENT_PUBLISHED: "announcement.published",
+  /** Okul geneli duyuru yayınlandı. data: { announcementId, universityId } */
+  ANNOUNCEMENT_UNIVERSITY_PUBLISHED: "announcement.university.published",
   /** Katılım bildirilen bir etkinlik iptal edildi. data: { activityId } */
   ACTIVITY_CANCELLED: "activity.cancelled",
   /** Kulüp bir etkinliğe co-host olarak davet edildi. data: { activityId, hostClubId, clubId } */
@@ -35,6 +39,86 @@ export const NotificationType = {
 } as const;
 
 export type NotificationTypeKey = (typeof NotificationType)[keyof typeof NotificationType];
+
+/** Tip kataloğu meta — frontend ayar ekranı ve susturulamaz tebligat ayrımı. */
+export const NotificationTypeMeta: Record<
+  NotificationTypeKey,
+  { optOutable: boolean; labelTr: string; labelEn: string }
+> = {
+  [NotificationType.ACCOUNT_VERIFIED]: {
+    optOutable: false,
+    labelTr: "E-posta doğrulandı",
+    labelEn: "Email verified",
+  },
+  [NotificationType.ACCOUNT_SUSPENDED]: {
+    optOutable: false,
+    labelTr: "Hesap askıya alındı",
+    labelEn: "Account suspended",
+  },
+  [NotificationType.ACCOUNT_UNSUSPENDED]: {
+    optOutable: false,
+    labelTr: "Hesap askısı kaldırıldı",
+    labelEn: "Account unsuspended",
+  },
+  [NotificationType.ACCOUNT_PASSWORD_RESET]: {
+    optOutable: false,
+    labelTr: "Şifre sıfırlandı",
+    labelEn: "Password reset",
+  },
+  [NotificationType.CLUB_APPLICATION_DECIDED]: {
+    optOutable: false,
+    labelTr: "Kulüp kurma başvurusu kararı",
+    labelEn: "Club application decision",
+  },
+  [NotificationType.CLUB_MEMBERSHIP_DECIDED]: {
+    optOutable: false,
+    labelTr: "Kulüp üyelik kararı",
+    labelEn: "Club membership decision",
+  },
+  [NotificationType.ROLE_ASSIGNED]: {
+    optOutable: false,
+    labelTr: "Rol atandı",
+    labelEn: "Role assigned",
+  },
+  [NotificationType.ACTIVITY_PUBLISHED]: {
+    optOutable: true,
+    labelTr: "Yeni etkinlik",
+    labelEn: "New activity",
+  },
+  [NotificationType.ANNOUNCEMENT_PUBLISHED]: {
+    optOutable: true,
+    labelTr: "Yeni duyuru",
+    labelEn: "New announcement",
+  },
+  [NotificationType.ANNOUNCEMENT_UNIVERSITY_PUBLISHED]: {
+    optOutable: true,
+    labelTr: "Okul geneli duyuru",
+    labelEn: "University-wide announcement",
+  },
+  [NotificationType.ACTIVITY_CANCELLED]: {
+    optOutable: true,
+    labelTr: "Etkinlik iptal",
+    labelEn: "Activity cancelled",
+  },
+  [NotificationType.ACTIVITY_COHOST_INVITED]: {
+    optOutable: true,
+    labelTr: "Co-host daveti",
+    labelEn: "Co-host invitation",
+  },
+};
+
+export function isOptOutableNotificationType(type: string): boolean {
+  if (!(type in NotificationTypeMeta)) return false;
+  return NotificationTypeMeta[type as NotificationTypeKey].optOutable;
+}
+
+export const OPT_OUTABLE_NOTIFICATION_TYPES = Object.entries(NotificationTypeMeta)
+  .filter(([, meta]) => meta.optOutable)
+  .map(([type, meta]) => ({
+    type,
+    labelTr: meta.labelTr,
+    labelEn: meta.labelEn,
+  }));
 
 /** Bir bildirimi yaratmak için gereken yük (userId ayrı geçilir). */
 export interface CreateNotificationPayload {

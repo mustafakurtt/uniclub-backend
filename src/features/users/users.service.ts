@@ -1,6 +1,7 @@
 import { usersRepository } from "./users.repository";
 import { verifyPassword, hashPassword } from "../../shared/utils/password.util";
 import { toSafeUser } from "../../shared/utils/user.util";
+import { revokeUserSessions } from "../../shared/rbac/session-revocation";
 import { resolveAuthz } from "../../shared/rbac/rbac.cache";
 import { activitiesService } from "../activities/activities.service";
 import { dashboardService } from "../dashboard/dashboard.service";
@@ -40,6 +41,7 @@ export const usersService = {
 
     const newPasswordHash = await hashPassword(data.newPassword);
     await usersRepository.updatePasswordHash(userId, newPasswordHash);
+    await revokeUserSessions(userId);
   },
 
   async listMyClubs(userId: string) {

@@ -11,10 +11,16 @@
  */
 export const AnnouncementPermission = {
   MODERATE: "announcement.moderate",
+  /** Okul geneli duyuru oluşturma/yayınlama/yönetme (tenant staff). */
+  UNIVERSITY_MANAGE: "announcement.university.manage",
 } as const;
 
 export type AnnouncementPermission = (typeof AnnouncementPermission)[keyof typeof AnnouncementPermission];
 
 export const ANNOUNCEMENT_PERMISSION_CATALOG: { key: AnnouncementPermission; description: string }[] = [
   { key: AnnouncementPermission.MODERATE, description: "Herhangi bir kulübün duyurusunu kaldırma (moderasyon)" },
+  {
+    key: AnnouncementPermission.UNIVERSITY_MANAGE,
+    description: "Okul geneli duyuru oluşturma, yayınlama ve yönetme",
+  },
 ];

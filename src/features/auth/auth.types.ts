@@ -19,3 +19,16 @@ export interface CreateUserPayload {
   studentNumber?: string | null;
   status: "pending" | "active" | "suspended";
 }
+
+/** Operatör provizyonu — tenant veya platform hesabı. */
+export interface ProvisionUserPayload {
+  universityId: string | null;
+  departmentId?: string | null;
+  studentNumber?: string | null;
+  email: string;
+  passwordHash: string;
+  firstName: string;
+  lastName: string;
+  status: "pending" | "active" | "suspended";
+  mustChangePassword: boolean;
+}

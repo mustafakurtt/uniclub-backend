@@ -2,14 +2,18 @@
 /**
  * Doküman bütünlük kontrolü — CI'da çalışır.
  * 1. docs altındaki ve kök .md dosyalarındaki relative markdown linkleri
- * 2. index.ts'teki app.route mount'ları ↔ docs/API.md bölümleri
+ * 2. index.ts'teki app.route mount'ları ↔ docs/reference/api.md bölümleri
  */
 import { readdirSync, readFileSync, statSync, existsSync } from "fs";
 import { join, dirname, resolve, relative } from "path";
+import {
+  SELF_SERVICE_PASSWORD_MIN_LENGTH,
+  PROVISION_PASSWORD_MIN_LENGTH,
+} from "../src/shared/schemas/password.schema";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DOCS = join(ROOT, "docs");
-const API_MD = join(DOCS, "API.md");
+const API_MD = join(DOCS, "reference", "api.md");
 const INDEX_TS = join(ROOT, "src", "index.ts");
 
 let failed = false;
@@ -94,7 +98,7 @@ if (brokenCount === 0) {
   fail(`${brokenCount} kırık relative link`);
 }
 
-// ── 3. API.md kapsam kontrolü ───────────────────────────────────────────────
+// ── 3. reference/api.md kapsam kontrolü ─────────────────────────────────────
 
 const indexSrc = readFileSync(INDEX_TS, "utf8");
 const routeMounts = [...indexSrc.matchAll(/app\.route\("(\/api\/[^"]+)"/g)].map(
@@ -138,15 +142,161 @@ const extraInApiMd = documentedMounts.filter((r) => !isMounted(r));
 
 if (missingInApiMd.length === 0 && extraInApiMd.length === 0) {
   ok(
-    `API.md kapsamı — ${routeMounts.length} üst mount + ${documentedMounts.length - routeMounts.length} alt kaynak belgelenmiş`
+    `reference/api.md kapsamı — ${routeMounts.length} üst mount + ${documentedMounts.length - routeMounts.length} alt kaynak belgelenmiş`
   );
 } else {
   for (const r of missingInApiMd) {
-    fail(`API.md'de bölüm yok: app.route("${r}")`);
+    fail(`reference/api.md'de bölüm yok: app.route("${r}")`);
   }
   for (const r of extraInApiMd) {
-    fail(`API.md'de var ama kodda böyle bir mount yok: ${r}`);
+    fail(`reference/api.md'de var ama kodda böyle bir mount yok: ${r}`);
   }
+}
+
+// ── 4. reference/api.md içindekiler ↔ bölüm numaralandırması ───────────────
+
+const sectionHeaders = [...apiMd.matchAll(/^### (\d+)\) .+ — `(\/api\/[^`]+)`/gm)].map((m) => ({
+  num: Number(m[1]),
+  path: m[2],
+}));
+
+if (sectionHeaders.length === 0) {
+  fail("reference/api.md içinde `### N) ... — `/api/...`` bölüm başlığı bulunamadı");
+} else {
+  const nums = sectionHeaders.map((h) => h.num);
+  const expected = Array.from({ length: nums.length }, (_, i) => i + 1);
+  const dupes = nums.filter((n, i) => nums.indexOf(n) !== i);
+  const missingSeq = expected.filter((n) => !nums.includes(n));
+  const extraSeq = nums.filter((n) => n < 1 || n > nums.length);
+
+  if (dupes.length > 0) {
+    fail(`reference/api.md bölüm numaraları çakışıyor: ${[...new Set(dupes)].join(", ")}`);
+  } else if (missingSeq.length > 0 || extraSeq.length > 0) {
+    fail(
+      `reference/api.md bölüm numaralandırması kırık — beklenen 1..${nums.length}, bulunan: ${nums.join(", ")}`
+    );
+  } else {
+    ok(`reference/api.md bölüm numaralandırması — ${nums.length} bölüm, 1..${nums.length} ardışık`);
+  }
+}
+
+// İçindekiler TOC satırları ↔ bölüm anchor'ları (Notifications'tan itibaren kayma yakalanır)
+const tocSectionLinks = [...apiMd.matchAll(/^\s+- \[.+?\]\(#(\d+)-[^)]+\)/gm)].map((m) => Number(m[1]));
+const tocNums = tocSectionLinks.filter((n) => n >= 1);
+if (tocNums.length > 0) {
+  const tocDupes = tocNums.filter((n, i) => tocNums.indexOf(n) !== i);
+  const tocExpected = Array.from({ length: tocNums.length }, (_, i) => i + 1);
+  const tocBroken =
+    tocDupes.length > 0 ||
+    tocExpected.some((n) => !tocNums.includes(n)) ||
+    tocNums.some((n) => n < 1 || n > tocNums.length);
+
+  if (tocBroken) {
+    fail(`reference/api.md İçindekiler numaralandırması kırık: ${tocNums.join(", ")}`);
+  } else {
+    ok(`reference/api.md İçindekiler — ${tocNums.length} endpoint bölümü, anchor numaraları ardışık`);
+  }
+}
+
+// ── 5. Bilinen ölü path referansları ────────────────────────────────────────
+
+const DEAD_PATH_PATTERNS = [
+  /docs\/yonetim\//,
+  /GOREV_PANOSU\.md/,
+  /docs\/frontend\//,
+  /docs\/API\.md/,
+  /docs\/DATA_MODEL\.md/,
+  /docs\/KVKK\.md/,
+  /docs\/LOGLAMA\.md/,
+  /docs\/MAKINE_KURULUMU\.md/,
+  /docs\/operations\.md/,
+  /docs\/architecture\.md/,
+  /docs\/CORE_MIDDLEWARE\.md/,
+  /docs\/GUVENLIK_YOL_HARITASI\.md/,
+  /docs\/SEMA_VE_URUN_YOL_HARITASI\.md/,
+  /docs\/ONBOARDING_TENANT\.md/,
+  /docs\/PERFORMANS\.md/,
+  /docs\/MAIL_DOGRULAMA\.md/,
+  /docs\/BILDIRIMLER\.md/,
+  /docs\/DENETIM_VE_HATA\.md/,
+  /docs\/cache\//,
+  /design\/05-eksikler-ve-onerilen-endpointler\.md/,
+];
+const scanExts = [".md", ".ts", ".yml"];
+let deadRefCount = 0;
+
+function scanDeadPaths(dir: string) {
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) {
+      if (entry === "node_modules" || entry === ".git" || entry === "src/db/migrations") continue;
+      scanDeadPaths(p);
+    } else if (scanExts.some((ext) => entry.endsWith(ext))) {
+      if (relative(ROOT, p) === "scripts/update-doc-links.ts") continue;
+      if (relative(ROOT, p) === "scripts/patch-auth-doc.ts") continue;
+      const text = readFileSync(p, "utf8");
+      for (const pat of DEAD_PATH_PATTERNS) {
+        if (pat.test(text)) {
+          deadRefCount++;
+          fail(`${relative(ROOT, p)} → ölü path referansı: ${pat}`);
+        }
+      }
+    }
+  }
+}
+
+scanDeadPaths(ROOT);
+
+if (deadRefCount === 0) {
+  ok("Ölü docs path referansı yok");
+}
+
+// ── 5. Şifre minimum uzunlukları — docs/ genelinde yanlış değer taraması ───
+
+const ALLOWED_PASSWORD_MIN_LENGTHS = new Set([
+  SELF_SERVICE_PASSWORD_MIN_LENGTH,
+  PROVISION_PASSWORD_MIN_LENGTH,
+]);
+
+/** Şifre bağlamı: satırda password/şifre geçiyorsa minimum uzunluk ifadesi denetlenir. */
+const PASSWORD_CONTEXT_RE = /password|şifre|newPassword|currentPassword/i;
+const PASSWORD_MIN_PATTERNS = [
+  /\bmin(?:imum)?\s+(\d+)/gi,
+  /\ben az\s+(\d+)\s*karakter/gi,
+  /\(\s*min\s+(\d+)\s*\)/gi,
+];
+
+let passwordMinViolationCount = 0;
+
+for (const file of collectMarkdownFiles(DOCS)) {
+  const text = readFileSync(file, "utf8");
+  const lines = text.split("\n");
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    if (!PASSWORD_CONTEXT_RE.test(line)) continue;
+
+    for (const pattern of PASSWORD_MIN_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(line))) {
+        const value = Number(match[1]);
+        if (!ALLOWED_PASSWORD_MIN_LENGTHS.has(value)) {
+          passwordMinViolationCount++;
+          const rel = relative(ROOT, file);
+          fail(
+            `${rel}:${lineIndex + 1} şifre minimumu ${value} — yalnızca ${SELF_SERVICE_PASSWORD_MIN_LENGTH} (self-service) veya ${PROVISION_PASSWORD_MIN_LENGTH} (provision) kabul edilir: ${line.trim()}`
+          );
+        }
+      }
+    }
+  }
+}
+
+if (passwordMinViolationCount === 0) {
+  ok(
+    `docs/ şifre minimum uzunlukları (${SELF_SERVICE_PASSWORD_MIN_LENGTH}/${PROVISION_PASSWORD_MIN_LENGTH}) ile uyumlu`
+  );
 }
 
 // ── Sonuç ───────────────────────────────────────────────────────────────────

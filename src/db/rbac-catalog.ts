@@ -10,6 +10,9 @@ import { GalleryPermission, GALLERY_PERMISSION_CATALOG } from "../features/galle
 import { ActivityPermission, ACTIVITY_PERMISSION_CATALOG } from "../features/activities/activities.permissions";
 import { DashboardPermission, DASHBOARD_PERMISSION_CATALOG } from "../features/dashboard/dashboard.permissions";
 import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/audit.permissions";
+import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
+import { TENANT_SETTINGS_PERMISSION_CATALOG, TenantSettingsPermission } from "../features/tenant-settings/tenant-settings.permissions";
+import type { DbExecutor } from "./executor";
 
 /**
  * Global RBAC kataloğunun TEK KAYNAĞI (roller, yetkiler, rol→yetki demetleri).
@@ -46,6 +49,8 @@ export const PERMISSION_CATALOG: { key: string; description: string }[] = [
   ...ACTIVITY_PERMISSION_CATALOG,
   ...DASHBOARD_PERMISSION_CATALOG,
   ...AUDIT_PERMISSION_CATALOG,
+  ...PLATFORM_PERMISSION_CATALOG,
+  ...TENANT_SETTINGS_PERMISSION_CATALOG,
   { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
   { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
 ];
@@ -62,11 +67,13 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW, ClubPermission.APPROVE,
     ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE, ClubPermission.DELETE,
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
+    AnnouncementPermission.UNIVERSITY_MANAGE,
     DashboardPermission.VIEW,
     UniversityPermission.UPDATE,
     UniversityPermission.FACULTY_CREATE, UniversityPermission.FACULTY_UPDATE, UniversityPermission.FACULTY_DELETE,
     UniversityPermission.DEPARTMENT_CREATE, UniversityPermission.DEPARTMENT_UPDATE, UniversityPermission.DEPARTMENT_DELETE,
     UniversityPermission.DOMAIN_CREATE, UniversityPermission.DOMAIN_UPDATE, UniversityPermission.DOMAIN_DELETE,
+    TenantSettingsPermission.MANAGE,
     AuthPermission.ROLE_MANAGE,
     AuditPermission.VIEW,
   ],
@@ -76,6 +83,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW, ClubPermission.APPROVE,
     ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE,
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
+    AnnouncementPermission.UNIVERSITY_MANAGE,
     DashboardPermission.VIEW,
   ],
   // Öğrenci İşleri / BİDB: akademik yapı + bölüm atama.
@@ -100,11 +108,9 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     AdminPermission.USER_VIEW, ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW,
     DashboardPermission.VIEW,
     AuditPermission.VIEW,
+    PlatformPermission.TENANT_VIEW,
   ],
 };
-
-/** seed / bootstrap'in verdiği transaction ya da doğrudan db. */
-export type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Rolleri, yetkileri ve rol→yetki bağlarını kurar. IDEMPOTENT — mevcut bir

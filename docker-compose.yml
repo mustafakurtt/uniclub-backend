@@ -72,7 +72,7 @@ services:
   #
   # Akış: Bun uygulaması (host) → ./logs/app.log → Vector → Loki → Grafana.
   # Uygulama container'da olmadığı için Vector, host'un yazdığı log DOSYASINI okur
-  # (LOG_FILE=./logs/app.log). Bkz. docs/LOGLAMA.md.
+  # (LOG_FILE=./logs/app.log). Bkz. docs/operations/logging.md.
 
   # Depo: hafif, etiket-indeksli log veritabanı. Varsayılan gömülü config ile çalışır.
   loki:

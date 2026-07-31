@@ -74,9 +74,11 @@ feat(clubs): add full-text search to club browsing
 fix(auth): invalidate permission cache on email verification
 ```
 
+Her PR, `CHANGELOG.md` dosyasındaki `[Unreleased]` bölümünü günceller (eklenen/değişen/fix maddeleri).
+
 ## Code conventions
 
-Read [docs/architecture.md](docs/architecture.md) first. The non-negotiables:
+Read [docs/architecture/overview.md](docs/architecture/overview.md) first. The non-negotiables:
 
 ### Documentation language
 
@@ -84,8 +86,8 @@ The repo uses a deliberate split — match the folder you're editing:
 
 | Language | What |
 |---|---|
-| **English** | Root `README.md`, `docs/architecture.md`, `docs/operations.md`, `CONTRIBUTING.md`, `CLAUDE.md` — architecture and operations for a mixed team |
-| **Turkish** | `docs/API.md`, `docs/design/`, `docs/frontend/`, and other product/integration docs — same audience as the API |
+| **English** | Root `README.md`, `docs/architecture/overview.md`, `docs/operations/runbook.md`, `CONTRIBUTING.md`, `CLAUDE.md` — architecture and operations for a mixed team |
+| **Turkish** | `docs/reference/api.md`, `docs/design/`, `docs/integration/`, and other product/integration docs — same audience as the API |
 | **Turkish** | All code comments, commit messages, and user-facing API `message` strings |
 
 Do not introduce a third convention without updating this table.
@@ -93,9 +95,10 @@ Do not introduce a third convention without updating this table.
 ### Application code
 - **Layering.** `routes → service → repository`. Only repositories import
   `db`/`schema`. Services never touch the database directly.
-- **Errors.** Business-rule failures throw a *plain* `new Error("Türkçe mesaj")`.
-  Infrastructure errors (pg, drizzle, TypeError) are subclasses and become a
-  generic 500. Route `catch` blocks call `respondWithBusinessError(c, error)`.
+- **Errors.** Business-rule failures throw **`HttpError`** via `src/shared/utils/errors.ts`
+  (`notFound("key")`, `badRequest("key")`, …). Routes have **no** `try/catch` —
+  `app.onError` converts them. Argument is a typed `MessageKey`, not a sentence.
+  See [ADR 0005](docs/adr/0005-plain-error-business-contract.md).
 - **Env.** Never read `process.env` in app code — go through `src/config/env.ts`.
   New vars must be added to `.env.example` and validated with Zod.
 - **Logging.** Never `console.*`. Use `logger.child({ module: "..." })`.

@@ -1,5 +1,5 @@
 /**
- * Çapraz-tenant kilidi — VERİTABANI seviyesinde (bkz. docs/SEMA_VE_URUN_YOL_HARITASI.md §1.1).
+ * Çapraz-tenant kilidi — VERİTABANI seviyesinde (bkz. docs/planning/schema-product.md §1.1).
  *
  * Diğer tenant izolasyon testleri (rbac.test.ts) HTTP katmanını sınar: "başka
  * üniversitenin kaynağına uzanan istek 403 alır mı". Bu dosya farklı bir soruyu

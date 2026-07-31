@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, desc, inArray, sql, getTableColumns, type SQL } from "drizzle-orm";
+import { and, eq, gte, lt, desc, inArray, isNotNull, isNull, sql, getTableColumns, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import {
   clubs,
@@ -10,6 +10,36 @@ import {
   clubApplications,
   users,
 } from "../../db/schema";
+import type { FeedPageCursor } from "./feed-cursor";
+
+/** Feed birleşim sırası: at DESC, kind DESC (activity=2 > announcement=1 > university_announcement=0), id DESC. */
+const FEED_KIND_ORDER = { university_announcement: 0, announcement: 1, activity: 2 } as const;
+
+function feedTupleBefore(
+  timeCol: typeof announcements.publishedAt | typeof activities.createdAt,
+  idCol: typeof announcements.id | typeof activities.id,
+  kind: keyof typeof FEED_KIND_ORDER,
+  cursor: FeedPageCursor
+): SQL {
+  const rowKindOrd = FEED_KIND_ORDER[kind];
+  const cursorKindOrd = FEED_KIND_ORDER[cursor.kind];
+  if (!cursor.id) {
+    return lt(timeCol, cursor.at);
+  }
+  if (cursor.kind === "university_announcement") {
+    return sql`(${timeCol}, ${rowKindOrd}, ${idCol}) < (
+      SELECT a.published_at, ${cursorKindOrd}, a.id FROM announcements a WHERE a.id = ${cursor.id} AND a.club_id IS NULL
+    )`;
+  }
+  if (cursor.kind === "announcement") {
+    return sql`(${timeCol}, ${rowKindOrd}, ${idCol}) < (
+      SELECT a.published_at, ${cursorKindOrd}, a.id FROM announcements a WHERE a.id = ${cursor.id}
+    )`;
+  }
+  return sql`(${timeCol}, ${rowKindOrd}, ${idCol}) < (
+    SELECT act.created_at, ${cursorKindOrd}, act.id FROM activities act WHERE act.id = ${cursor.id}
+  )`;
+}
 
 /**
  * dashboard bir OKUMA MODELİdir (read model): tek bir feature'a ait olmayan,
@@ -37,51 +67,125 @@ export const dashboardRepository = {
     return rows.map((r) => r.clubId);
   },
 
-  // ═══════════════════════════════════════════════
-  // ÖĞRENCİ FEED (kulüplerimden yeni içerik)
-  // ═══════════════════════════════════════════════
-  /** Kulüplerimin duyuruları (en yeni), keyset cursor (createdAt < cursor). */
-  feedAnnouncements(clubIds: string[], cursor: Date | undefined, limit: number) {
-    return db.query.announcements.findMany({
-      where: {
-        clubId: { in: clubIds },
-        ...(cursor ? { createdAt: { lt: cursor } } : {}),
-      },
-      with: { club: true },
-      orderBy: { createdAt: "desc" },
-      limit,
+  /** Kullanıcının tenant id'si (okul geneli feed için). */
+  async getUserUniversityId(userId: string): Promise<string | null> {
+    const row = await db.query.users.findFirst({
+      where: { id: userId },
+      columns: { universityId: true },
     });
+    return row?.universityId ?? null;
+  },
+
+  // ═══════════════════════════════════════════════
+  // ÖĞRENCİ FEED (kulüplerimden + okul geneli)
+  // ═══════════════════════════════════════════════
+  /** Kulüplerimin YAYINLANMIŞ duyuruları; keyset (publishedAt DESC, id DESC) + feed tie-break. */
+  async feedAnnouncements(clubIds: string[], cursor: FeedPageCursor | undefined, limit: number) {
+    if (clubIds.length === 0) return { rows: [], hasMore: false };
+
+    const filters: SQL[] = [
+      inArray(announcements.clubId, clubIds),
+      isNotNull(announcements.clubId),
+      eq(announcements.status, "published"),
+    ];
+    if (cursor) {
+      filters.push(feedTupleBefore(announcements.publishedAt, announcements.id, "announcement", cursor));
+    }
+
+    const raw = await db
+      .select(getTableColumns(announcements))
+      .from(announcements)
+      .where(and(...filters))
+      .orderBy(desc(announcements.publishedAt), desc(announcements.id))
+      .limit(limit + 1);
+
+    const hasMore = raw.length > limit;
+    const slice = hasMore ? raw.slice(0, limit) : raw;
+    if (slice.length === 0) return { rows: [], hasMore: false };
+
+    const resolvedClubIds = slice.map((r) => r.clubId).filter((id): id is string => id != null);
+    const clubRows = await db.query.clubs.findMany({
+      where: { id: { in: resolvedClubIds } },
+    });
+    const clubById = new Map(clubRows.map((c) => [c.id, c]));
+    const rows = slice.map((a) => ({
+      ...a,
+      club: a.clubId ? clubById.get(a.clubId) ?? null : null,
+    }));
+    return { rows, hasMore };
+  },
+
+  /** Tenant okul geneli YAYINLANMIŞ duyuruları. */
+  async feedUniversityAnnouncements(
+    universityId: string,
+    cursor: FeedPageCursor | undefined,
+    limit: number
+  ) {
+    const filters: SQL[] = [
+      eq(announcements.universityId, universityId),
+      isNull(announcements.clubId),
+      eq(announcements.status, "published"),
+    ];
+    if (cursor) {
+      filters.push(
+        feedTupleBefore(
+          announcements.publishedAt,
+          announcements.id,
+          "university_announcement",
+          cursor
+        )
+      );
+    }
+
+    const raw = await db
+      .select(getTableColumns(announcements))
+      .from(announcements)
+      .where(and(...filters))
+      .orderBy(desc(announcements.publishedAt), desc(announcements.id))
+      .limit(limit + 1);
+
+    const hasMore = raw.length > limit;
+    const rows = hasMore ? raw.slice(0, limit) : raw;
+    return { rows, hasMore };
   },
 
   /**
    * Kulüplerimin YAYINLANMIŞ etkinlikleri (en yeni yayınlanan), host kulübüyle.
    * activity_clubs (accepted) üzerinden; co-hosted etkinlik tek satır (distinct).
    */
-  async feedActivities(clubIds: string[], cursor: Date | undefined, limit: number) {
+  async feedActivities(clubIds: string[], cursor: FeedPageCursor | undefined, limit: number) {
+    if (clubIds.length === 0) return { rows: [], hasMore: false };
+
     const filters: SQL[] = [
       inArray(activityClubs.clubId, clubIds),
       eq(activityClubs.status, "accepted"),
       eq(activities.status, "published"),
     ];
-    if (cursor) filters.push(lt(activities.createdAt, cursor));
+    if (cursor) {
+      filters.push(feedTupleBefore(activities.createdAt, activities.id, "activity", cursor));
+    }
 
-    const rows = await db
+    const raw = await db
       .selectDistinct(getTableColumns(activities))
       .from(activities)
       .innerJoin(activityClubs, eq(activityClubs.activityId, activities.id))
       .where(and(...filters))
-      .orderBy(desc(activities.createdAt))
-      .limit(limit);
+      .orderBy(desc(activities.createdAt), desc(activities.id))
+      .limit(limit + 1);
 
-    if (rows.length === 0) return [] as { activity: (typeof rows)[number]; hostClub: any }[];
+    const hasMore = raw.length > limit;
+    const rows = hasMore ? raw.slice(0, limit) : raw;
+    if (rows.length === 0) return { rows: [], hasMore: false };
 
-    // Host kulüpleri tek sorguda ekle (N+1 yok).
     const hostRows = await db.query.activityClubs.findMany({
       where: { activityId: { in: rows.map((r) => r.id) }, role: "host" },
       with: { club: true },
     });
     const hostByActivity = new Map(hostRows.map((h) => [h.activityId, h.club]));
-    return rows.map((a) => ({ activity: a, hostClub: hostByActivity.get(a.id) ?? null }));
+    return {
+      rows: rows.map((a) => ({ activity: a, hostClub: hostByActivity.get(a.id) ?? null })),
+      hasMore,
+    };
   },
 
   // ═══════════════════════════════════════════════

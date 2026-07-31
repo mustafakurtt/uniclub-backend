@@ -26,6 +26,12 @@ class DomainRepository extends BaseRepository<typeof universityDomains, typeof d
     return this.query!.findFirst({ where: { id: domainId, universityId } });
   }
 
+  findStaffDomainInUniversity(universityId: string, domain: string) {
+    return this.query!.findFirst({
+      where: { universityId, domain, domainType: "staff" },
+    });
+  }
+
   listByUniversity(universityId: string) {
     return this.query!.findMany({ where: { universityId } });
   }

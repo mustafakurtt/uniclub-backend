@@ -1,8 +1,56 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
-import { createEnv, envBoolean } from "../../src/core/config/env";
+import {
+  isJwtPlaceholderSecret,
+  validateJwtSecret,
+} from "../../src/config/jwt-secret";
 
-/** core/config birim testleri — process.env'e DOKUNMADAN (source enjekte edilir). */
+// env.ts ile aynı şema parçası — JWT kurallarını process.env olmadan test eder.
+import { createEnv, envBoolean } from "../../src/core/config/env";
+const jwtFieldSchema = z
+  .object({
+    NODE_ENV: z.enum(["development", "production", "test"]),
+    JWT_SECRET: z.string().min(1),
+  })
+  .superRefine((data, ctx) => {
+    const err = validateJwtSecret(data.JWT_SECRET, data.NODE_ENV);
+    if (err) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: err, path: ["JWT_SECRET"] });
+    }
+  });
+
+describe("JWT_SECRET doğrulama", () => {
+  const validDev = "dev-local-jwt-secret-min-32-chars-ok";
+
+  it("min 32 karakter altını reddeder", () => {
+    expect(validateJwtSecret("short-secret", "development")).toMatch(/32/);
+  });
+
+  it("placeholder değerleri reddeder", () => {
+    expect(isJwtPlaceholderSecret("change-me-to-a-long-random-secret")).toBe(true);
+    expect(isJwtPlaceholderSecret("your-secret-key")).toBe(true);
+    expect(validateJwtSecret("change-me-to-a-long-random-secret", "development")).not.toBeNull();
+  });
+
+  it("uzun rastgele benzeri değerleri kabul eder", () => {
+    expect(validateJwtSecret(validDev, "development")).toBeNull();
+    expect(validateJwtSecret("ci-only-secret-not-used-anywhere-else", "test")).toBeNull();
+  });
+
+  it("production'da örnek değerleri reddeder", () => {
+    const longExample = "change-me-to-a-long-random-secret-extra";
+    expect(validateJwtSecret(longExample, "production")).not.toBeNull();
+  });
+
+  it("env şeması ile uyumlu parse", () => {
+    expect(() =>
+      jwtFieldSchema.parse({ NODE_ENV: "development", JWT_SECRET: validDev })
+    ).not.toThrow();
+    expect(() =>
+      jwtFieldSchema.parse({ NODE_ENV: "development", JWT_SECRET: "changeme" })
+    ).toThrow();
+  });
+});
 
 describe("createEnv", () => {
   const schema = z.object({
@@ -20,7 +68,6 @@ describe("createEnv", () => {
   });
 
   it("geçersizse FIRLATIR ve hangi alan/neden olduğunu tek tek listeler", () => {
-    // Ham schema.parse() çıktısının aksine okunur olması bu fabrikanın varlık sebebi.
     expect(() => createEnv(schema, { source: { DATABASE_URL: "url-değil" } })).toThrow(
       /DATABASE_URL: Geçerli bir veritabanı URL'si girilmelidir\./
     );
@@ -49,8 +96,6 @@ describe("envBoolean", () => {
     z.object({ FLAG: envBoolean(fallback) }).parse(raw === undefined ? {} : { FLAG: raw }).FLAG;
 
   it('KRİTİK: "false" gerçekten false olur', () => {
-    // z.coerce.boolean() burada true verirdi (Boolean("false") === true) — bu
-    // yardımcının bütün varlık sebebi bu tuzak.
     expect(parse("false")).toBe(false);
   });
 

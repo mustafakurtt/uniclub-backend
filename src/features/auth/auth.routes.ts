@@ -10,12 +10,16 @@ import {
   assignRoleSchema,
   setUserPermissionSchema,
   resendVerificationSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  acceptTenantAdminInvitationSchema,
 } from "./auth.schema";
 import { authService } from "./auth.service";
 import { authMiddleware } from "../../core/auth/auth.middleware";
 import { guard } from "../../core/rbac/guard";
 import { RbacVariables } from "../../core/rbac/rbac.middleware";
 import { AuthPermission } from "./auth.permissions";
+import { applyAuthzPolicyMiddleware } from "../../middlewares/active-user.middleware";
 import { validate } from "../../shared/utils/validate";
 import { ok, created, done } from "../../shared/utils/respond";
 import { badRequest } from "../../shared/utils/errors";
@@ -26,6 +30,10 @@ import {
   registerLimit,
   resendVerificationEmailLimit,
   resendVerificationIpLimit,
+  acceptTenantAdminInvitationIpLimit,
+  forgotPasswordEmailLimit,
+  forgotPasswordIpLimit,
+  resetPasswordIpLimit,
 } from "../../middlewares/rate-limit.middleware";
 
 // Hono rotasına RbacVariables tipini tanıtıyoruz ki 'c.get("user")'/'c.get("authz")' tamamlansın
@@ -55,7 +63,7 @@ const actorFromCtx = (c: Context<{ Variables: RbacVariables }>) => {
 };
 
 /**
- * login response'u zarfın DIŞINDA `user`/`token` de döner (bkz. docs/API.md
+ * login response'u zarfın DIŞINDA `user`/`token` de döner (bkz. docs/reference/api.md
  * "tek istisna") — core responder (`ok`) bu şekle uymaz, bu yüzden `translate`
  * burada doğrudan çağrılır. Mesaj yine aynı katalogdan gelen bir anahtardır.
  */
@@ -108,8 +116,48 @@ authRoutes.post(
   }
 );
 
+// 3C. TENANT YÖNETİCİSİ DAVET KABUL (public — kimlik yok)
+// Token 128 bit entropi (UUID); DB'de SHA-256 özeti — enumeration pratikte anlamsız,
+// bu yüzden süre/kullanım/iptal için ayrı mesajlar güvenlidir.
+// Kimlik tabanlı rate limit uygulanamaz; IP başına kaba tavan (registerLimit ile aynı ilke).
+authRoutes.post(
+  "/accept-tenant-admin-invitation",
+  acceptTenantAdminInvitationIpLimit,
+  validate("json", acceptTenantAdminInvitationSchema),
+  async (c) => {
+    const body = c.req.valid("json");
+    const user = await authService.acceptTenantAdminInvitation(body);
+    return created(c, user, "auth.tenantAdminInvitationAccepted");
+  }
+);
+
+// 3D. ŞİFRE SIFIRLAMA TALEBİ (enumeration-safe)
+authRoutes.post(
+  "/forgot-password",
+  forgotPasswordEmailLimit,
+  forgotPasswordIpLimit,
+  validate("json", forgotPasswordSchema),
+  async (c) => {
+    const body = c.req.valid("json");
+    await authService.forgotPassword(body);
+    return done(c, "auth.forgotPasswordSent");
+  }
+);
+
+// 3E. ŞİFRE SIFIRLAMA (token tüketimi — otomatik giriş yok)
+authRoutes.post(
+  "/reset-password",
+  resetPasswordIpLimit,
+  validate("json", resetPasswordSchema),
+  async (c) => {
+    const body = c.req.valid("json");
+    await authService.resetPassword(body);
+    return done(c, "auth.passwordResetSuccess");
+  }
+);
+
 // 4. PROFİL BİLGİSİ (Korumalı Rota)
-authRoutes.get("/me", authMiddleware, async (c) => {
+authRoutes.get("/me", authMiddleware, applyAuthzPolicyMiddleware, async (c) => {
   const user = c.get("user");
   return ok(c, { userId: user.userId, universityId: user.universityId }, "auth.meProtected");
 });

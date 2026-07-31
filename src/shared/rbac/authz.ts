@@ -10,6 +10,11 @@ import type { AuthzContext } from "../../core/rbac/rbac.types";
 declare module "../../core/rbac/rbac.types" {
   interface AuthzContext {
     /**
+     * Kullanıcının tenant'ı — platform hesaplarında `null`.
+     * Tenant durum kontrolü authz-policy + tenant-status cache üzerinden yapılır.
+     */
+    universityId?: string | null;
+    /**
      * Hesap durumu — askıya alınan kullanıcının erişimini bir sonraki istekte
      * ANINDA kesmek için authz'a gömülür (politika: shared/rbac/authz-policy.ts).
      * Kullanıcı bulunamazsa undefined.
@@ -20,6 +25,8 @@ declare module "../../core/rbac/rbac.types" {
      * "Kendinden düşük rütbe" kuralının girdisi (bkz. auth.service assertActorOutranks*).
      */
     maxRank: number;
+    /** DB `users.token_version` — JWT claim ile karşılaştırılır (enforceAuthzPolicy). */
+    tokenVersion?: number;
   }
 }
 

@@ -4,6 +4,8 @@ import { universitiesRoutes } from "./routes/universities.routes";
 import { domainsRoutes } from "./routes/domains.routes";
 import { facultiesRoutes } from "./routes/faculties.routes";
 import { departmentsRoutes } from "./routes/departments.routes";
+import { universityAnnouncementsRoutes } from "../announcements/university-announcements.routes";
+import { tenantSettingsRoutes } from "../tenant-settings/tenant-settings.routes";
 
 /**
  * university feature'ının kök router'ı — `/api/universities` altına mount edilir
@@ -22,3 +24,5 @@ universityRoutes.route("/", universitiesRoutes);
 universityRoutes.route("/", domainsRoutes);
 universityRoutes.route("/", facultiesRoutes);
 universityRoutes.route("/", departmentsRoutes);
+universityRoutes.route("/", universityAnnouncementsRoutes);
+universityRoutes.route("/", tenantSettingsRoutes);

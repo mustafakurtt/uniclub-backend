@@ -30,7 +30,7 @@ Bu projede tek bir yetki modeli var; iki farklı isimle konuşulur:
 ```
 
 Effective (etkin) hesap = **rollerden gelenlerin birleşimi**, sonra
-`userPermissions` uygulanır. Detay: [README §4](README.md).
+`userPermissions` uygulanır. Detay: [README §4](../README.md).
 
 ---
 
@@ -89,7 +89,7 @@ Yoksa `404` `"Yetki bulunamadı."`
   key'e dokunulmaz.
 - **S1.3 — (eksik) yetki silme:** Kullanılmayan bir permission **silinemez**
   (`DELETE` yok). Silme eklenirse `rolePermissions` + `userPermissions` bağları
-  ve seed çekirdek anahtarları korunmalı — [05](05-eksikler-ve-onerilen-endpointler.md).
+  ve seed çekirdek anahtarları korunmalı — [05](archive/05-implemented-endpoints.md).
 
 ---
 
@@ -105,7 +105,7 @@ işlenir (attach/detach + tüm-kullanıcı cache invalidation). Buraya özet:
 "Yetkiler" sekmesinden bakış: her permission satırının yanında "bu yetki hangi
 rollerde?" bilgisi rol matrisinden türetilir (`GET /api/auth/roles` → her rolün
 `permissions`'ı taranır). Ters yön ("bu yetkiye sahip roller/kullanıcılar")
-için hazır endpoint yoktur (bkz. [05](05-eksikler-ve-onerilen-endpointler.md)).
+için hazır endpoint yoktur (bkz. [05](archive/05-implemented-endpoints.md)).
 
 ---
 
@@ -132,7 +132,7 @@ Effective setin **ikinci** kaynağı ve bu panelin **en kritik eksiği.**
   çekemezsiniz.
 
 Önerilen endpoint'ler (`POST/DELETE /api/auth/users/:userId/permissions` +
-effective görüntüleme) [05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md)'te
+effective görüntüleme) [archive/05-implemented-endpoints.md](archive/05-implemented-endpoints.md)'te
 şema düzeyinde verilmiştir.
 
 ### Senaryolar (endpoint eklendiğinde hedeflenen davranış)
@@ -169,11 +169,11 @@ permission listesi vermez.
   frontend'de **elle** hesaplanmak zorunda kalır (rol yetkilerini `GET /roles`'tan
   çekip birleştirerek) — hataya açık.
 - Kendi UI guard'larınız için de effective liste olmadığından **rol adı bazlı**
-  geçici guard kullanılır (bkz. [README §6](README.md)).
+  geçici guard kullanılır (bkz. [README §6](../README.md)).
 
 Önerilen: `GET /api/users/me/permissions` (self) ve
 `GET /api/admin/.../users/:userId/effective-permissions` (yönetici) —
-[05-eksikler-ve-onerilen-endpointler.md](05-eksikler-ve-onerilen-endpointler.md) öneri #1, #4.
+[archive/05-implemented-endpoints.md](archive/05-implemented-endpoints.md) öneri #1, #4.
 
 ---
 

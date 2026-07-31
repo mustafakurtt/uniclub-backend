@@ -1,0 +1,2 @@
+ALTER TABLE "announcements" DROP CONSTRAINT "announcements_club_id_clubs_id_fkey", ADD CONSTRAINT "announcements_club_id_clubs_id_fkey" FOREIGN KEY ("club_id") REFERENCES "clubs"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "announcements" DROP CONSTRAINT "announcements_club_tenant_fkey", ADD CONSTRAINT "announcements_club_tenant_fkey" FOREIGN KEY ("club_id","university_id") REFERENCES "clubs"("id","university_id") ON DELETE RESTRICT;

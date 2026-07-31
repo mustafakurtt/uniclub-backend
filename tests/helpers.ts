@@ -42,7 +42,7 @@ export const postJson = (path: string, body: unknown) => app.request(path, json(
 
 /** Bearer token'lı yazma isteği (POST/PATCH/DELETE), opsiyonel JSON gövde ile. */
 export function reqAuth(
-  method: "POST" | "PATCH" | "DELETE",
+  method: "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   token: string,
   body?: unknown

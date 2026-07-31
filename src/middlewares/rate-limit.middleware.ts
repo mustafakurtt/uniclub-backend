@@ -4,6 +4,8 @@ import { createRateLimiter, RedisRateLimitStore, type RateLimitStore } from "../
 import { env } from "../config/env";
 import { redis } from "../shared/redis/redis.client";
 import { logger } from "../shared/logger/logger";
+import { getTenantSettings } from "../features/tenant-settings/tenant-settings.cache";
+import { TenantSettingKey, TENANT_SETTING_CATALOG } from "../features/tenant-settings/tenant-settings.catalog";
 
 /**
  * Bu projenin hız sınırı KURULUMU — taşınabilir `core/ratelimit` fabrikasının
@@ -37,7 +39,7 @@ const store: RateLimitStore = new RedisRateLimitStore(redis);
  */
 const limiter = (options: {
   keyPrefix: string;
-  limit: number;
+  limit: number | ((c: Context) => number | Promise<number>);
   windowSeconds: number;
   keyFn: (c: Context) => string | null | Promise<string | null>;
 }) =>
@@ -166,4 +168,60 @@ export const registerLimit = limiter({
   limit: 30,
   windowSeconds: 60,
   keyFn: (c) => clientIp(c),
+});
+
+/**
+ * Tenant yönetici davet kabulü — IP başına (public uç, kimlik yok).
+ * Token yüksek entropili ve hash'li; asıl koruma budur. IP limiti kaba kuvvet
+ * denemelerini yavaşlatır; enumeration için tüm hata durumları aynı mesajı döner.
+ */
+export const acceptTenantAdminInvitationIpLimit = limiter({
+  keyPrefix: "invite-accept:ip",
+  limit: 30,
+  windowSeconds: 60,
+  keyFn: (c) => clientIp(c),
+});
+
+export const forgotPasswordEmailLimit = limiter({
+  keyPrefix: "forgot-password:email",
+  limit: 3,
+  windowSeconds: 60 * 60,
+  keyFn: (c) => bodyField(c, "email"),
+});
+
+export const forgotPasswordIpLimit = limiter({
+  keyPrefix: "forgot-password:ip",
+  limit: 20,
+  windowSeconds: 60,
+  keyFn: (c) => clientIp(c),
+});
+
+export const resetPasswordIpLimit = limiter({
+  keyPrefix: "reset-password:ip",
+  limit: 30,
+  windowSeconds: 60,
+  keyFn: (c) => clientIp(c),
+});
+
+/**
+ * Okul geneli duyuru yayınlama — tenant + yayıncı başına (saatte 5).
+ * Büyük fan-out'un kötüye kullanımını yavaşlatır.
+ */
+export const universityAnnouncementPublishLimit = limiter({
+  keyPrefix: "uni-announcement-publish",
+  limit: async (c) => {
+    const universityId = c.req.param("universityId");
+    if (!universityId) {
+      return TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR].defaultValue;
+    }
+    const settings = await getTenantSettings(universityId);
+    return settings.universityAnnouncementPublishPerHour;
+  },
+  windowSeconds: 60 * 60,
+  keyFn: (c) => {
+    const universityId = c.req.param("universityId");
+    const user = c.get("user") as { userId?: string } | undefined;
+    if (!universityId || !user?.userId) return null;
+    return `${universityId}:${user.userId}`;
+  },
 });

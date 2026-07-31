@@ -16,6 +16,8 @@ import {
   CreateDepartmentDTO,
   UpdateDepartmentDTO,
 } from "./university.schema";
+import type { CreateTenantPackagePayload, UpdateTenantLifecyclePayload } from "./university.types";
+import type { DbExecutor } from "../../db/executor";
 
 /**
  * university iş kuralları. Veri erişimi kaynak-başına repository'lere dağıtılmıştır
@@ -40,6 +42,15 @@ export const universityService = {
     return await universityCache.list().read(() => universityRepository.list());
   },
 
+  /** Operatör tenant listesi — keyset sayfalama; cache'lenmez (cursor anahtarları çok). */
+  async listUniversitiesPaginated(
+    limit: number,
+    cursor?: { createdAt: Date; id: string },
+    search?: string
+  ) {
+    return await universityRepository.listOperatorPage(limit, cursor, search);
+  },
+
   async getUniversity(universityId: string) {
     // Repo undefined dönerse cache'lenmez (getOrSet null/undefined'ı yazmaz);
     // notFound guard'ı her çağrıda çalışır.
@@ -52,21 +63,73 @@ export const universityService = {
     return university;
   },
 
+  async getUniversitySummary(universityId: string) {
+    const university = await universityRepository.findByIdSummary(universityId);
+    if (!university) {
+      throw notFound("university.notFound");
+    }
+    return university;
+  },
+
+  async createTenantPackage(data: CreateTenantPackagePayload, options?: { tx?: DbExecutor }) {
+    return await universityRepository.createTenantPackage(data, options);
+  },
+
+  async updateTenantLifecycle(
+    universityId: string,
+    data: UpdateTenantLifecyclePayload,
+    options?: { tx?: DbExecutor }
+  ) {
+    const university = await universityRepository.findByIdSummary(universityId);
+    if (!university) {
+      throw notFound("university.notFound");
+    }
+    return await universityRepository.updateTenantLifecycle(universityId, data, options);
+  },
+
+  assertStaffDomainsForAdmin(
+    domains: { domain: string; domainType: string }[],
+    email: string
+  ) {
+    const hasStaffDomain = domains.some((d) => d.domainType === "staff");
+    if (!hasStaffDomain) {
+      throw badRequest("platform.tenantStaffDomainRequired");
+    }
+
+    const emailDomain = extractEmailDomain(email);
+    const matchesStaff = domains.some((d) => d.domain === emailDomain && d.domainType === "staff");
+    if (!matchesStaff) {
+      throw badRequest("platform.adminEmailDomainMismatch");
+    }
+  },
+
+  async assertStaffEmailForTenant(universityId: string, email: string) {
+    const emailDomain = extractEmailDomain(email);
+    const staffDomain = await domainRepository.findStaffDomainInUniversity(universityId, emailDomain);
+    if (!staffDomain) {
+      throw badRequest("platform.adminEmailDomainMismatch");
+    }
+  },
+
   /**
    * Yeni üniversite oluşturur.
-   * 1. slug sistemde benzersiz olmalı (silinmiş kayıtlar DAHİL — unique kısıt hepsini kapsar).
-   * 2. Verilen domainlerin hiçbiri (istekte ve DB'de) daha önce kayıtlı olmamalı.
    */
   async createUniversity(data: CreateUniversityDTO) {
-    // 1
-    const existingSlug = await universityRepository.findBySlugIncludingDeleted(data.slug);
+    await universityService.validateSlugAndDomains(data.slug, data.domains);
+    return await universityRepository.createWithDomains(data);
+  },
+
+  /**
+   * Slug ve domain benzersizlik kontrolleri — `createUniversity` ve platform onboard ortak.
+   */
+  async validateSlugAndDomains(slug: string, domains: CreateUniversityDTO["domains"]) {
+    const existingSlug = await universityRepository.findBySlugIncludingDeleted(slug);
     if (existingSlug) {
       throw badRequest("university.slugTaken");
     }
 
-    // 2
     const seen = new Set<string>();
-    for (const d of data.domains) {
+    for (const d of domains) {
       if (seen.has(d.domain)) {
         throw badRequest("university.domainDuplicateInRequest", { params: { domain: d.domain } });
       }
@@ -77,8 +140,6 @@ export const universityService = {
         throw badRequest("university.domainAlreadyRegistered", { params: { domain: d.domain } });
       }
     }
-
-    return await universityRepository.createWithDomains(data);
   },
 
   async updateUniversity(universityId: string, data: UpdateUniversityDTO) {
@@ -322,3 +383,11 @@ export const universityService = {
     return { id: departmentId };
   },
 };
+
+function extractEmailDomain(email: string): string {
+  const parts = email.split("@");
+  if (parts.length !== 2 || !parts[1]) {
+    throw badRequest("auth.invalidEmailFormat");
+  }
+  return parts[1];
+}

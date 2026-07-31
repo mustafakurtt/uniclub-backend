@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { selfServicePasswordSchema } from "../../shared/schemas/password.schema";
+import { NotificationType } from "../notifications/notifications.types";
 
 export const updateProfileSchema = z.object({
   firstName: z.string().min(2, "Ad en az 2 karakter olmalıdır.").max(100).optional(),
@@ -12,6 +14,19 @@ export type UpdateProfileDTO = z.infer<typeof updateProfileSchema>;
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Mevcut şifre boş bırakılamaz."),
-  newPassword: z.string().min(6, "Yeni şifre en az 6 karakter olmalıdır."),
+  newPassword: selfServicePasswordSchema,
 });
 export type ChangePasswordDTO = z.infer<typeof changePasswordSchema>;
+
+const nullableUuid = z.union([z.string().uuid(), z.null()]);
+
+export const updateNotificationPreferenceSchema = z
+  .object({
+    type: z.union([z.enum(Object.values(NotificationType) as [string, ...string[]]), z.null()]).optional(),
+    clubId: nullableUuid.optional(),
+    muted: z.boolean(),
+  })
+  .refine((data) => data.type != null || data.clubId != null, {
+    message: "En az type veya clubId belirtilmelidir.",
+  });
+export type UpdateNotificationPreferenceDTO = z.infer<typeof updateNotificationPreferenceSchema>;

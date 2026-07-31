@@ -51,3 +51,18 @@ describe("generatePassword", () => {
     expect(await verifyPassword(`${password}x`, hash)).toBe(false);
   });
 });
+
+describe("verifyPasswordOrDummy", () => {
+  it("hash null ise her zaman false döner", async () => {
+    const { verifyPasswordOrDummy } = await import("../../src/core/auth/password");
+    expect(await verifyPasswordOrDummy("any-password", null)).toBe(false);
+    expect(await verifyPasswordOrDummy("any-password", undefined)).toBe(false);
+  });
+
+  it("geçerli hash ile verifyPassword ile aynı sonuç", async () => {
+    const { verifyPasswordOrDummy } = await import("../../src/core/auth/password");
+    const hash = await hashPassword("TimingTestPass1!");
+    expect(await verifyPasswordOrDummy("TimingTestPass1!", hash)).toBe(true);
+    expect(await verifyPasswordOrDummy("wrong", hash)).toBe(false);
+  });
+});

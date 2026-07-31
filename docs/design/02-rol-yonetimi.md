@@ -23,10 +23,10 @@ roles (id, universityId[NULL=global], name, description)
   birden fazla role, bir rol birden fazla kullanıcıya sahip olabilir.
 - **`roles` ↔ `permissions`** ara tablosu `rolePermissions` (PK: roleId+permissionId).
 - `roles.universityId`: `NULL` → **global rol** (şablon), dolu → **o üniversiteye
-  özel rol**. Seed'de 9 kurumsal rol global şablondur (bkz. [README §2](README.md)).
+  özel rol**. Seed'de 9 kurumsal rol global şablondur (bkz. [README §2](../README.md)).
 
 **Cache ilişkisi:** userRoles veya rolePermissions'a her dokunuşta etkilenen
-kullanıcıların effective-permission cache'i temizlenir (bkz. [README §4](README.md)).
+kullanıcıların effective-permission cache'i temizlenir (bkz. [README §4](../README.md)).
 
 ---
 

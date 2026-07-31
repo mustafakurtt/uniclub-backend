@@ -34,7 +34,7 @@ Aşağıdaki **B ve C bölümlerinin tamamı koda geçirildi** ve seed + canlı 
   eklenemez, global roller tenant yöneticisi tarafından düzenlenemez, çapraz-tenant
   atama engellenir (`auth.service.ts` `assertRole*`/`assertUserInTenant`).
 - **`platform_support`** tenant-scope bypass'ına eklendi (çapraz-tenant salt-okunur).
-- **Askı anında kesme (#7)** eklendi (bkz. [05](05-eksikler-ve-onerilen-endpointler.md)).
+- **Askı anında kesme (#7)** eklendi (bkz. [05](archive/05-implemented-endpoints.md)).
 
 **Seed demo hesapları** (hepsi `Password123!`, Antalya): `sks@antalya.edu.tr`
 (student_affairs), `denetci@antalya.edu.tr` (auditor), `ogrenci.isleri@antalya.edu.tr`

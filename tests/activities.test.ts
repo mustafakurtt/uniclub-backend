@@ -1,5 +1,18 @@
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, spyOn } from "bun:test";
+import { and, eq } from "drizzle-orm";
 import { get, login, me, reqAuth, data } from "./helpers";
+import { db } from "../src/db";
+import { notifications } from "../src/db/schema";
+import { NotificationType } from "../src/features/notifications/notifications.types";
+import * as notificationsRepo from "../src/features/notifications/notifications.repository";
+
+async function countUserNotifications(userId: string, type: string) {
+  const rows = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId), eq(notifications.type, type)));
+  return rows.length;
+}
 
 /**
  * Activities feature'ının uçtan uca davranışı (gerçek Postgres/Redis, app.request):
@@ -169,6 +182,114 @@ describe("Activities", () => {
 
     // İptal edilmiş etkinlik detayı 400 döner
     expect((await get(`/api/activities/${activityId}`, mustafa)).status).toBe(400);
+  });
+
+  // ── RSVP tenant + görünürlük katmanları ───────────────────────────────────
+  it("RSVP tenant: aynı tenant host etkinliğine katılım bildirilebilir", async () => {
+    const list = await data<{ id: string; title: string }[]>(
+      await get("/api/activities?scope=upcoming", mustafa)
+    );
+    const reactId = findBy(list, (a) => a.title.includes("React")).id;
+    expect((await reqAuth("POST", `/api/activities/${reactId}/rsvp`, sen, { status: "interested" })).status).toBe(
+      200
+    );
+  });
+
+  it("RSVP tenant: çok-üniversiteli etkinlikte co-host tenant öğrencisi katılabilir", async () => {
+    const list = await data<{ id: string; title: string }[]>(
+      await get("/api/activities?scope=upcoming", cem)
+    );
+    const hackathonId = findBy(list, (a) => a.title.includes("Hackathon")).id;
+    expect((await reqAuth("POST", `/api/activities/${hackathonId}/rsvp`, cem, { status: "going" })).status).toBe(
+      200
+    );
+  });
+
+  it("RSVP tenant: üçüncü tenant öğrencisi çok-üniversiteli etkinliğe katılamaz → 404", async () => {
+    const yusuf = await login("yusuf.celik@std.kartek.edu.tr");
+    const list = await data<{ id: string; title: string }[]>(
+      await get("/api/activities?scope=upcoming", mustafa)
+    );
+    const hackathonId = findBy(list, (a) => a.title.includes("Hackathon")).id;
+    expect((await reqAuth("POST", `/api/activities/${hackathonId}/rsvp`, yusuf, { status: "going" })).status).toBe(
+      404
+    );
+  });
+
+  it("RSVP görünürlük: members-only etkinlikte tenant içi ama üye olmayan → 403", async () => {
+    const asBurak = await data<{ id: string; title?: string; visibility: string }[]>(
+      await get(`/api/clubs/${photoClubId}/activities`, burak)
+    );
+    const membersId = findBy(asBurak, (a) => a.visibility === "members").id;
+    expect((await reqAuth("POST", `/api/activities/${membersId}/rsvp`, emre, { status: "going" })).status).toBe(403);
+  });
+
+  it("RSVP tenant: üçüncü tenant + members görünürlük → 404 (403 sızdırmaz)", async () => {
+    const yusuf = await login("yusuf.celik@std.kartek.edu.tr");
+    const asBurak = await data<{ id: string; title?: string; visibility: string }[]>(
+      await get(`/api/clubs/${photoClubId}/activities`, burak)
+    );
+    const membersId = findBy(asBurak, (a) => a.visibility === "members").id;
+    expect((await reqAuth("POST", `/api/activities/${membersId}/rsvp`, yusuf, { status: "going" })).status).toBe(404);
+  });
+
+  it("RSVP tenant: üçüncü tenant + iptal edilmiş etkinlik → 404 (400 sızdırmaz)", async () => {
+    const yusuf = await login("yusuf.celik@std.kartek.edu.tr");
+    const startsAt = new Date(Date.now() + 8 * 864e5).toISOString();
+    const created = await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+      title: "Tenant sıra iptal testi",
+      startsAt,
+    });
+    const activityId = (await created.json()).data.id;
+    expect((await reqAuth("POST", `/api/clubs/${techClubId}/activities/${activityId}/cancel`, mustafa)).status).toBe(200);
+    expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, yusuf, { status: "going" })).status).toBe(404);
+  });
+
+  it("iptal bildirimi: katılımcı sayısından bağımsız tek toplu yazım", async () => {
+    const startsAt = new Date(Date.now() + 9 * 864e5).toISOString();
+    const created = await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+      title: "İptal fan-out testi",
+      startsAt,
+    });
+    const activityId = (await created.json()).data.id;
+
+    expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, mustafa, { status: "going" })).status).toBe(200);
+    expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, sen, { status: "interested" })).status).toBe(200);
+
+    const addManySpy = spyOn(notificationsRepo.notificationsRepository, "addMany");
+    expect((await reqAuth("POST", `/api/clubs/${techClubId}/activities/${activityId}/cancel`, mustafa)).status).toBe(200);
+
+    expect(addManySpy.mock.calls.length).toBe(1);
+    expect(addManySpy.mock.calls[0]![0].length).toBeGreaterThanOrEqual(2);
+    addManySpy.mockRestore();
+  });
+
+  it("iptal bildirimi: kulüp bağlamı susturması activity.cancelled'ı süpürmez", async () => {
+    const senId = (await me(sen)).userId;
+    const before = await countUserNotifications(senId, NotificationType.ACTIVITY_CANCELLED);
+
+    await reqAuth("PUT", "/api/users/me/notification-preferences", sen, {
+      type: NotificationType.ACTIVITY_CANCELLED,
+      clubId: techClubId,
+      muted: true,
+    });
+
+    const startsAt = new Date(Date.now() + 10 * 864e5).toISOString();
+    const created = await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+      title: "İptal mute bağlam testi",
+      startsAt,
+    });
+    const activityId = (await created.json()).data.id;
+    expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, sen, { status: "going" })).status).toBe(200);
+    expect((await reqAuth("POST", `/api/clubs/${techClubId}/activities/${activityId}/cancel`, mustafa)).status).toBe(200);
+
+    expect(await countUserNotifications(senId, NotificationType.ACTIVITY_CANCELLED)).toBeGreaterThan(before);
+
+    await reqAuth("PUT", "/api/users/me/notification-preferences", sen, {
+      type: NotificationType.ACTIVITY_CANCELLED,
+      clubId: techClubId,
+      muted: false,
+    });
   });
 });
 

@@ -10,7 +10,7 @@ import type { PushSubscriptionStore, WebPushPayload, WebPushSubscription } from 
  *
  * WebSocket'in TAMAMLAYICISIDIR: WS yalnızca uygulama AÇIKKEN çalışır; web push,
  * uygulama KAPALIYKEN de cihaza (SW → OS bildirimi) ulaşır. İkili teslimatta
- * çift-bildirimi ÖNLEMEK service worker'ın işidir (bkz. `docs/BILDIRIMLER.md`):
+ * çift-bildirimi ÖNLEMEK service worker'ın işidir (bkz. `docs/architecture/notifications.md`):
  * push geldiğinde odaklı bir pencere varsa OS bildirimini bastırır, `tag` ile de-dup eder.
  */
 export interface VapidConfig {

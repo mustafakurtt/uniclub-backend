@@ -1,15 +1,22 @@
-import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDTO, UpdatePermissionDTO, SetUserPermissionDTO, ResendVerificationDTO } from "./auth.schema"; // LoginDTO'yu ekle
+import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDTO, UpdatePermissionDTO, SetUserPermissionDTO, ResendVerificationDTO, ForgotPasswordDTO, ResetPasswordDTO, AcceptTenantAdminInvitationDTO } from "./auth.schema";
 import { authRepository } from "./auth.repository";
-import { hashPassword, verifyPassword } from "../../shared/utils/password.util"; // verifyPassword eklendi
+import { tenantAdminInvitationsRepository } from "./tenant-admin-invitations.repository";
+import { toTenantAdminInvitationPublic, type TenantAdminInvitationPublic } from "./tenant-admin-invitations.types";
+import { hashPassword, verifyPasswordOrDummy } from "../../shared/utils/password.util"; // verifyPasswordOrDummy — timing-safe login
 import { generateToken } from "../../shared/utils/jwt.util"; // JWT üreteci eklendi
 import { generateOneTimeToken, hashToken } from "../../core/auth/token"; // e-posta doğrulama token'ı (JWT DEĞİL)
 import { emailQueue } from "./auth.queue";
 import { resolveAuthz, invalidateUserPermissions, invalidateUsersPermissions } from "../../shared/rbac/rbac.cache";
+import { revokeUserSessions } from "../../shared/rbac/session-revocation";
 import { toSafeUser } from "../../shared/utils/user.util";
+import { db } from "../../db";
+import type { DbExecutor } from "../../db/executor";
+import type { WithAfterCommit } from "../../shared/types/after-commit";
 import { AuthPermission } from "./auth.permissions";
 import { AdminPermission } from "../admin/admin.permissions";
 import { ClubPermission } from "../clubs/clubs.permissions";
 import { UniversityPermission } from "../university/university.permissions";
+import { PlatformPermission } from "../platform/platform.permissions";
 import { AnnouncementPermission } from "../announcements/announcements.permissions";
 import { GalleryPermission } from "../gallery/gallery.permissions";
 import { ActivityPermission } from "../activities/activities.permissions";
@@ -18,6 +25,7 @@ import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { notFound, badRequest, unauthorized } from "../../shared/utils/errors";
 import { authCache, authCatalogEffects } from "./auth.cache";
+import { resolveTenantStatus, tenantBlocksAccess } from "../../shared/rbac/tenant-status.cache";
 
 // Kayıt otomatik rolü + promote/demote hedefi. Not: "admin" rolü kurumsal modelde
 // "university_admin" olarak yeniden adlandırıldı (bkz. docs/design/06).
@@ -70,6 +78,10 @@ const PLATFORM_PERMISSION_KEYS = new Set<string>([
   UniversityPermission.DELETE,
   AuthPermission.ROLE_MANAGE,
   AuthPermission.PERMISSION_MANAGE,
+  PlatformPermission.TENANT_VIEW,
+  PlatformPermission.TENANT_MANAGE,
+  PlatformPermission.TENANT_INVITE,
+  PlatformPermission.USER_VIEW,
 ]);
 
 /**
@@ -209,6 +221,8 @@ async function assertNotLastAdminOfScope(
 
 /** Doğrulama linkinin geçerlilik süresi. Mail şablonundaki "24 saat" ile eşleşmelidir. */
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const TENANT_ADMIN_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 /**
  * Kullanıcıya yeni bir doğrulama token'ı üretir ve mailini kuyruğa atar.
@@ -237,6 +251,58 @@ async function issueVerificationEmail(user: { id: string; email: string; firstNa
     firstName: user.firstName,
     token: verificationToken,
   });
+}
+
+async function queuePasswordResetEmail(email: string, firstName: string, token: string) {
+  await emailQueue.add("send-password-reset", { email, firstName, token });
+}
+
+async function issuePasswordResetEmail(user: { id: string; email: string; firstName: string }) {
+  await authRepository.invalidateUserPasswordResets(user.id);
+  const resetToken = generateOneTimeToken();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+  await authRepository.createPasswordReset(user.id, await hashToken(resetToken), expiresAt);
+  await queuePasswordResetEmail(user.email, user.firstName, resetToken);
+}
+async function queueTenantAdminInvitationEmail(email: string, firstName: string, token: string) {
+  await emailQueue.add("send-tenant-admin-invitation", {
+    email,
+    firstName,
+    token,
+  });
+}
+
+function namesMatchInvitation(
+  invitation: { firstName: string; lastName: string },
+  firstName: string,
+  lastName: string
+): boolean {
+  const norm = (value: string) => value.trim().toLocaleLowerCase("tr-TR");
+  return norm(invitation.firstName) === norm(firstName) && norm(invitation.lastName) === norm(lastName);
+}
+
+function assertInvitationAcceptable(invitation: {
+  acceptedAt: Date | null;
+  cancelledAt: Date | null;
+  expiresAt: Date;
+}) {
+  if (invitation.acceptedAt) {
+    throw badRequest("auth.invitationAlreadyUsed");
+  }
+  if (invitation.cancelledAt) {
+    throw badRequest("auth.invitationCancelled");
+  }
+  if (invitation.expiresAt < new Date()) {
+    throw badRequest("auth.invitationExpired");
+  }
+}
+
+/** Kayıt ve davet kabulü aynı tenant yaşam döngüsü kuralını paylaşır. */
+async function assertTenantAcceptsNewUsers(universityId: string) {
+  const snapshot = await resolveTenantStatus(universityId);
+  if (tenantBlocksAccess(snapshot)) {
+    throw badRequest("auth.tenantRegistrationDisabled");
+  }
 }
 
 /**
@@ -299,55 +365,345 @@ async function removeGlobalRole(actor: RoleAdminActor, userId: string, roleName:
 
 export const authService = {
   /**
-   * Yeni bir kullanıcıyı doğrulamalardan geçirerek sisteme kaydeder.
+   * Öğrenci/personel self-service kayıt — e-posta doğrulama zorunlu.
    */
-  async register(data: RegisterDTO) {
-    // 1. İş Kuralı: E-postadan domain'i ayıkla
+  async registerSelfService(data: RegisterDTO) {
     const emailParts = data.email.split("@");
     if (emailParts.length !== 2) {
       throw badRequest("auth.invalidEmailFormat");
     }
     const domain = emailParts[1];
 
-    // 2. İş Kuralı: Domain kayıtlı mı?
     const universityDomain = await authRepository.findUniversityByDomain(domain);
     if (!universityDomain) {
       throw badRequest("auth.emailDomainNotRegistered");
     }
 
-    // 3. İş Kuralı: E-posta müsait mi?
+    const snapshot = await resolveTenantStatus(universityDomain.universityId);
+    if (tenantBlocksAccess(snapshot)) {
+      throw badRequest("auth.tenantRegistrationDisabled");
+    }
+
     const existingUser = await authRepository.findUserByEmailAndTenant(
       data.email,
       universityDomain.universityId
     );
-
     if (existingUser) {
       throw badRequest("auth.emailAlreadyInUse");
     }
 
-    // 4. İş Kuralı: Şifreyi güvenlikten geçir
     const hashedPassword = await hashPassword(data.password);
-
-    // 5. İş Kuralı: Hoca ise danışman, öğrenci ise öğrenci rolünü belirle
     const assignedRole = universityDomain.domainType === "staff" ? "advisor" : "student";
 
-    // 6. Veritabanına Yazma İşlemi (Repository'ye devret)
-    const newUser = await authRepository.createUserWithRole({
-      universityId: universityDomain.universityId,
-      email: data.email,
-      passwordHash: hashedPassword,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      studentNumber: data.studentNumber || null,
-      status: "pending", // Mail onayı bekleniyor
-    }, assignedRole);
+    const user = await db.transaction(async (tx) => {
+      return await authRepository.createUserWithRoleInTx(
+        tx,
+        {
+          universityId: universityDomain.universityId,
+          email: data.email,
+          passwordHash: hashedPassword,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          studentNumber: data.studentNumber || null,
+          status: "pending",
+        },
+        assignedRole
+      );
+    });
 
-    // 7. Doğrulama maili (token üretimi + kuyruğa atma tek yerde)
-    await issueVerificationEmail(newUser);
+    await issueVerificationEmail(user);
 
-    // 8. İş Kuralı: Hashlenmiş şifreyi dışarı sızdırma
-    const { passwordHash, ...safeUser } = newUser;
-    
+    const { passwordHash, ...safeUser } = user;
+    return safeUser;
+  },
+
+  async register(data: RegisterDTO) {
+    return await authService.registerSelfService(data);
+  },
+
+  /**
+   * Operatör tarafından tenant personeli provision — tx dışında hash'lenmiş şifre alır.
+   */
+  async provisionStaffAccountInTx(params: {
+    tx: DbExecutor;
+    universityId: string;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }): Promise<WithAfterCommit<Omit<import("./auth.types").User, "passwordHash">>> {
+    const existing = await authRepository.findUserByEmailInTx(params.tx, params.email);
+    if (existing) {
+      throw badRequest("auth.emailAlreadyInUse");
+    }
+
+    const user = await authRepository.provisionUserWithRoleInTx(
+      params.tx,
+      {
+        universityId: params.universityId,
+        email: params.email,
+        passwordHash: params.passwordHash,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        studentNumber: null,
+        status: "active",
+        mustChangePassword: true,
+      },
+      params.roleName
+    );
+
+    const { passwordHash, ...safe } = user;
+    return {
+      result: safe,
+      afterCommit: async () => {
+        await invalidateUserPermissions(user.id);
+      },
+    };
+  },
+
+  async provisionStaffAccount(params: {
+    universityId: string;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }) {
+    const afterCommits: Array<() => Promise<void>> = [];
+    const result = await db.transaction(async (tx) => {
+      const wrapped = await authService.provisionStaffAccountInTx({ tx, ...params });
+      if (wrapped.afterCommit) {
+        afterCommits.push(wrapped.afterCommit);
+      }
+      return wrapped.result;
+    });
+    for (const runAfterCommit of afterCommits) {
+      await runAfterCommit();
+    }
+    return result;
+  },
+
+  async provisionPlatformAccount(params: {
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }) {
+    const existing = await authRepository.findPlatformUserByEmail(params.email);
+    if (existing) {
+      throw badRequest("platform.userEmailAlreadyInUse");
+    }
+
+    const role = await authRepository.findRoleByName(params.roleName, null);
+    if (!role) {
+      throw notFound("platform.roleNotFound");
+    }
+
+    const afterCommits: Array<() => Promise<void>> = [];
+    const result = await db.transaction(async (tx) => {
+      const wrapped = await authService.provisionPlatformAccountInTx({
+        tx,
+        ...params,
+      });
+      if (wrapped.afterCommit) {
+        afterCommits.push(wrapped.afterCommit);
+      }
+      return wrapped.result;
+    });
+    for (const runAfterCommit of afterCommits) {
+      await runAfterCommit();
+    }
+    return result;
+  },
+
+  async provisionPlatformAccountInTx(params: {
+    tx: DbExecutor;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }): Promise<WithAfterCommit<{ email: string; roles: string[] } & Omit<import("./auth.types").User, "passwordHash">>> {
+    const existing = await authRepository.findUserByEmailInTx(params.tx, params.email);
+    if (existing) {
+      throw badRequest("platform.userEmailAlreadyInUse");
+    }
+
+    const user = await authRepository.provisionUserWithRoleInTx(
+      params.tx,
+      {
+        universityId: null,
+        email: params.email,
+        passwordHash: params.passwordHash,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        studentNumber: null,
+        status: "active",
+        mustChangePassword: true,
+      },
+      params.roleName
+    );
+
+    const { passwordHash, ...safe } = user;
+    return {
+      result: { ...safe, roles: [params.roleName] },
+      afterCommit: async () => {
+        await invalidateUserPermissions(user.id);
+      },
+    };
+  },
+
+  async findPlatformUserByEmail(email: string) {
+    return await authRepository.findPlatformUserByEmail(email);
+  },
+
+  async listPlatformUsers() {
+    return await authRepository.listPlatformUsers();
+  },
+
+  /**
+   * Tenant yöneticisi daveti — tx içinde yalnızca DB yazımı; mail commit sonrası.
+   */
+  async createTenantAdminInvitationInTx(params: {
+    tx: DbExecutor;
+    universityId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+    invitedBy: string | null;
+  }): Promise<WithAfterCommit<TenantAdminInvitationPublic>> {
+    const existingUser = await authRepository.findUserByEmailInTx(params.tx, params.email);
+    if (existingUser) {
+      throw badRequest("auth.emailAlreadyInUse");
+    }
+
+    const pending = await tenantAdminInvitationsRepository.findPendingByUniversityAndEmailInTx(
+      params.tx,
+      params.universityId,
+      params.email
+    );
+    if (pending) {
+      throw badRequest("auth.invitationPendingExists");
+    }
+
+    const token = generateOneTimeToken();
+    const tokenHash = await hashToken(token);
+    const expiresAt = new Date(Date.now() + TENANT_ADMIN_INVITATION_TTL_MS);
+
+    const row = await tenantAdminInvitationsRepository.createInTx(params.tx, {
+      universityId: params.universityId,
+      email: params.email,
+      firstName: params.firstName,
+      lastName: params.lastName,
+      roleName: params.roleName,
+      tokenHash,
+      invitedBy: params.invitedBy,
+      expiresAt,
+    });
+
+    const publicInvitation = toTenantAdminInvitationPublic(row);
+    return {
+      result: publicInvitation,
+      afterCommit: async () => {
+        await queueTenantAdminInvitationEmail(params.email, params.firstName, token);
+      },
+    };
+  },
+
+  async createTenantAdminInvitation(params: {
+    universityId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+    invitedBy: string | null;
+  }): Promise<TenantAdminInvitationPublic> {
+    const afterCommits: Array<() => Promise<void>> = [];
+    const result = await db.transaction(async (tx) => {
+      const wrapped = await authService.createTenantAdminInvitationInTx({ tx, ...params });
+      if (wrapped.afterCommit) {
+        afterCommits.push(wrapped.afterCommit);
+      }
+      return wrapped.result;
+    });
+    for (const runAfterCommit of afterCommits) {
+      await runAfterCommit();
+    }
+    return result;
+  },
+
+  async listPendingTenantAdminInvitations(universityId: string): Promise<TenantAdminInvitationPublic[]> {
+    const rows = await tenantAdminInvitationsRepository.listPendingByUniversity(universityId);
+    return rows.map(toTenantAdminInvitationPublic);
+  },
+
+  async cancelTenantAdminInvitation(universityId: string, invitationId: string): Promise<TenantAdminInvitationPublic> {
+    const invitation = await tenantAdminInvitationsRepository.findByIdInUniversity(invitationId, universityId);
+    if (!invitation) {
+      throw notFound("auth.invitationNotFound");
+    }
+    if (invitation.acceptedAt || invitation.cancelledAt || invitation.expiresAt < new Date()) {
+      throw badRequest("auth.invitationNotPending");
+    }
+    const cancelled = await tenantAdminInvitationsRepository.markCancelled(invitationId);
+    if (!cancelled) {
+      throw badRequest("auth.invitationNotPending");
+    }
+    return toTenantAdminInvitationPublic(cancelled);
+  },
+
+  /**
+   * Public davet kabul — tenant ve rol token'dan okunur; şifre tx öncesi hash'lenir.
+   */
+  async acceptTenantAdminInvitation(data: AcceptTenantAdminInvitationDTO) {
+    const tokenHash = await hashToken(data.token);
+    const invitation = await tenantAdminInvitationsRepository.findByTokenHash(tokenHash);
+    if (!invitation) {
+      throw badRequest("auth.invalidInvitationLink");
+    }
+
+    assertInvitationAcceptable(invitation);
+    await assertTenantAcceptsNewUsers(invitation.universityId);
+
+    if (!namesMatchInvitation(invitation, data.firstName, data.lastName)) {
+      throw badRequest("auth.invitationNameMismatch");
+    }
+
+    const passwordHash = await hashPassword(data.password);
+
+    const user = await db.transaction(async (tx) => {
+      const existing = await authRepository.findUserByEmailInTx(tx, invitation.email);
+      if (existing) {
+        throw badRequest("auth.emailAlreadyInUse");
+      }
+
+      const marked = await tenantAdminInvitationsRepository.markAcceptedInTx(tx, invitation.id);
+      if (!marked) {
+        throw badRequest("auth.invitationAlreadyUsed");
+      }
+
+      return await authRepository.provisionUserWithRoleInTx(
+        tx,
+        {
+          universityId: invitation.universityId,
+          email: invitation.email,
+          passwordHash,
+          firstName: invitation.firstName,
+          lastName: invitation.lastName,
+          studentNumber: null,
+          status: "active",
+          mustChangePassword: false,
+        },
+        invitation.roleName
+      );
+    });
+
+    await invalidateUserPermissions(user.id);
+
+    const { passwordHash: _, ...safeUser } = user;
     return safeUser;
   },
 
@@ -356,18 +712,11 @@ export const authService = {
    * E-posta ve şifreyi kontrol eder, başarılıysa JWT döner.
    */
   async login(data: LoginDTO) {
-    // 1. Kullanıcıyı veritabanında bul
     const user = await authRepository.findUserByEmail(data.email);
-    
-    // Güvenlik Kuralı: "E-posta bulunamadı" veya "Şifre yanlış" diye detay vermiyoruz ki
-    // kötü niyetli kişiler sistemde hangi e-postaların kayıtlı olduğunu tahmin edemesin.
-    if (!user) {
-      throw unauthorized("auth.invalidCredentials");
-    }
 
-    // 2. Şifreyi doğrula (Bun.password kullanarak)
-    const isPasswordValid = await verifyPassword(data.password, user.passwordHash);
-    if (!isPasswordValid) {
+    // Güvenlik: aynı hata mesajı + her istekte hash doğrulama (dummy hash ile timing eşitlenir).
+    const isPasswordValid = await verifyPasswordOrDummy(data.password, user?.passwordHash);
+    if (!user || !isPasswordValid) {
       throw unauthorized("auth.invalidCredentials");
     }
 
@@ -382,6 +731,13 @@ export const authService = {
       throw unauthorized("auth.loginAccountSuspended");
     }
 
+    if (user.universityId) {
+      const snapshot = await resolveTenantStatus(user.universityId);
+      if (tenantBlocksAccess(snapshot)) {
+        throw unauthorized("auth.loginTenantSuspended");
+      }
+    }
+
     // Not: user.status === "pending" olanlar (henüz mail onaylamamış olanlar)
     // şu an sisteme giriş yapabilir, ancak ileride yazacağımız middleware (ara katman)
     // sayesinde onay yapmadan kulüplere başvuru yapmalarını engelleyeceğiz.
@@ -389,7 +745,8 @@ export const authService = {
     // 4. JWT Üretimi (Kullanıcı ID'sini ve SaaS Tenant ID'sini içine gömüyoruz)
     const token = await generateToken({
       userId: user.id,
-      universityId: user.universityId
+      universityId: user.universityId,
+      tokenVersion: user.tokenVersion,
     });
 
     // 5. Güvenlik: Hashlenmiş şifreyi frontend'e dönme
@@ -457,6 +814,38 @@ export const authService = {
       return; // sessizce yut — dışarıdan başarılı istekten ayırt edilemez
     }
     await issueVerificationEmail(user);
+  },
+
+  /**
+   * Self-servis şifre sıfırlama talebi. Enumeration-safe: her zaman aynı yanıt.
+   * Mail yalnızca aktif, silinmemiş hesaplara gider.
+   */
+  async forgotPassword(data: ForgotPasswordDTO) {
+    const user = await authRepository.findUserByEmail(data.email);
+    if (!user || user.deletedAt || user.status !== "active") {
+      return;
+    }
+    await issuePasswordResetEmail(user);
+  },
+
+  async resetPassword(data: ResetPasswordDTO) {
+    const reset = await authRepository.findPasswordResetByTokenHash(await hashToken(data.token));
+    if (!reset) {
+      throw badRequest("auth.invalidPasswordResetLink");
+    }
+    if (reset.usedAt) {
+      throw badRequest("auth.passwordResetLinkUsed");
+    }
+    if (reset.expiresAt < new Date()) {
+      throw badRequest("auth.passwordResetLinkExpired");
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const completed = await authRepository.completePasswordReset(reset.userId, reset.id, passwordHash);
+    if (!completed) {
+      throw badRequest("auth.passwordResetLinkUsed");
+    }
+    await revokeUserSessions(reset.userId);
   },
 
   async promoteToAdmin(actor: RoleAdminActor, userId: string) {

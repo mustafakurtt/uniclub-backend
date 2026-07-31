@@ -12,6 +12,8 @@ declare module "../../core/auth/auth.middleware" {
     /** NULL = platform hesabı (hiçbir üniversiteye bağlı değil). Bkz. schema.users. */
     universityId: string | null;
     exp: number;
+    /** Oturum epoch — eksik claim geriye uyum için 0 kabul edilir. */
+    tokenVersion?: number;
   }
 }
 

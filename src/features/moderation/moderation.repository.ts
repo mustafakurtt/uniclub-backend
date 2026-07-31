@@ -1,4 +1,4 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { users, userModerationActions } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
@@ -28,9 +28,19 @@ class ModerationRepository extends BaseRepository<typeof userModerationActions> 
     return usersRepo.updateById(userId, { status });
   }
 
-  /** Yeni şifre hash'ini yazar ve kullanıcıyı sonraki girişte değişime zorlar. */
+  /** Yeni şifre hash'ini yazar, mustChangePassword ve tokenVersion artırır. */
   setPassword(userId: string, passwordHash: string) {
-    return usersRepo.updateById(userId, { passwordHash, mustChangePassword: true });
+    return db
+      .update(users)
+      .set({
+        passwordHash,
+        mustChangePassword: true,
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning()
+      .then((rows) => rows[0]);
   }
 
   /**

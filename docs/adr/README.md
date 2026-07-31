@@ -17,3 +17,6 @@ bir ADR ile geçersiz kılın.
 | [0005](0005-plain-error-business-contract.md) | İş kuralı hataları: düz `new Error` sözleşmesi |
 | [0006](0006-composite-fk-cross-tenant-lock.md) | Çapraz-tenant kilidi: bileşik FK'ler |
 | [0007](0007-email-domain-tenant-inference.md) | Tenant: e-posta domain'inden çıkarım |
+| [0008](0008-platform-feature-boundary.md) | Platform operasyonları ayrı `features/platform` katmanı |
+| [0009](0009-tenant-status-in-authz-cache.md) | Tenant `status` authz cache + middleware zorlaması |
+| [0010](0010-platform-vs-tenant-roles.md) | Platform rolü ↔ tenant rolü ayrımı |

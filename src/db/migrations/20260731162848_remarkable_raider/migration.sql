@@ -1,0 +1,2 @@
+CREATE TYPE "university_status" AS ENUM('trial', 'active', 'past_due', 'suspended');--> statement-breakpoint
+ALTER TABLE "universities" ADD COLUMN "status" "university_status" DEFAULT 'active'::"university_status" NOT NULL;

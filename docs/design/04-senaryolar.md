@@ -1,9 +1,9 @@
 # 04 — Uçtan Uca Birleşik Senaryolar
 
 Kullanıcı + rol + yetki + tenant + kulüp ilişkilerinin birlikte devreye girdiği
-gerçekçi yönetim akışları. Her senaryo seed verisiyle (bkz. [README §7](README.md)
+gerçekçi yönetim akışları. Her senaryo seed verisiyle (bkz. [README §7](../README.md)
 ve `seed.ts`) somutlaştırılmıştır. Adımlarda `[VAR]` = bugün çalışır,
-`[EKSİK]` = önerilen endpoint gerektirir ([05](05-eksikler-ve-onerilen-endpointler.md)).
+`[EKSİK]` = önerilen endpoint gerektirir ([05](archive/05-implemented-endpoints.md)).
 
 Seed'den kritik aktörler:
 - `superadmin@platform.local` → `super_admin` (platform, tenant bypass)
@@ -46,7 +46,7 @@ etmez; hâlâ kulüp danışmanı **atanabilir** (advisor rolü şartı sağlan�
    → role yalnızca `club.approve` eklenir.
 4. `[EKSİK]` Bir kullanıcıya `sks_officer` **atama** → genel rol atama endpoint'i
    yok (`promote-*` yalnızca admin/super_admin). Bugün yapılamaz.
-   → Öneri: `POST /api/auth/users/:userId/roles { roleId }` ([05](05-eksikler-ve-onerilen-endpointler.md)).
+   → Öneri: `POST /api/auth/users/:userId/roles { roleId }` ([05](archive/05-implemented-endpoints.md)).
 5. **Şema bağlantısı:** Bu rol, `clubApplicationApprovals.step: 2` (ör. "SKS
    onayı") gibi genişletilebilir onay zincirinin insan tarafını temsil eder —
    şema zaten hazır, yalnızca atama akışı eksik.
@@ -64,7 +64,7 @@ adminler ekleyemesin.
 - **Doğru yol** `[EKSİK]`: kişi bazlı override →
   `POST /api/auth/users/<elif>/permissions { key: "university.faculty.create", granted: true }`.
   Effective sette elif'in rol yetkileri + bu tek yetki birleşir; diğer adminler
-  etkilenmez. Endpoint henüz yok — [05](05-eksikler-ve-onerilen-endpointler.md) #2.
+  etkilenmez. Endpoint henüz yok — [05](archive/05-implemented-endpoints.md) #2.
 
 > **Ek engel:** `university.faculty.create` rotaları da tenant-scoped
 > olabileceği için (üniversite feature'ının yazma rotaları) elif yalnızca kendi
@@ -145,7 +145,7 @@ alınsın.
 ## S-H — "Kendi ayağına sıkma" senaryoları (backend engellemez)
 
 Aşağıdakiler bugün **başarılı olur**; korumalar UI/öneri seviyesindedir
-([05](05-eksikler-ve-onerilen-endpointler.md) #6):
+([05](archive/05-implemented-endpoints.md) #6):
 
 - **S-H1 — Son super_admin kendini düşürür:** `superadmin@antalya` →
   `demote-super-admin` kendi `userId`'sine → başarılı. Sistemde `role.manage`
@@ -179,10 +179,10 @@ Aşağıdakiler bugün **başarılı olur**; korumalar UI/öneri seviyesindedir
 | Senaryo | Ağırlıklı konu | Detay dosyası |
 |---|---|---|
 | S-A | admin atama | [02](02-rol-yonetimi.md) §4a |
-| S-B | özel rol + atama eksiği | [02](02-rol-yonetimi.md) §2,§4b · [05](05-eksikler-ve-onerilen-endpointler.md) |
-| S-C, S-D | kişi bazlı override | [03](03-yetki-ve-claim-yonetimi.md) §3 · [05](05-eksikler-ve-onerilen-endpointler.md) |
+| S-B | özel rol + atama eksiği | [02](02-rol-yonetimi.md) §2,§4b · [05](archive/05-implemented-endpoints.md) |
+| S-C, S-D | kişi bazlı override | [03](03-yetki-ve-claim-yonetimi.md) §3 · [05](archive/05-implemented-endpoints.md) |
 | S-E | askı × kulüp başkanlığı | [01](01-kullanici-yonetimi.md) §3 |
 | S-F | danışman × advisor rolü | [02](02-rol-yonetimi.md) §4b |
-| S-G | tenant izolasyonu | [README](README.md) §5 · [01](01-kullanici-yonetimi.md) |
-| S-H | güvenlik önlemleri | [05](05-eksikler-ve-onerilen-endpointler.md) #6 |
-| S-I | cache invalidation | [README](README.md) §4 |
+| S-G | tenant izolasyonu | [README](../README.md) §5 · [01](01-kullanici-yonetimi.md) |
+| S-H | güvenlik önlemleri | [05](archive/05-implemented-endpoints.md) #6 |
+| S-I | cache invalidation | [README](../README.md) §4 |

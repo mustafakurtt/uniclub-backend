@@ -19,6 +19,7 @@ import { mediaRoutes, mediaServeRoutes } from "./features/media/media.routes";
 import { notificationsRoutes } from "./features/notifications/notifications.routes";
 import { auditRoutes } from "./features/audit/audit.routes";
 import { moderationRoutes } from "./features/moderation/moderation.routes";
+import { platformRoutes } from "./features/platform/platform.routes";
 import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
@@ -27,7 +28,7 @@ import { configureRbac } from "./core/rbac/rbac.middleware";
 import { configureTenantScope } from "./core/rbac/tenant-scope";
 import { verifyToken } from "./shared/utils/jwt.util";
 import { resolveAuthz } from "./shared/rbac/rbac.cache";
-import { enforceAccountStatus } from "./shared/rbac/authz-policy";
+import { enforceAuthzPolicy } from "./shared/rbac/authz-policy";
 import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim şekli)
 import "./shared/rbac/authz"; // AuthzContext declaration merging (proje authz alanları)
 import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
@@ -35,11 +36,13 @@ import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
 import { verifyMailConnection, mailer } from "./shared/mail/mailer";
 import { redisSubscriber } from "./shared/redis/redis.subscriber";
 import { closeEmailQueue } from "./features/auth/auth.queue";
+import { closeNotificationFanoutQueue } from "./features/notifications/notifications.fanout";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
 import { metrics } from "./shared/metrics/metrics";
 import { createShutdownManager } from "./core/http/shutdown";
 import { createHealth } from "./core/http/health";
+import { ensureMigrationsAtStartup } from "./db/migration-check";
 
 const log = logger.child({ module: "bootstrap" });
 
@@ -98,7 +101,7 @@ setTokenVerifier(verifyToken);
 configureRbac({
   getSubjectId: (user) => user.userId,
   resolveAuthz,
-  enforce: enforceAccountStatus,
+  enforce: enforceAuthzPolicy,
 });
 
 // Tenant-scope AYRI opsiyonel eksen (core/rbac/tenant-scope): alan/param/bypass
@@ -181,12 +184,19 @@ app.route("/uploads", mediaServeRoutes);
 app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);
+app.route("/api/platform", platformRoutes);
 
 // Sunucuyu başlat + graceful shutdown — YALNIZCA bu dosya doğrudan entrypoint
 // iken (import.meta.main). Testler `app`'i import eder (import.meta.main false),
 // bu yüzden Bun.serve/sinyal dinleyicileri kurulmaz — port açılmaz, testler
 // tüm middleware zincirini `app.request()` ile portsuz koşturur.
 if (import.meta.main) {
+  await ensureMigrationsAtStartup({
+    nodeEnv: env.NODE_ENV,
+    databaseUrl: env.DATABASE_URL,
+    logger: log,
+  });
+
   const server = Bun.serve({
     port: env.PORT,
     fetch: app.fetch,
@@ -209,6 +219,7 @@ if (import.meta.main) {
   shutdown.register("drain", health.drainTask(drainMs));
   shutdown.register("http-server", () => server.stop()); // yeni bağlantı yok, uçuştakini bekle
   shutdown.register("email-queue", closeEmailQueue); // worker önce (job'u bitir), sonra queue
+  shutdown.register("notification-fanout-queue", closeNotificationFanoutQueue);
   shutdown.register("redis-subscriber", async () => void (await redisSubscriber.quit()));
   shutdown.register("redis", async () => void (await redis.quit()));
   shutdown.register("db", () => db.$client.end({ timeout: 5 }));

@@ -2,10 +2,73 @@ import { activitiesRepository } from "./activities.repository";
 import { activitiesCache, activityEffects } from "./activities.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { notFound, badRequest, forbidden } from "../../shared/utils/errors";
-import { notificationsService } from "../notifications/notifications.service";
+import { dispatchNotificationFanout } from "../notifications/notifications.fanout";
 import { NotificationType } from "../notifications/notifications.types";
 import { CreateActivityDTO, UpdateActivityDTO, ListActivitiesQueryDTO, RsvpDTO } from "./activities.schema";
 import type { Activity } from "./activities.types";
+
+type ActivityDetail = NonNullable<Awaited<ReturnType<typeof activitiesRepository.findDetailById>>>;
+type AcceptedClubLink = ActivityDetail["activityClubs"][number];
+
+async function fetchActivityDetail(activityId: string): Promise<ActivityDetail> {
+  const detail = await activitiesCache.detail(activityId).read(() =>
+    activitiesRepository.findDetailById(activityId)
+  );
+  if (!detail) {
+    throw notFound("activity.notFound");
+  }
+  return detail;
+}
+
+function acceptedClubLinks(detail: ActivityDetail): AcceptedClubLink[] {
+  return detail.activityClubs.filter((ac) => ac.status === "accepted");
+}
+
+function assertActivityPublished(detail: ActivityDetail) {
+  if (detail.status === "draft") {
+    throw notFound("activity.notFound"); // taslak dışarı görünmez
+  }
+  if (detail.status === "cancelled") {
+    throw badRequest("activity.cancelled");
+  }
+}
+
+async function assertActivityVisibility(
+  userId: string,
+  acceptedClubs: AcceptedClubLink[],
+  visibility: ActivityDetail["visibility"]
+) {
+  if (visibility !== "members") return;
+  const clubIds = acceptedClubs.map((ac) => ac.clubId);
+  const isMember = await activitiesRepository.isApprovedMemberOfAny(userId, clubIds);
+  if (!isMember) {
+    throw forbidden("activity.membersOnly");
+  }
+}
+
+/** Accepted host/co-host kulüplerinin tenant kümesinde olma — ilk kapı; dış tenant'a varlık sızdırmaz. */
+function assertAcceptedClubTenant(universityId: string, acceptedClubs: AcceptedClubLink[]) {
+  const clubUniversityIds = acceptedClubs
+    .map((ac) => ac.club?.universityId)
+    .filter((id): id is string => id != null);
+  if (!clubUniversityIds.includes(universityId)) {
+    throw notFound("activity.notFound");
+  }
+}
+
+/**
+ * RSVP (ve detay) kapısı: tenant → yayın durumu → görünürlük.
+ * Tenant ilk — kapsam dışı çağırana 404; görünürlük/iptal 403/400 sızdırmaz.
+ * İki katman da geçmeli; "üstüne gelir" sıra değil, birlikte uygulanma anlamında.
+ */
+async function assertCanRsvp(userId: string, universityId: string, activityId: string) {
+  const detail = await fetchActivityDetail(activityId);
+  const accepted = acceptedClubLinks(detail);
+  assertAcceptedClubTenant(universityId, accepted);
+  assertActivityPublished(detail);
+  await assertActivityVisibility(userId, accepted, detail.visibility);
+  return detail;
+}
 
 /**
  * Etkinlik iş kuralları. İki yüzey:
@@ -292,7 +355,7 @@ export const activitiesService = {
    * durumunu değiştirebilir (interested ↔ going).
    */
   async rsvp(userId: string, universityId: string, activityId: string, data: RsvpDTO) {
-    const detail = await this.resolveViewable(userId, universityId, activityId);
+    const detail = await assertCanRsvp(userId, universityId, activityId);
     // `new Date(...)` sarmalaması ARTIK GEREKLİ DEĞİL: varsayılan cache codec'i
     // (core/cache richCodec) Date'i Date olarak geri getiriyor. Savunma amaçlı
     // bırakıldı — Date'i de string'i de kabul eder, maliyeti yok.
@@ -337,44 +400,7 @@ export const activitiesService = {
    * döner. Tenant sızıntısı olmasın diye tenant-dışı etkinlik "bulunamadı" gibi görünür.
    */
   async resolveViewable(userId: string, universityId: string, activityId: string) {
-    // Taban detay (satır + kulüp bağları) VIEWER-BAĞIMSIZDIR → cache'lenir. goingCount
-    // ve çağıranın RSVP'si getDetail'de CANLI eklenir; tenant/görünürlük guard'ları
-    // burada cache DIŞINDA her çağrıda çalışır (aynı university.getUniversity deseni).
-    const detail = await activitiesCache.detail(activityId).read(() =>
-      activitiesRepository.findDetailById(activityId)
-    );
-    if (!detail) {
-      throw notFound("activity.notFound");
-    }
-
-    // Yalnızca KABUL EDİLMİŞ kulüp bağları tenant/görünürlük belirler; davet edilmiş
-    // (invited) bir co-host henüz "katılan kulüp" değildir.
-    const acceptedClubs = detail.activityClubs.filter((ac) => ac.status === "accepted");
-
-    // Tenant izolasyonu: kabul edilmiş kulüplerden en az biri çağıranın
-    // üniversitesinden olmalı (cross-university etkinlikte biri yeterli).
-    const clubUniversityIds = acceptedClubs.map((ac) => ac.club?.universityId);
-    if (!clubUniversityIds.includes(universityId)) {
-      throw notFound("activity.notFound");
-    }
-
-    if (detail.status === "draft") {
-      throw notFound("activity.notFound"); // taslak dışarı görünmez
-    }
-    if (detail.status === "cancelled") {
-      throw badRequest("activity.cancelled");
-    }
-
-    // members görünürlüğü: yalnızca kabul edilmiş kulüplerden birinin onaylı üyesi görebilir.
-    if (detail.visibility === "members") {
-      const clubIds = acceptedClubs.map((ac) => ac.clubId);
-      const isMember = await activitiesRepository.isApprovedMemberOfAny(userId, clubIds);
-      if (!isMember) {
-        throw forbidden("activity.membersOnly");
-      }
-    }
-
-    return detail;
+    return await assertCanRsvp(userId, universityId, activityId);
   },
 };
 
@@ -399,46 +425,34 @@ function stripJoins<T extends { activityClubs?: unknown; creator?: unknown }>(ro
 /** Yayın bildirimi: host kulübün onaylı üyelerine (yan etki, hataları yutulur). */
 async function notifyMembersPublished(hostClubId: string, activity: Activity) {
   const memberIds = await activitiesRepository.getApprovedMemberIds(hostClubId);
-  await Promise.all(
-    memberIds
-      .filter((id) => id !== activity.createdBy) // oluşturana kendi etkinliğini bildirme
-      .map((userId) =>
-        notificationsService.notifySafe(userId, {
-          type: NotificationType.ACTIVITY_PUBLISHED,
-          title: "Yeni etkinlik",
-          body: activity.title,
-          data: { activityId: activity.id, clubId: hostClubId },
-        })
-      )
-  );
+  const recipients = memberIds.filter((id) => id !== activity.createdBy);
+  await dispatchNotificationFanout(recipients, {
+    type: NotificationType.ACTIVITY_PUBLISHED,
+    title: "Yeni etkinlik",
+    body: activity.title,
+    data: { activityId: activity.id, clubId: hostClubId },
+  });
 }
 
 /** Co-host daveti bildirimi: hedef kulübün staff'ına (officer/president + danışman). */
 async function notifyCoHostInvited(hostClubId: string, targetClubId: string, activityId: string) {
   const staffIds = await activitiesRepository.getStaffIds(targetClubId);
-  await Promise.all(
-    staffIds.map((userId) =>
-      notificationsService.notifySafe(userId, {
-        type: NotificationType.ACTIVITY_COHOST_INVITED,
-        title: "Co-host daveti",
-        body: "Kulübünüz bir etkinliğe co-host olarak davet edildi.",
-        data: { activityId, hostClubId, clubId: targetClubId },
-      })
-    )
-  );
+  await dispatchNotificationFanout(staffIds, {
+    type: NotificationType.ACTIVITY_COHOST_INVITED,
+    title: "Co-host daveti",
+    body: "Kulübünüz bir etkinliğe co-host olarak davet edildi.",
+    data: { activityId, hostClubId, clubId: targetClubId },
+  });
 }
 
 /** İptal bildirimi: katılım bildiren herkese (yan etki). */
 async function notifyAttendeesCancelled(activityId: string, activity: Activity) {
   const attendees = await activitiesRepository.listAttendees(activityId);
-  await Promise.all(
-    attendees.map((a) =>
-      notificationsService.notifySafe(a.userId, {
-        type: NotificationType.ACTIVITY_CANCELLED,
-        title: "Etkinlik iptal edildi",
-        body: activity.title,
-        data: { activityId },
-      })
-    )
-  );
+  const userIds = attendees.map((a) => a.userId);
+  await dispatchNotificationFanout(userIds, {
+    type: NotificationType.ACTIVITY_CANCELLED,
+    title: "Etkinlik iptal edildi",
+    body: activity.title,
+    data: { activityId },
+  });
 }

@@ -30,8 +30,8 @@ export interface CreateRateLimiterOptions {
   store: RateLimitStore;
   /** Anahtar öneki — endpoint'ler birbirinin sayacını yemesin. */
   keyPrefix: string;
-  /** Pencere başına izin verilen istek sayısı. */
-  limit: number;
+  /** Pencere başına izin verilen istek sayısı (veya çalışma anında hesaplanan). */
+  limit: number | ((c: Context) => number | Promise<number>);
   /** Pencere uzunluğu (saniye). */
   windowSeconds: number;
   /**
@@ -85,6 +85,7 @@ export function createRateLimiter(options: CreateRateLimiterOptions): Middleware
     if (identity === null) return next(); // kimlik çıkarılamadı → sınırlama yok
 
     const key = `ratelimit:${keyPrefix}:${identity}`;
+    const effectiveLimit = typeof limit === "function" ? await limit(c) : limit;
 
     let count: number;
     let ttlSeconds: number;
@@ -96,9 +97,9 @@ export function createRateLimiter(options: CreateRateLimiterOptions): Middleware
       return next();
     }
 
-    setRateLimitHeaders(c, limit, Math.max(0, limit - count), ttlSeconds);
+    setRateLimitHeaders(c, effectiveLimit, Math.max(0, effectiveLimit - count), ttlSeconds);
 
-    if (count > limit) {
+    if (count > effectiveLimit) {
       c.header("Retry-After", String(ttlSeconds));
       // Zarfı/dili burada KURMUYORUZ: fırlatırız, app.onError tek noktadan 429 +
       // i18n + requestId'ye çevirir (authMiddleware'in UnauthorizedError deseni).

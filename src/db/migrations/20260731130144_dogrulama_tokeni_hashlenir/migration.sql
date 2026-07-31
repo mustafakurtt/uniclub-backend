@@ -1,5 +1,5 @@
 -- Doğrulama token'ı artık düz değil, SHA-256 özeti olarak saklanır
--- (bkz. core/auth/token.ts, docs/SEMA_VE_URUN_YOL_HARITASI.md §0.8).
+-- (bkz. core/auth/token.ts, docs/planning/schema-product.md §0.8).
 --
 -- Bir önceki migration düz `token` kolonunu düşürdü; kalan satırların özeti
 -- geriye dönük ÜRETİLEMEZ (hash tek yönlüdür) ve token'ları zaten kayıp
