@@ -19,11 +19,9 @@ Uygulandı: min 32 karakter, placeholder reddi, prod örnek yasak (`config/jwt-s
 
 ### 1.3 Token iptali (revocation)
 
-Logout gerçek logout değil; şifre değişimi diğer oturumları öldürmez.
+Tasarım notu: [session-revocation-and-password-reset.md](session-revocation-and-password-reset.md) (onay bekliyor).
 
-**Yapılacak:** session epoch (`tokenVersion` claim + authz cache karşılaştırması). Tercih edilen yol.
-
-Hesap askıya alma çalışıyor (`attachAuthz` + authz cache `status`).
+**Özet:** `users.token_version` + JWT claim; karşılaştırma `enforceAuthzPolicy` içinde authz snapshot'tan — blocklist yok, ek Redis okuması yok.
 
 ---
 

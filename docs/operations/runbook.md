@@ -79,6 +79,38 @@ crash it. Split destructive changes across two releases:
 The same applies to renames: add the new column, backfill, switch the code, then
 drop the old one.
 
+### Migration açığı (schema drift)
+
+**Belirti:** Uygulama açılışta sorunsuz görünür; `/health` yeşil; ilk gerçek iş isteği
+500 döner. Sunucu logunda ham `DrizzleQueryError` — örneğin `column ... does not exist`
+veya `relation ... does not exist`. İstemci: *"Sunucu tarafında beklenmeyen bir hata
+oluştu."*
+
+**Teşhis:** Kodda yeni migration var ama veritabanına uygulanmamış. Açılışta
+[`src/db/migration-check.ts`](../../src/db/migration-check.ts) yerel
+`src/db/migrations/` ile `drizzle.__drizzle_migrations` karşılaştırır:
+- `NODE_ENV=production` → eksik migration varsa süreç **başlamaz** (eksik adlar logda).
+- Diğer ortamlar → belirgin uyarı loglanır, dev akışı devam eder.
+
+Veritabanına bağlanılamazsa kontrol sessiz atlanır (mevcut açılış davranışı).
+
+Manuel kontrol:
+
+```sh
+bunx drizzle-kit migrate   # bekleyen migration'ları listeler / uygular
+```
+
+**Çözüm:**
+
+```sh
+bun run db:migrate
+```
+
+Yerelde `bun run dev` öncesinde veya `git pull` sonrası migration'ları uygulamayı
+unutmayın. Production'da migration'lar deploy pipeline'ının migrator imajıyla
+(`Dockerfile` migrator stage) uygulama başlamadan önce koşar; uygulama imajı ikinci
+kez kontrol eder — migrator atlanmışsa prod açılışı fail eder.
+
 ### Ordering vs. deploy
 
 Migrations run **before** the new code starts. Because they are backward

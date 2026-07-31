@@ -41,6 +41,7 @@ import { logger } from "./shared/logger/logger";
 import { metrics } from "./shared/metrics/metrics";
 import { createShutdownManager } from "./core/http/shutdown";
 import { createHealth } from "./core/http/health";
+import { ensureMigrationsAtStartup } from "./db/migration-check";
 
 const log = logger.child({ module: "bootstrap" });
 
@@ -189,6 +190,12 @@ app.route("/api/platform", platformRoutes);
 // bu yüzden Bun.serve/sinyal dinleyicileri kurulmaz — port açılmaz, testler
 // tüm middleware zincirini `app.request()` ile portsuz koşturur.
 if (import.meta.main) {
+  await ensureMigrationsAtStartup({
+    nodeEnv: env.NODE_ENV,
+    databaseUrl: env.DATABASE_URL,
+    logger: log,
+  });
+
   const server = Bun.serve({
     port: env.PORT,
     fetch: app.fetch,
