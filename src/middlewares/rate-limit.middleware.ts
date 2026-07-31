@@ -4,6 +4,8 @@ import { createRateLimiter, RedisRateLimitStore, type RateLimitStore } from "../
 import { env } from "../config/env";
 import { redis } from "../shared/redis/redis.client";
 import { logger } from "../shared/logger/logger";
+import { getTenantSettings } from "../features/tenant-settings/tenant-settings.cache";
+import { TenantSettingKey, TENANT_SETTING_CATALOG } from "../features/tenant-settings/tenant-settings.catalog";
 
 /**
  * Bu projenin hız sınırı KURULUMU — taşınabilir `core/ratelimit` fabrikasının
@@ -37,7 +39,7 @@ const store: RateLimitStore = new RedisRateLimitStore(redis);
  */
 const limiter = (options: {
   keyPrefix: string;
-  limit: number;
+  limit: number | ((c: Context) => number | Promise<number>);
   windowSeconds: number;
   keyFn: (c: Context) => string | null | Promise<string | null>;
 }) =>
@@ -207,7 +209,14 @@ export const resetPasswordIpLimit = limiter({
  */
 export const universityAnnouncementPublishLimit = limiter({
   keyPrefix: "uni-announcement-publish",
-  limit: 5,
+  limit: async (c) => {
+    const universityId = c.req.param("universityId");
+    if (!universityId) {
+      return TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR].defaultValue;
+    }
+    const settings = await getTenantSettings(universityId);
+    return settings.universityAnnouncementPublishPerHour;
+  },
   windowSeconds: 60 * 60,
   keyFn: (c) => {
     const universityId = c.req.param("universityId");

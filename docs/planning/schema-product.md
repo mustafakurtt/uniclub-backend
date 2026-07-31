@@ -34,8 +34,8 @@ Entegrasyon: [integration/activities.md](../integration/activities.md).
 ### 2.1 Tenant yaşam döngüsü ve yapılandırma
 
 - `universities.status` (`trial` / `active` / `past_due` / `suspended`) — uygulandı; askı ve soft-delete authz cache + login/register'da zorlanır
-- `tenant_settings` — kulüp kurma kuralları, feature flag, limitler (bugün koda gömülü)
-- `timezone`, `defaultLocale`, branding alanları — henüz yok
+- `tenant_settings` — **kapandı (C1):** sabitleme kotası + okul geneli duyuru hızı; seyrek model + cache. Bkz. [tenant-settings-cache.md](../architecture/tenant-settings-cache.md), [integration/tenant-settings.md](../integration/tenant-settings.md)
+- `timezone`, `defaultLocale`, branding alanları — henüz yok (C2)
 
 ### 2.2 Plan / abonelik / kota
 
@@ -45,7 +45,7 @@ Entegrasyon: [integration/activities.md](../integration/activities.md).
 
 Runbook: [operations/tenant-onboarding.md](../operations/tenant-onboarding.md).
 
-**Kalan:** tek çağrıda tenant açan endpoint uygulandı (`POST /api/platform/tenants/onboard`); `tenant_settings` ve branding alanları bekliyor.
+**Kalan:** tek çağrıda tenant açan endpoint uygulandı (`POST /api/platform/tenants/onboard`); branding alanları bekliyor (C2).
 
 ### 2.4 Self-servis şifre sıfırlama
 

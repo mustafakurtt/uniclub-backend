@@ -10,3 +10,4 @@ export * from "./audit";
 export * from "./activities";
 export * from "./media";
 export * from "./invitations";
+export * from "./tenant-settings";

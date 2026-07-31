@@ -20,6 +20,10 @@ import { activitiesMessages, type ActivitiesMessageKey } from "../../features/ac
 import { dashboardMessages, type DashboardMessageKey } from "../../features/dashboard/dashboard.messages";
 import { mediaMessages, type MediaMessageKey } from "../../features/media/media.messages";
 import { platformMessages, type PlatformMessageKey } from "../../features/platform/platform.messages";
+import {
+  tenantSettingsMessages,
+  type TenantSettingsMessageKey,
+} from "../../features/tenant-settings/tenant-settings.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -43,7 +47,8 @@ export const messages = mergeCatalogs(
   activitiesMessages,
   dashboardMessages,
   mediaMessages,
-  platformMessages
+  platformMessages,
+  tenantSettingsMessages
 );
 
 /**
@@ -67,4 +72,5 @@ export type MessageKey =
   | ActivitiesMessageKey
   | DashboardMessageKey
   | MediaMessageKey
-  | PlatformMessageKey;
+  | PlatformMessageKey
+  | TenantSettingsMessageKey;

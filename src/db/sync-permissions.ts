@@ -10,6 +10,7 @@ import { ANNOUNCEMENT_PERMISSION_CATALOG } from "../features/announcements/annou
 import { GALLERY_PERMISSION_CATALOG } from "../features/gallery/gallery.permissions";
 import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/audit.permissions";
 import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
+import { TENANT_SETTINGS_PERMISSION_CATALOG } from "../features/tenant-settings/tenant-settings.permissions";
 
 /**
  * Yetki kataloğu senkronizasyonu — VERİYİ SIFIRLAMADAN çalışır (db:reset'in aksine).
@@ -42,6 +43,7 @@ const PERMISSION_CATALOG: { key: string; description: string }[] = [
   ...GALLERY_PERMISSION_CATALOG,
   ...AUDIT_PERMISSION_CATALOG,
   ...PLATFORM_PERMISSION_CATALOG,
+  ...TENANT_SETTINGS_PERMISSION_CATALOG,
   { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
   { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
 ];

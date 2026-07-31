@@ -12,12 +12,8 @@ import { announcementsCache, announcementEffects } from "./announcements.cache";
 import { dispatchNotificationFanout } from "../notifications/notifications.fanout";
 import { NotificationType } from "../notifications/notifications.types";
 import { resolveAuthz } from "../../shared/rbac/rbac.cache";
+import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
 import type { Announcement } from "./announcements.types";
-
-/** Kulüp başına sabitlenen duyuru üst sınırı — vitrin alanını korur. */
-export const MAX_PINNED_ANNOUNCEMENTS_PER_CLUB = 3;
-/** Okul geneli sabitleme üst sınırı — kulüp kotasından bağımsız. */
-export const MAX_PINNED_UNIVERSITY_ANNOUNCEMENTS = 3;
 
 type AnnouncementRow = Awaited<ReturnType<typeof announcementsRepository.findByClubForStaff>>[number];
 type UniversityAnnouncementRow = Awaited<
@@ -68,7 +64,7 @@ export const announcementsService = {
 
   async create(universityId: string, clubId: string, authorId: string, data: CreateAnnouncementDTO) {
     if (data.pinned) {
-      await assertPinnedCapacity(clubId);
+      await assertPinnedCapacity(universityId, clubId);
     }
 
     const announcement = await announcementsRepository.add(universityId, clubId, authorId, {
@@ -166,7 +162,7 @@ export const announcementsService = {
     }
 
     if (data.pinned === true && !existing.pinned) {
-      await assertPinnedCapacity(clubId);
+      await assertPinnedCapacity(existing.universityId, clubId);
     }
 
     const [updated] = await announcementsRepository.updateInClub(clubId, announcementId, data);
@@ -244,16 +240,18 @@ function filterForViewer(
   );
 }
 
-async function assertPinnedCapacity(clubId: string) {
+async function assertPinnedCapacity(universityId: string, clubId: string) {
+  const settings = await getTenantSettings(universityId);
   const pinnedCount = await announcementsRepository.countPinnedInClub(clubId);
-  if (pinnedCount >= MAX_PINNED_ANNOUNCEMENTS_PER_CLUB) {
+  if (pinnedCount >= settings.clubPinnedAnnouncementsMax) {
     throw badRequest("announcement.pinnedLimit");
   }
 }
 
 async function assertUniversityPinnedCapacity(universityId: string) {
+  const settings = await getTenantSettings(universityId);
   const pinnedCount = await announcementsRepository.countPinnedInUniversity(universityId);
-  if (pinnedCount >= MAX_PINNED_UNIVERSITY_ANNOUNCEMENTS) {
+  if (pinnedCount >= settings.universityPinnedAnnouncementsMax) {
     throw badRequest("announcement.universityPinnedLimit");
   }
 }

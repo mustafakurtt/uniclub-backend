@@ -272,6 +272,13 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sabitleme güncelle |
 | DELETE | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sil |
 
+**Tenant ayarları** (`university.settings.manage`, tenantScoped):
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| GET | `/api/universities/:universityId/settings` | `university.settings.manage` | Çözümlenmiş ayarlar + katalog metadata |
+| PATCH | `/api/universities/:universityId/settings` | `university.settings.manage` | Kısmi güncelleme; `null` = varsayılana dönüş |
+
 **Bölümler** (her zaman `facultyId` üzerinden — `departments` tablosu `universityId` taşımaz)
 
 | Method | Path | Yetki | Açıklama |
