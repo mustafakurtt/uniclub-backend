@@ -284,6 +284,14 @@ function assertInvitationAcceptable(invitation: {
   }
 }
 
+/** Kayıt ve davet kabulü aynı tenant yaşam döngüsü kuralını paylaşır. */
+async function assertTenantAcceptsNewUsers(universityId: string) {
+  const university = await universityRepository.findByIdSummary(universityId);
+  if (!university || university.status === "suspended") {
+    throw badRequest("auth.tenantRegistrationDisabled");
+  }
+}
+
 /**
  * "admin" ve "super_admin" ataması/kaldırılması aynı mekanikte çalışır
  * (global rol, userRoles üzerinden atanır, cache invalidate edilir) —
@@ -645,6 +653,7 @@ export const authService = {
     }
 
     assertInvitationAcceptable(invitation);
+    await assertTenantAcceptsNewUsers(invitation.universityId);
 
     if (!namesMatchInvitation(invitation, data.firstName, data.lastName)) {
       throw badRequest("auth.invitationNameMismatch");
@@ -658,7 +667,12 @@ export const authService = {
         throw badRequest("auth.emailAlreadyInUse");
       }
 
-      const created = await authRepository.provisionUserWithRoleInTx(
+      const marked = await tenantAdminInvitationsRepository.markAcceptedInTx(tx, invitation.id);
+      if (!marked) {
+        throw badRequest("auth.invitationAlreadyUsed");
+      }
+
+      return await authRepository.provisionUserWithRoleInTx(
         tx,
         {
           universityId: invitation.universityId,
@@ -672,9 +686,6 @@ export const authService = {
         },
         invitation.roleName
       );
-
-      await tenantAdminInvitationsRepository.markAcceptedInTx(tx, invitation.id);
-      return created;
     });
 
     await invalidateUserPermissions(user.id);

@@ -31,26 +31,31 @@ Public kabul uçunda kimlik yok — IP başına kaba tavan rate limit uygulanır
 
 ## `GET /api/platform/tenants`
 
-Tenant listesi + özet istatistikler. Yetki: `platform.tenant.view`.
+Tenant listesi + özet istatistikler. Yetki: `platform.tenant.view`. Keyset sayfalama.
+
+Query: `limit` (varsayılan 50, max 100), `cursor` (ISO 8601 `createdAt`), opsiyonel `search`.
 
 ```jsonc
 {
   "success": true,
   "message": "Tenant listesi listelendi.",
-  "data": [
-    {
-      "id": "...",
-      "name": "Antalya Bilim Üniversitesi",
-      "slug": "antalya-bilim",
-      "status": "active",
-      "createdAt": "...",
-      "updatedAt": "...",
-      "domainCount": 2,
-      "userCount": 18,
-      "clubCount": 6,
-      "pendingApplications": 1
-    }
-  ]
+  "data": {
+    "items": [
+      {
+        "id": "...",
+        "name": "Antalya Bilim Üniversitesi",
+        "slug": "antalya-bilim",
+        "status": "active",
+        "createdAt": "...",
+        "updatedAt": "...",
+        "domainCount": 2,
+        "userCount": 18,
+        "clubCount": 6,
+        "pendingApplications": 1
+      }
+    ],
+    "nextCursor": "2026-07-31T12:00:00.000Z" // veya null (son sayfa)
+  }
 }
 ```
 

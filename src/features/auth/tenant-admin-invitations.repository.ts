@@ -80,11 +80,19 @@ export const tenantAdminInvitationsRepository = {
     });
   },
 
-  async markAcceptedInTx(tx: DbExecutor, invitationId: string) {
-    await tx
+  async markAcceptedInTx(tx: DbExecutor, invitationId: string): Promise<boolean> {
+    const rows = await tx
       .update(schema.tenantAdminInvitations)
       .set({ acceptedAt: new Date() })
-      .where(eq(schema.tenantAdminInvitations.id, invitationId));
+      .where(
+        and(
+          eq(schema.tenantAdminInvitations.id, invitationId),
+          isNull(schema.tenantAdminInvitations.acceptedAt),
+          isNull(schema.tenantAdminInvitations.cancelledAt)
+        )
+      )
+      .returning({ id: schema.tenantAdminInvitations.id });
+    return rows.length > 0;
   },
 
   async markCancelled(invitationId: string) {

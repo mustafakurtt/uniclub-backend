@@ -10,6 +10,7 @@ export const tenantsMessages = defineCatalog({
     "platform.adminEmailAlreadyInUse": "Bu e-posta adresi tenant'ta zaten kayıtlı.",
     "platform.tenantStaffDomainRequired": "İlk yönetici için en az bir staff domain tanımlanmalı.",
     "platform.invitePermissionRequired": "İlk yönetici daveti için platform.tenant.invite yetkisi gerekir.",
+    "platform.invalidTenantListCursor": "Geçersiz tenant listesi cursor değeri.",
     // başarı
     "platform.tenantsListed": "Tenant listesi listelendi.",
     "platform.tenantStatusUpdated": "Tenant durumu güncellendi.",
@@ -27,6 +28,7 @@ export const tenantsMessages = defineCatalog({
     "platform.adminEmailAlreadyInUse": "This email address is already registered in the tenant.",
     "platform.tenantStaffDomainRequired": "At least one staff domain is required to provision the first admin.",
     "platform.invitePermissionRequired": "platform.tenant.invite permission is required to invite the initial administrator.",
+    "platform.invalidTenantListCursor": "Invalid tenant list cursor value.",
     // success
     "platform.tenantsListed": "Tenant list retrieved.",
     "platform.tenantStatusUpdated": "Tenant status updated.",

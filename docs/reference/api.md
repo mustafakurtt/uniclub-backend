@@ -411,7 +411,7 @@ Ayrıntı: `docs/integration/platform-panel.md`.
 
 | Method | Path | Permission | Açıklama |
 |---|---|---|---|
-| GET | `/api/platform/tenants` | `platform.tenant.view` | Tenant listesi + özet istatistikler |
+| GET | `/api/platform/tenants` | `platform.tenant.view` | Tenant listesi + özet istatistikler (keyset: `limit`, `cursor`, ops. `search`) → `{ items, nextCursor }` |
 | POST | `/api/platform/tenants/onboard` | `university.create` (+ `platform.tenant.invite` if `initialAdmin`) | Atomik tenant açma + opsiyonel ilk yönetici **daveti** (şifre yok) |
 | GET | `/api/platform/tenants/:universityId/invitations` | `platform.tenant.invite` | Bekleyen tenant yönetici davetleri |
 | POST | `/api/platform/tenants/:universityId/invite-admin` | `platform.tenant.invite` | Tenant yöneticisi daveti (şifre yok; mail commit sonrası) |

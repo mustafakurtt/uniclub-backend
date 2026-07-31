@@ -111,8 +111,8 @@ authRoutes.post(
 );
 
 // 3C. TENANT YÖNETİCİSİ DAVET KABUL (public — kimlik yok)
-// Token 128 bit entropi (UUID); DB'de SHA-256 özeti. Geçersiz/süresi dolmuş/kullanılmış
-// tüm durumlar aynı genel hata mesajıyla reddedilir (enumeration önleme).
+// Token 128 bit entropi (UUID); DB'de SHA-256 özeti — enumeration pratikte anlamsız,
+// bu yüzden süre/kullanım/iptal için ayrı mesajlar güvenlidir.
 // Kimlik tabanlı rate limit uygulanamaz; IP başına kaba tavan (registerLimit ile aynı ilke).
 authRoutes.post(
   "/accept-tenant-admin-invitation",

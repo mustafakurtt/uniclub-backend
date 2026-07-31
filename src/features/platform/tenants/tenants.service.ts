@@ -1,5 +1,10 @@
 import { db } from "../../../db";
-import { OnboardTenantDTO, InviteTenantAdminDTO, UpdateTenantStatusDTO } from "./tenants.schema";
+import {
+  OnboardTenantDTO,
+  InviteTenantAdminDTO,
+  UpdateTenantStatusDTO,
+  ListTenantsQuery,
+} from "./tenants.schema";
 import type { OnboardTenantResult, TenantListItem, UniversityStatus } from "./tenants.types";
 import { notFound, badRequest } from "../../../shared/utils/errors";
 import { invalidateUsersPermissions } from "../../../shared/rbac/rbac.cache";
@@ -11,8 +16,17 @@ import { tenantsRepository } from "./tenants.repository";
 const UNIVERSITY_ADMIN_ROLE = "university_admin";
 
 export const tenantsService = {
-  async listTenants(): Promise<TenantListItem[]> {
-    const tenants = await universityService.listUniversities();
+  async listTenants(query: ListTenantsQuery): Promise<{ items: TenantListItem[]; nextCursor: string | null }> {
+    const cursorDate = query.cursor ? new Date(query.cursor) : undefined;
+    if (cursorDate && Number.isNaN(cursorDate.getTime())) {
+      throw badRequest("platform.invalidTenantListCursor");
+    }
+
+    const tenants = await universityService.listUniversitiesPaginated(
+      query.limit,
+      cursorDate,
+      query.search
+    );
     const ids = tenants.map((t) => t.id);
     const [domainCounts, userCounts, clubCounts, pendingApplications] = await Promise.all([
       tenantsRepository.countDomainsByUniversityIds(ids),
@@ -21,13 +35,18 @@ export const tenantsService = {
       tenantsRepository.countPendingApplicationsByUniversityIds(ids),
     ]);
 
-    return tenants.map((tenant) => ({
+    const items = tenants.map((tenant) => ({
       ...tenant,
       domainCount: domainCounts.get(tenant.id) ?? 0,
       userCount: userCounts.get(tenant.id) ?? 0,
       clubCount: clubCounts.get(tenant.id) ?? 0,
       pendingApplications: pendingApplications.get(tenant.id) ?? 0,
     }));
+
+    const nextCursor =
+      items.length === query.limit ? items[items.length - 1].createdAt.toISOString() : null;
+
+    return { items, nextCursor };
   },
 
   async updateTenantStatus(universityId: string, data: UpdateTenantStatusDTO, actorUserId: string) {

@@ -8,7 +8,7 @@ import { forbidden } from "../../../shared/utils/errors";
 import { UniversityPermission } from "../../university/university.permissions";
 import { universityEffects } from "../../university/university.cache";
 import { PlatformPermission } from "../platform.permissions";
-import { onboardTenantSchema, inviteTenantAdminSchema, updateTenantStatusSchema } from "./tenants.schema";
+import { onboardTenantSchema, inviteTenantAdminSchema, updateTenantStatusSchema, listTenantsQuerySchema } from "./tenants.schema";
 import { tenantsService } from "./tenants.service";
 
 export const tenantsRoutes = new Hono<{ Variables: RbacVariables }>();
@@ -20,9 +20,11 @@ export const tenantsRoutes = new Hono<{ Variables: RbacVariables }>();
 tenantsRoutes.get(
   "/tenants",
   ...guard(PlatformPermission.TENANT_VIEW),
+  validate("query", listTenantsQuerySchema),
   async (c) => {
-    const tenants = await tenantsService.listTenants();
-    return ok(c, tenants, "platform.tenantsListed");
+    const query = c.req.valid("query");
+    const result = await tenantsService.listTenants(query);
+    return ok(c, result, "platform.tenantsListed");
   }
 );
 

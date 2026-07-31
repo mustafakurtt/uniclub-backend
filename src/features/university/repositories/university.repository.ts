@@ -52,6 +52,33 @@ class UniversityRepository extends BaseRepository<typeof universities, typeof db
     });
   }
 
+  /** Operatör tenant listesi — keyset sayfalama (createdAt azalan). */
+  listOperatorPage(limit: number, cursor?: Date, search?: string) {
+    const where: Record<string, unknown> = { deletedAt: { isNull: true } };
+    if (search) {
+      where.name = { ilike: `%${search}%` };
+    }
+    if (cursor) {
+      where.createdAt = { lt: cursor };
+    }
+    return this.query!.findMany({
+      where,
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+        status: true,
+        statusReason: true,
+        statusChangedAt: true,
+        statusChangedBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      limit,
+    });
+  }
+
   findByIdSummary(id: string) {
     return this.query!.findFirst({
       where: { id, deletedAt: { isNull: true } },

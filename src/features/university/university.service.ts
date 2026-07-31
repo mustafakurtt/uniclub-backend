@@ -42,6 +42,11 @@ export const universityService = {
     return await universityCache.list().read(() => universityRepository.list());
   },
 
+  /** Operatör tenant listesi — keyset sayfalama; cache'lenmez (cursor anahtarları çok). */
+  async listUniversitiesPaginated(limit: number, cursor?: Date, search?: string) {
+    return await universityRepository.listOperatorPage(limit, cursor, search);
+  },
+
   async getUniversity(universityId: string) {
     // Repo undefined dönerse cache'lenmez (getOrSet null/undefined'ı yazmaz);
     // notFound guard'ı her çağrıda çalışır.

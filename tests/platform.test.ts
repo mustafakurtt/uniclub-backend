@@ -56,19 +56,22 @@ describe("platform operasyonları (/api/platform)", () => {
     const res = await get("/api/platform/tenants", superAdmin);
     expect(res.status).toBe(200);
 
-    const tenants = await data<Array<{
-      id: string;
-      name: string;
-      slug: string;
-      status: string;
-      domainCount: number;
-      userCount: number;
-      clubCount: number;
-      pendingApplications: number;
-    }>>(res);
+    const page = await data<{
+      items: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        status: string;
+        domainCount: number;
+        userCount: number;
+        clubCount: number;
+        pendingApplications: number;
+      }>;
+      nextCursor: string | null;
+    }>(res);
 
-    expect(tenants.length).toBeGreaterThanOrEqual(3);
-    const antalya = tenants.find((t) => t.slug === "antalya-bilim");
+    expect(page.items.length).toBeGreaterThanOrEqual(3);
+    const antalya = page.items.find((t) => t.slug === "antalya-bilim");
     expect(antalya).toBeDefined();
     expect(antalya!.status).toBe("active");
     expect(antalya!.userCount).toBeGreaterThan(0);
@@ -539,5 +542,66 @@ describe("tenant yönetici davet kabulü", () => {
       password: "short1ab",
     });
     expect(res.status).toBe(400);
+  });
+
+  it("aynı token ile eşzamanlı iki kabul — biri 201 diğeri 400", async () => {
+    const email = `concurrent.${Date.now()}@antalya.edu.tr`;
+    await reqAuth("POST", `/api/platform/tenants/${antalyaUni}/invite-admin`, superAdmin, {
+      firstName: "Concurrent",
+      lastName: "Test",
+      email,
+    });
+    const token = await getInvitationTokenForEmail(email);
+    const body = JSON.stringify({
+      token,
+      firstName: "Concurrent",
+      lastName: "Test",
+      password: "ConcurrentAdm12!",
+    });
+    const opts = {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    };
+    const [first, second] = await Promise.all([
+      app.request("/api/auth/accept-tenant-admin-invitation", opts),
+      app.request("/api/auth/accept-tenant-admin-invitation", opts),
+    ]);
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([201, 400]);
+    if (second.status === 400) {
+      expect((await second.json()).message).toContain("kullanılmış");
+    } else {
+      expect((await first.json()).message).toContain("kullanılmış");
+    }
+  });
+
+  it("askıya alınmış tenant için bekleyen davet kabul edilemez", async () => {
+    const email = `suspended.invite.${Date.now()}@antalya.edu.tr`;
+    await reqAuth("POST", `/api/platform/tenants/${antalyaUni}/invite-admin`, superAdmin, {
+      firstName: "Suspended",
+      lastName: "Invite",
+      email,
+    });
+    const token = await getInvitationTokenForEmail(email);
+
+    await reqAuth("PATCH", `/api/platform/tenants/${antalyaUni}/status`, superAdmin, {
+      status: "suspended",
+      reason: "Davet kabul testi askısı",
+    });
+
+    const res = await acceptTenantAdminInvitation({
+      token,
+      firstName: "Suspended",
+      lastName: "Invite",
+      password: "SuspendedAdm12!",
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).message).toContain("kayıt");
+
+    await reqAuth("PATCH", `/api/platform/tenants/${antalyaUni}/status`, superAdmin, {
+      status: "active",
+      reason: "Davet kabul testi temizliği",
+    });
   });
 });
