@@ -31,8 +31,9 @@ import { resolveAuthz } from "./shared/rbac/rbac.cache";
 import { enforceAuthzPolicy } from "./shared/rbac/authz-policy";
 import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim şekli)
 import "./shared/rbac/authz"; // AuthzContext declaration merging (proje authz alanları)
-import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
-import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
+import { createAppLocaleMiddleware } from "./middlewares/app-locale.middleware";
+import { optionalAuthMiddleware } from "./middlewares/optional-auth.middleware";
+import type { LocaleVariables } from "./core/i18n/locale";
 import { verifyMailConnection, mailer } from "./shared/mail/mailer";
 import { redisSubscriber } from "./shared/redis/redis.subscriber";
 import { closeEmailQueue } from "./features/auth/auth.queue";
@@ -83,9 +84,9 @@ const globalBodyLimit = bodyLimit({
 app.use("*", (c, next) =>
   c.req.path.startsWith("/api/uploads") ? next() : globalBodyLimit(c, next)
 );
-// Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
-// bu dile çevirir (bkz. core/i18n).
-app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
+// Dil: isteğe bağlı auth → kullanıcı tercihi → Accept-Language → tenant varsayılanı → tr.
+app.use("*", optionalAuthMiddleware);
+app.use("*", createAppLocaleMiddleware());
 app.use("*", requestLogger);
 // CORS: allowlist env'den (CORS_ORIGINS). Verilmezse tüm origin'lere açık (`*`) —
 // dev için; PROD'da CORS_ORIGINS doldurulmalı. Kimlik Authorization'da, cookie yok.

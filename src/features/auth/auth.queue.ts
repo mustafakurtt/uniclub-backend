@@ -26,18 +26,21 @@ export interface VerificationEmailJob {
   email: string;
   firstName: string;
   token: string;
+  locale?: string;
 }
 
 export interface TenantAdminInvitationEmailJob {
   email: string;
   firstName: string;
   token: string;
+  locale?: string;
 }
 
 export interface PasswordResetEmailJob {
   email: string;
   firstName: string;
   token: string;
+  locale?: string;
 }
 
 export const emailQueue = new Queue<
@@ -61,8 +64,8 @@ const emailWorker = new Worker<
   "email-verification-queue",
   async (job) => {
     if (job.name === "send-verify-email") {
-      const { email, firstName, token } = job.data as VerificationEmailJob;
-      const { subject, html, text } = buildVerificationEmail({ firstName, token });
+      const { email, firstName, token, locale } = job.data as VerificationEmailJob;
+      const { subject, html, text } = buildVerificationEmail({ firstName, token, locale });
       const info = await sendMail({ to: email, subject, html, text });
       log.info({ email, firstName, messageId: info.messageId }, "✅ doğrulama maili gönderildi");
       log.debug({ link: buildVerifyLink(token), inbox: "http://localhost:8025" }, "doğrulama linki (Mailpit)");
@@ -70,8 +73,8 @@ const emailWorker = new Worker<
     }
 
     if (job.name === "send-tenant-admin-invitation") {
-      const { email, firstName, token } = job.data as TenantAdminInvitationEmailJob;
-      const { subject, html, text } = buildTenantAdminInvitationEmail({ firstName, token });
+      const { email, firstName, token, locale } = job.data as TenantAdminInvitationEmailJob;
+      const { subject, html, text } = buildTenantAdminInvitationEmail({ firstName, token, locale });
       const info = await sendMail({ to: email, subject, html, text });
       log.info({ email, firstName, messageId: info.messageId }, "✅ tenant admin davet maili gönderildi");
       log.debug(
@@ -82,8 +85,8 @@ const emailWorker = new Worker<
     }
 
     if (job.name === "send-password-reset") {
-      const { email, firstName, token } = job.data as PasswordResetEmailJob;
-      const { subject, html, text } = buildPasswordResetEmail({ firstName, token });
+      const { email, firstName, token, locale } = job.data as PasswordResetEmailJob;
+      const { subject, html, text } = buildPasswordResetEmail({ firstName, token, locale });
       const info = await sendMail({ to: email, subject, html, text });
       log.info({ email, firstName, messageId: info.messageId }, "✅ şifre sıfırlama maili gönderildi");
       log.debug({ link: buildPasswordResetLink(token), inbox: "http://localhost:8025" }, "sıfırlama linki (Mailpit)");

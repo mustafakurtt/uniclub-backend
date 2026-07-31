@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { SUPPORTED_LOCALES } from "../../shared/i18n/translator";
+import { isValidIanaTimezone } from "../../shared/utils/timezone";
 
 /**
  * E-posta domain'i — HER ZAMAN küçük harfe indirgenir. Kayıt akışı tenant'ı
@@ -26,12 +28,32 @@ export const createUniversitySchema = z.object({
 });
 export type CreateUniversityDTO = z.infer<typeof createUniversitySchema>;
 
-export const updateUniversitySchema = z.object({
-  name: z.string().min(2).max(256).optional(),
-  slug: z.string().min(2).max(256).optional(),
-}).refine((data) => Object.keys(data).length > 0, {
-  message: "Güncellenecek en az bir alan girilmelidir.",
-});
+const localeField = z.enum(SUPPORTED_LOCALES);
+const nullableUrl = z.string().url().max(2048).nullable().optional();
+const nullableHexColor = z
+  .string()
+  .regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Renk #RGB veya #RRGGBB biçiminde olmalıdır.")
+  .nullable()
+  .optional();
+
+const timezoneField = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine(isValidIanaTimezone, { message: "Geçerli bir IANA saat dilimi giriniz." });
+
+export const updateUniversitySchema = z
+  .object({
+    name: z.string().min(2).max(256).optional(),
+    slug: z.string().min(2).max(256).optional(),
+    timezone: timezoneField.optional(),
+    defaultLocale: localeField.optional(),
+    logoUrl: nullableUrl,
+    primaryColor: nullableHexColor,
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Güncellenecek en az bir alan girilmelidir.",
+  });
 export type UpdateUniversityDTO = z.infer<typeof updateUniversitySchema>;
 
 // ═══════════════════════════════════════════════

@@ -13,6 +13,7 @@ sürüm numaraları [Semantic Versioning](https://semver.org/) ile uyumludur.
 - **Duyuru yaşam döngüsü** (draft/published, pinned, visibility) ve **okul geneli duyuru** (`/api/universities/:universityId/announcements`).
 - **Bildirim tercihleri** (tip/kulüp bazlı susturma), toplu fan-out ve kuyruk eşiği (500+ alıcı).
 - **`tenant_settings`:** tenant başına yapılandırılabilir kurallar (sabitleme kotası, okul geneli duyuru hızı) — `GET/PATCH /api/universities/:universityId/settings`.
+- **Tenant profili (C2):** `timezone`, `defaultLocale`, `logoUrl`, `primaryColor` — `PATCH /api/universities/:universityId`.
 - **Core:** taşınabilir hız sınırı fabrikası (`core/ratelimit`), sağlık/hazırlık mekanizması geliştirmeleri.
 - **Operasyon:** açılışta migration açığı kontrolü.
 
@@ -23,6 +24,7 @@ sürüm numaraları [Semantic Versioning](https://semver.org/) ile uyumludur.
 - **`GET /api/platform/tenants`** yanıtı `{ items, nextCursor }` sayfalama zarfına geçti (düz dizi değil).
 - Etkinlik şeması: FK `onDelete` politikaları; kulüp silme varsayımı hizalaması (`announcements` → clubs RESTRICT).
 - Tenant `status` cache ayrı anahtara taşındı (`rbac:tenant-status`).
+- API mesaj dili: kullanıcı tercihi → `Accept-Language` → tenant `defaultLocale` → `tr`; mail/kuyruk bağlamında başlık yok.
 
 ### Fixed
 
