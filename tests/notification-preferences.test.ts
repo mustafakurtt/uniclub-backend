@@ -216,6 +216,50 @@ describe("bildirim tercihleri (notification preferences)", () => {
     });
   });
 
+  it("susturulamaz tip: kulüp geneli susturma club.membership.decided'i kesmez", async () => {
+    const beforeMembership = await countUserNotifications(senId, NotificationType.CLUB_MEMBERSHIP_DECIDED);
+    const beforeAnnouncement = await countUserNotifications(senId, NotificationType.ANNOUNCEMENT_PUBLISHED);
+
+    expect(
+      (
+        await reqAuth("PUT", "/api/users/me/notification-preferences", sen, {
+          clubId: photoClubId,
+          muted: true,
+        })
+      ).status
+    ).toBe(200);
+
+    const decideRes = await reqAuth(
+      "PATCH",
+      `/api/clubs/${photoClubId}/join-requests/${senId}`,
+      ayse,
+      { decision: "approved" }
+    );
+    expect(decideRes.status).toBe(200);
+    expect(
+      await countUserNotifications(senId, NotificationType.CLUB_MEMBERSHIP_DECIDED)
+    ).toBeGreaterThan(beforeMembership);
+
+    const title = `Opt-out tebligat ${Date.now()}`;
+    expect(
+      (
+        await reqAuth("POST", `/api/clubs/${photoClubId}/announcements`, ayse, {
+          title,
+          content: "Duyuru susturulmalı.",
+          publish: true,
+        })
+      ).status
+    ).toBe(201);
+    expect(await countUserNotifications(senId, NotificationType.ANNOUNCEMENT_PUBLISHED)).toBe(
+      beforeAnnouncement
+    );
+
+    await reqAuth("PUT", "/api/users/me/notification-preferences", sen, {
+      clubId: photoClubId,
+      muted: false,
+    });
+  });
+
   it("fan-out: susturma sorgusu alıcı sayısından bağımsız tek çağrı", async () => {
     const findMutedSpy = spyOn(mutesRepo.notificationMutesRepository, "findMutedUserIds");
     const recipients = [senId, canId, burakId];

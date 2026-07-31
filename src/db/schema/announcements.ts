@@ -1,4 +1,5 @@
 import { pgTable as table } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
 import { timestamps } from "../../core/db/base.entity";
 import { universities } from "./university";
@@ -8,7 +9,7 @@ import { compositeForeignKey } from "./helpers";
 import { activityStatusEnum, activityVisibilityEnum } from "./activities";
 
 // ═══════════════════════════════════════════════
-// ANNOUNCEMENTS (şimdilik sadece kulüp bazlı)
+// ANNOUNCEMENTS (kulüp bazlı + okul geneli)
 // ═══════════════════════════════════════════════
 // Etkinliklerle aynı PG enum'ları paylaşır (`activity_status` / `activity_visibility`).
 // İsim `activity_*` olsa da duyuru yaşam döngüsü aynı değer kümesini kullanır;
@@ -18,7 +19,8 @@ export const announcements = table("announcements", {
   universityId: t.uuid("university_id")
     .references(() => universities.id, { onDelete: "restrict" })
     .notNull(), // hızlı sorgu için denormalize
-  clubId: t.uuid("club_id").notNull(), // ileride okul geneli için nullable'a çevrilebilir
+  // NULL = okul geneli duyuru (tenant yayını). Dolu = kulüp duyurusu.
+  clubId: t.uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }),
 
   authorId: t.uuid("author_id").references(() => users.id, { onDelete: "restrict" }).notNull(),
   title: t.varchar({ length: 256 }).notNull(),
@@ -36,6 +38,9 @@ export const announcements = table("announcements", {
   // Denormalize `university_id` kulübünkiyle SAPABİLİRDİ (iki ayrı tekil FK
   // birbirini kontrol etmez). Bileşik FK ikisini birbirine kilitler; yazar
   // tarafı bilinçli olarak serbest (bkz. clubGallery'deki aynı gerekçe).
+  // Postgres MATCH SIMPLE: club_id NULL olduğunda bileşik FK uygulanmaz — tenant
+  // kilidi okul geneli satırlarda university_id → universities FK ile korunur;
+  // kulüp duyurularında (club_id dolu) kilidi aynen çalışır.
   compositeForeignKey({
     columns: [cols.clubId, cols.universityId],
     foreignColumns: [clubs.id, clubs.universityId],
@@ -48,4 +53,8 @@ export const announcements = table("announcements", {
     cols.pinned.desc(),
     cols.publishedAt.desc()
   ),
+  // Okul geneli duyuru akışı (club_id IS NULL).
+  t.index("announcements_university_published_idx")
+    .on(cols.universityId, cols.status, cols.pinned.desc(), cols.publishedAt.desc())
+    .where(sql`${cols.clubId} is null`),
 ]);

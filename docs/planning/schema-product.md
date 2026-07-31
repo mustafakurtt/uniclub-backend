@@ -61,7 +61,27 @@ Uygulandı (2026-07-31): `password_resets` tablosu + `POST /api/auth/forgot-pass
 
 ### 3.2 Duyuru yaşam döngüsü
 
-**Durum:** Uygulandı (`/api/clubs/:clubId/announcements`). `status`, `publishedAt`, `pinned`, `visibility` — etkinliklerle aynı enum'lar (`activity_status` / `activity_visibility`; duyuruda `cancelled` kullanılmaz). Mevcut satırlar migration'da `published` + `publishedAt = createdAt` backfill.
+**Durum:** Uygulandı — kulüp duyuruları (`/api/clubs/:clubId/announcements`) ve okul
+geneli duyurular (`/api/universities/:universityId/announcements`, B2). `status`,
+`publishedAt`, `pinned`, `visibility` — etkinliklerle aynı enum'lar; duyuruda
+`cancelled` kullanılmaz.
+
+**Okul geneli model:** `announcements.club_id` nullable — `NULL` = tenant yayını
+(oryantasyon, akademik takvim, SKS). Tenant kilidi: Postgres `MATCH SIMPLE` ile
+bileşik `(club_id, university_id) → clubs` FK yalnızca `club_id` dolu satırlarda
+uygulanır; okul geneli satırlarda `university_id → universities` FK tenant'ı garanti
+eder (kilit delinmedi).
+
+**Elenen alternatifler:**
+- **Polimorfik yayıncı** (`publisher_type` + `publisher_id`): bileşik FK ile tenant
+  kilidi kurulamaz; çapraz-tenant sapması riski.
+- **Üniversite başına "sistem kulübü"**: sahte kulüp üyelik/başvuru/rol sızıntısı;
+  her kulüp sorgusuna `WHERE slug != 'sistem'` filtresi.
+
+**Okul geneli fan-out guardrail (karar):** Bildirim tipi `announcement.university.published`
+— **susturulabilir** (`optOutable`). Yayınlama uçunda tenant+yayıncı başına **saatte 5**
+hız sınırı. Fan-out **500 alıcıdan büyükse** BullMQ kuyruğuna (`notification-fanout`);
+küçük tenant'ta `notifyManySafe` istek içinde senkron kalır.
 
 ### 3.3 Akademik dönem
 

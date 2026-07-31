@@ -11,6 +11,7 @@ export const announcementsMessages = defineCatalog({
     "announcement.notFound": "Duyuru bulunamadı.",
     "announcement.notDraft": "Yalnızca taslak duyurular yayınlanabilir.",
     "announcement.pinnedLimit": "Bu kulüpte en fazla 3 duyuru sabitlenebilir.",
+    "announcement.universityPinnedLimit": "Okul genelinde en fazla 3 duyuru sabitlenebilir.",
     // başarı
     "announcement.listed": "Duyurular listelendi.",
     "announcement.created": "Duyuru oluşturuldu.",
@@ -23,6 +24,7 @@ export const announcementsMessages = defineCatalog({
     "announcement.notFound": "Announcement not found.",
     "announcement.notDraft": "Only draft announcements can be published.",
     "announcement.pinnedLimit": "A club can pin at most 3 announcements.",
+    "announcement.universityPinnedLimit": "At most 3 university-wide announcements can be pinned.",
     // success
     "announcement.listed": "Announcements listed.",
     "announcement.created": "Announcement created.",

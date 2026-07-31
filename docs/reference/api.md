@@ -262,6 +262,16 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | PATCH | `/api/universities/:universityId/faculties/:facultyId` | `university.faculty.update` | Fakülte güncelle |
 | DELETE | `/api/universities/:universityId/faculties/:facultyId` | `university.faculty.delete` | Fakülte sil (**bölümü varsa reddedilir**) |
 
+**Okul geneli duyurular** (`announcement.university.manage`, tenantScoped):
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| GET | `/api/universities/:universityId/announcements` | Bearer | Tenant duyuruları (öğrenci: yalnızca yayınlanmış) |
+| POST | `/api/universities/:universityId/announcements` | `announcement.university.manage` | Oluştur / yayınla (saatte 5 hız sınırı) |
+| POST | `/api/universities/:universityId/announcements/:id/publish` | `announcement.university.manage` | Taslak yayınla |
+| PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sabitleme güncelle |
+| DELETE | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sil |
+
 **Bölümler** (her zaman `facultyId` üzerinden — `departments` tablosu `universityId` taşımaz)
 
 | Method | Path | Yetki | Açıklama |

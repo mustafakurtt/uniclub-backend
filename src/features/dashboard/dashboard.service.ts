@@ -5,8 +5,8 @@ import { FeedQueryDTO } from "./dashboard.schema";
 import { decodeFeedCursor, encodeFeedCursor, type FeedPageCursor } from "./feed-cursor";
 import type { AdminDashboard, ClubDashboard, FeedPage, StudentSummary } from "./dashboard.types";
 
-/** Feed birleşim sırası: at DESC, kind DESC (activity önce), id DESC. */
-const FEED_KIND_ORDER = { announcement: 0, activity: 1 } as const;
+/** Feed birleşim sırası: at DESC, kind DESC (activity > announcement > university_announcement), id DESC. */
+const FEED_KIND_ORDER = { university_announcement: 0, announcement: 1, activity: 2 } as const;
 
 /** Feed/özet kartlarında dönen kompakt kulüp gösterimi. */
 function compactClub(club: any) {
@@ -22,7 +22,7 @@ function stripClub<T extends { club?: unknown }>(row: T): Omit<T, "club"> {
 
 function feedSortKey(
   at: Date,
-  kind: "announcement" | "activity",
+  kind: "university_announcement" | "announcement" | "activity",
   id: string
 ): [number, number, string] {
   return [at.getTime(), FEED_KIND_ORDER[kind], id];
@@ -52,15 +52,28 @@ export const dashboardService = {
     }
 
     const clubIds = await dashboardRepository.approvedClubIds(userId);
-    if (clubIds.length === 0) return { items: [], nextCursor: null };
+    const universityId = await dashboardRepository.getUserUniversityId(userId);
+    if (clubIds.length === 0 && !universityId) return { items: [], nextCursor: null };
 
     const fetchLimit = query.limit + 1;
-    const [annPage, actPage] = await Promise.all([
+    const [annPage, uniAnnPage, actPage] = await Promise.all([
       dashboardRepository.feedAnnouncements(clubIds, cursor, fetchLimit),
-      dashboardRepository.feedActivities(clubIds, cursor, fetchLimit),
+      universityId
+        ? dashboardRepository.feedUniversityAnnouncements(universityId, cursor, fetchLimit)
+        : Promise.resolve({ rows: [], hasMore: false }),
+      clubIds.length > 0
+        ? dashboardRepository.feedActivities(clubIds, cursor, fetchLimit)
+        : Promise.resolve({ rows: [], hasMore: false }),
     ]);
 
     const merged = [
+      ...uniAnnPage.rows.map((a) => ({
+        type: "university_announcement" as const,
+        at: a.publishedAt ?? a.createdAt,
+        id: a.id,
+        club: null,
+        item: a,
+      })),
       ...annPage.rows.map((a) => ({
         type: "announcement" as const,
         at: a.publishedAt ?? a.createdAt,
@@ -84,7 +97,10 @@ export const dashboardService = {
 
     const page = merged.slice(0, query.limit);
     const hasMore =
-      merged.length > query.limit || annPage.hasMore || actPage.hasMore;
+      merged.length > query.limit ||
+      annPage.hasMore ||
+      uniAnnPage.hasMore ||
+      actPage.hasMore;
     const last = page[page.length - 1];
     const nextCursor =
       hasMore && last ? encodeFeedCursor(last.at, last.type, last.id) : null;

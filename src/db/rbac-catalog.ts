@@ -65,6 +65,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW, ClubPermission.APPROVE,
     ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE, ClubPermission.DELETE,
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
+    AnnouncementPermission.UNIVERSITY_MANAGE,
     DashboardPermission.VIEW,
     UniversityPermission.UPDATE,
     UniversityPermission.FACULTY_CREATE, UniversityPermission.FACULTY_UPDATE, UniversityPermission.FACULTY_DELETE,
@@ -79,6 +80,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     ClubPermission.VIEW, ClubPermission.APPLICATION_VIEW, ClubPermission.APPROVE,
     ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE,
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
+    AnnouncementPermission.UNIVERSITY_MANAGE,
     DashboardPermission.VIEW,
   ],
   // Öğrenci İşleri / BİDB: akademik yapı + bölüm atama.

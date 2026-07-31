@@ -17,3 +17,16 @@ export const updateAnnouncementSchema = z.object({
   visibility: visibilityEnum.optional(),
 });
 export type UpdateAnnouncementDTO = z.infer<typeof updateAnnouncementSchema>;
+
+export const createUniversityAnnouncementSchema = z.object({
+  title: z.string().min(3, "Başlık en az 3 karakter olmalıdır.").max(256),
+  content: z.string().min(1, "İçerik boş bırakılamaz.").max(5000),
+  pinned: z.boolean().default(false),
+  publish: z.boolean().default(true),
+});
+export type CreateUniversityAnnouncementDTO = z.infer<typeof createUniversityAnnouncementSchema>;
+
+export const updateUniversityAnnouncementSchema = z.object({
+  pinned: z.boolean().optional(),
+});
+export type UpdateUniversityAnnouncementDTO = z.infer<typeof updateUniversityAnnouncementSchema>;

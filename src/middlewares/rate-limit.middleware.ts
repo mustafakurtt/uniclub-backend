@@ -200,3 +200,19 @@ export const resetPasswordIpLimit = limiter({
   windowSeconds: 60,
   keyFn: (c) => clientIp(c),
 });
+
+/**
+ * Okul geneli duyuru yayınlama — tenant + yayıncı başına (saatte 5).
+ * Büyük fan-out'un kötüye kullanımını yavaşlatır.
+ */
+export const universityAnnouncementPublishLimit = limiter({
+  keyPrefix: "uni-announcement-publish",
+  limit: 5,
+  windowSeconds: 60 * 60,
+  keyFn: (c) => {
+    const universityId = c.req.param("universityId");
+    const user = c.get("user") as { userId?: string } | undefined;
+    if (!universityId || !user?.userId) return null;
+    return `${universityId}:${user.userId}`;
+  },
+});

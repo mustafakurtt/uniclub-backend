@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, desc, inArray, sql, getTableColumns, type SQL } from "drizzle-orm";
+import { and, eq, gte, lt, desc, inArray, isNotNull, isNull, sql, getTableColumns, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import {
   clubs,
@@ -12,8 +12,8 @@ import {
 } from "../../db/schema";
 import type { FeedPageCursor } from "./feed-cursor";
 
-/** Feed birleşim sırası: at DESC, kind DESC (activity=1 > announcement=0), id DESC. */
-const FEED_KIND_ORDER = { announcement: 0, activity: 1 } as const;
+/** Feed birleşim sırası: at DESC, kind DESC (activity=2 > announcement=1 > university_announcement=0), id DESC. */
+const FEED_KIND_ORDER = { university_announcement: 0, announcement: 1, activity: 2 } as const;
 
 function feedTupleBefore(
   timeCol: typeof announcements.publishedAt | typeof activities.createdAt,
@@ -25,6 +25,11 @@ function feedTupleBefore(
   const cursorKindOrd = FEED_KIND_ORDER[cursor.kind];
   if (!cursor.id) {
     return lt(timeCol, cursor.at);
+  }
+  if (cursor.kind === "university_announcement") {
+    return sql`(${timeCol}, ${rowKindOrd}, ${idCol}) < (
+      SELECT a.published_at, ${cursorKindOrd}, a.id FROM announcements a WHERE a.id = ${cursor.id} AND a.club_id IS NULL
+    )`;
   }
   if (cursor.kind === "announcement") {
     return sql`(${timeCol}, ${rowKindOrd}, ${idCol}) < (
@@ -62,8 +67,17 @@ export const dashboardRepository = {
     return rows.map((r) => r.clubId);
   },
 
+  /** Kullanıcının tenant id'si (okul geneli feed için). */
+  async getUserUniversityId(userId: string): Promise<string | null> {
+    const row = await db.query.users.findFirst({
+      where: { id: userId },
+      columns: { universityId: true },
+    });
+    return row?.universityId ?? null;
+  },
+
   // ═══════════════════════════════════════════════
-  // ÖĞRENCİ FEED (kulüplerimden yeni içerik)
+  // ÖĞRENCİ FEED (kulüplerimden + okul geneli)
   // ═══════════════════════════════════════════════
   /** Kulüplerimin YAYINLANMIŞ duyuruları; keyset (publishedAt DESC, id DESC) + feed tie-break. */
   async feedAnnouncements(clubIds: string[], cursor: FeedPageCursor | undefined, limit: number) {
@@ -71,6 +85,7 @@ export const dashboardRepository = {
 
     const filters: SQL[] = [
       inArray(announcements.clubId, clubIds),
+      isNotNull(announcements.clubId),
       eq(announcements.status, "published"),
     ];
     if (cursor) {
@@ -88,11 +103,49 @@ export const dashboardRepository = {
     const slice = hasMore ? raw.slice(0, limit) : raw;
     if (slice.length === 0) return { rows: [], hasMore: false };
 
+    const resolvedClubIds = slice.map((r) => r.clubId).filter((id): id is string => id != null);
     const clubRows = await db.query.clubs.findMany({
-      where: { id: { in: slice.map((r) => r.clubId) } },
+      where: { id: { in: resolvedClubIds } },
     });
     const clubById = new Map(clubRows.map((c) => [c.id, c]));
-    const rows = slice.map((a) => ({ ...a, club: clubById.get(a.clubId) ?? null }));
+    const rows = slice.map((a) => ({
+      ...a,
+      club: a.clubId ? clubById.get(a.clubId) ?? null : null,
+    }));
+    return { rows, hasMore };
+  },
+
+  /** Tenant okul geneli YAYINLANMIŞ duyuruları. */
+  async feedUniversityAnnouncements(
+    universityId: string,
+    cursor: FeedPageCursor | undefined,
+    limit: number
+  ) {
+    const filters: SQL[] = [
+      eq(announcements.universityId, universityId),
+      isNull(announcements.clubId),
+      eq(announcements.status, "published"),
+    ];
+    if (cursor) {
+      filters.push(
+        feedTupleBefore(
+          announcements.publishedAt,
+          announcements.id,
+          "university_announcement",
+          cursor
+        )
+      );
+    }
+
+    const raw = await db
+      .select(getTableColumns(announcements))
+      .from(announcements)
+      .where(and(...filters))
+      .orderBy(desc(announcements.publishedAt), desc(announcements.id))
+      .limit(limit + 1);
+
+    const hasMore = raw.length > limit;
+    const rows = hasMore ? raw.slice(0, limit) : raw;
     return { rows, hasMore };
   },
 

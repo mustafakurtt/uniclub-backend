@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { announcements, clubAdvisors, clubMembers } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
@@ -21,6 +21,30 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
       where: { clubId },
       orderBy: (ann, { desc }) => [desc(ann.pinned), desc(ann.publishedAt), desc(ann.createdAt)],
       with: { author: true },
+    });
+  }
+
+  /** Okul geneli duyurular — staff listesi (taslaklar dahil). */
+  findByUniversityForStaff(universityId: string) {
+    return db.query.announcements.findMany({
+      where: { universityId, clubId: { isNull: true } },
+      orderBy: (ann, { desc }) => [desc(ann.pinned), desc(ann.publishedAt), desc(ann.createdAt)],
+      with: { author: true },
+    });
+  }
+
+  /** Okul geneli yayınlanmış duyurular. */
+  findPublishedByUniversity(universityId: string) {
+    return db.query.announcements.findMany({
+      where: { universityId, clubId: { isNull: true }, status: "published" },
+      orderBy: (ann, { desc }) => [desc(ann.pinned), desc(ann.publishedAt)],
+      with: { author: true },
+    });
+  }
+
+  findInUniversity(universityId: string, announcementId: string) {
+    return db.query.announcements.findFirst({
+      where: { id: announcementId, universityId, clubId: { isNull: true } },
     });
   }
 
@@ -58,6 +82,25 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
     });
   }
 
+  addUniversity(
+    universityId: string,
+    authorId: string,
+    data: { title: string; content: string; pinned: boolean; publish: boolean }
+  ) {
+    const now = data.publish ? new Date() : null;
+    return this.create({
+      universityId,
+      clubId: null,
+      authorId,
+      title: data.title,
+      content: data.content,
+      status: data.publish ? "published" : "draft",
+      publishedAt: now,
+      pinned: data.pinned,
+      visibility: "university",
+    });
+  }
+
   publishAnnouncement(announcementId: string) {
     return db
       .update(announcements)
@@ -87,6 +130,28 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
       .from(announcements)
       .where(and(eq(announcements.clubId, clubId), eq(announcements.pinned, true)))
       .then((rows) => rows[0]?.v ?? 0);
+  }
+
+  countPinnedInUniversity(universityId: string) {
+    return db
+      .select({ v: sql<number>`cast(count(*) as int)` })
+      .from(announcements)
+      .where(
+        and(
+          eq(announcements.universityId, universityId),
+          isNull(announcements.clubId),
+          eq(announcements.pinned, true)
+        )
+      )
+      .then((rows) => rows[0]?.v ?? 0);
+  }
+
+  async getTenantActiveUserIds(universityId: string): Promise<string[]> {
+    const rows = await db.query.users.findMany({
+      where: { universityId, status: "active" },
+      columns: { id: true },
+    });
+    return rows.map((r) => r.id);
   }
 
   async getApprovedMemberIds(clubId: string): Promise<string[]> {
@@ -121,8 +186,40 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
     return !!advisor;
   }
 
+  updateInUniversity(
+    universityId: string,
+    announcementId: string,
+    data: { pinned?: boolean }
+  ) {
+    const patch: Partial<typeof announcements.$inferInsert> = { updatedAt: new Date() };
+    if (data.pinned !== undefined) patch.pinned = data.pinned;
+    return db
+      .update(announcements)
+      .set(patch)
+      .where(
+        and(
+          eq(announcements.id, announcementId),
+          eq(announcements.universityId, universityId),
+          isNull(announcements.clubId)
+        )
+      )
+      .returning();
+  }
+
   removeFromClub(clubId: string, announcementId: string) {
     return this.deleteWhere({ id: announcementId, clubId });
+  }
+
+  removeFromUniversity(universityId: string, announcementId: string) {
+    return db
+      .delete(announcements)
+      .where(
+        and(
+          eq(announcements.id, announcementId),
+          eq(announcements.universityId, universityId),
+          isNull(announcements.clubId)
+        )
+      );
   }
 }
 

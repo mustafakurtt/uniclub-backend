@@ -30,6 +30,8 @@ export const NotificationType = {
   ACTIVITY_PUBLISHED: "activity.published",
   /** Kulüp yeni duyuru yayınladı. data: { announcementId, clubId } */
   ANNOUNCEMENT_PUBLISHED: "announcement.published",
+  /** Okul geneli duyuru yayınlandı. data: { announcementId, universityId } */
+  ANNOUNCEMENT_UNIVERSITY_PUBLISHED: "announcement.university.published",
   /** Katılım bildirilen bir etkinlik iptal edildi. data: { activityId } */
   ACTIVITY_CANCELLED: "activity.cancelled",
   /** Kulüp bir etkinliğe co-host olarak davet edildi. data: { activityId, hostClubId, clubId } */
@@ -87,6 +89,11 @@ export const NotificationTypeMeta: Record<
     optOutable: true,
     labelTr: "Yeni duyuru",
     labelEn: "New announcement",
+  },
+  [NotificationType.ANNOUNCEMENT_UNIVERSITY_PUBLISHED]: {
+    optOutable: true,
+    labelTr: "Okul geneli duyuru",
+    labelEn: "University-wide announcement",
   },
   [NotificationType.ACTIVITY_CANCELLED]: {
     optOutable: true,

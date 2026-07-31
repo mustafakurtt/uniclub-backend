@@ -1,16 +1,28 @@
 import { announcementsRepository } from "./announcements.repository";
 import { toSafeUser } from "../../shared/utils/user.util";
-import { CreateAnnouncementDTO, UpdateAnnouncementDTO } from "./announcements.schema";
+import {
+  CreateAnnouncementDTO,
+  CreateUniversityAnnouncementDTO,
+  UpdateAnnouncementDTO,
+  UpdateUniversityAnnouncementDTO,
+} from "./announcements.schema";
+import { AnnouncementPermission } from "./announcements.permissions";
 import { badRequest, notFound } from "../../shared/utils/errors";
 import { announcementsCache, announcementEffects } from "./announcements.cache";
-import { notificationsService } from "../notifications/notifications.service";
+import { dispatchNotificationFanout } from "../notifications/notifications.fanout";
 import { NotificationType } from "../notifications/notifications.types";
+import { resolveAuthz } from "../../shared/rbac/rbac.cache";
 import type { Announcement } from "./announcements.types";
 
-/** Kulüp başına sabitlenen duyuru üst sınırı — vitrin alanını korur, pin özelliğini anlamsız kılmaz. */
+/** Kulüp başına sabitlenen duyuru üst sınırı — vitrin alanını korur. */
 export const MAX_PINNED_ANNOUNCEMENTS_PER_CLUB = 3;
+/** Okul geneli sabitleme üst sınırı — kulüp kotasından bağımsız. */
+export const MAX_PINNED_UNIVERSITY_ANNOUNCEMENTS = 3;
 
 type AnnouncementRow = Awaited<ReturnType<typeof announcementsRepository.findByClubForStaff>>[number];
+type UniversityAnnouncementRow = Awaited<
+  ReturnType<typeof announcementsRepository.findByUniversityForStaff>
+>[number];
 
 export const announcementsService = {
   /**
@@ -33,6 +45,27 @@ export const announcementsService = {
     return filtered.filter((a) => a.author).map((a) => ({ ...a, author: toSafeUser(a.author!) }));
   },
 
+  /**
+   * Okul geneli duyuru listesi. Yönetim yetkisi taslakları görür; diğer tenant
+   * kullanıcıları yalnızca yayınlanmışları alır.
+   */
+  async listByUniversity(universityId: string, viewerId: string, viewerUniversityId: string | null) {
+    assertTenantViewer(universityId, viewerUniversityId);
+
+    const authz = await resolveAuthz(viewerId);
+    const canManage = authz.permissions.includes(AnnouncementPermission.UNIVERSITY_MANAGE);
+
+    const rows = canManage
+      ? await announcementsCache.universityStaffList(universityId).read(() =>
+          announcementsRepository.findByUniversityForStaff(universityId)
+        )
+      : await announcementsCache.universityPublishedList(universityId).read(() =>
+          announcementsRepository.findPublishedByUniversity(universityId)
+        );
+
+    return rows.filter((a) => a.author).map((a) => ({ ...a, author: toSafeUser(a.author!) }));
+  },
+
   async create(universityId: string, clubId: string, authorId: string, data: CreateAnnouncementDTO) {
     if (data.pinned) {
       await assertPinnedCapacity(clubId);
@@ -51,6 +84,30 @@ export const announcementsService = {
     }
 
     await announcementEffects.changed.emit(clubId);
+    return announcement;
+  },
+
+  async createUniversity(
+    universityId: string,
+    authorId: string,
+    data: CreateUniversityAnnouncementDTO
+  ) {
+    if (data.pinned) {
+      await assertUniversityPinnedCapacity(universityId);
+    }
+
+    const announcement = await announcementsRepository.addUniversity(universityId, authorId, {
+      title: data.title,
+      content: data.content,
+      pinned: data.pinned,
+      publish: data.publish,
+    });
+
+    if (data.publish) {
+      await notifyTenantPublished(universityId, announcement, authorId);
+    }
+
+    await announcementEffects.universityChanged.emit(universityId);
     return announcement;
   },
 
@@ -78,6 +135,30 @@ export const announcementsService = {
     return published;
   },
 
+  async publishUniversity(universityId: string, announcementId: string, actorUserId: string) {
+    const existing = await announcementsRepository.findInUniversity(universityId, announcementId);
+    if (!existing) {
+      throw notFound("announcement.notFound");
+    }
+    if (existing.status !== "draft") {
+      throw badRequest("announcement.notDraft");
+    }
+
+    const firstPublish = existing.publishedAt == null;
+    const rows = await announcementsRepository.publishAnnouncement(announcementId);
+    if (rows.length === 0) {
+      throw badRequest("announcement.notDraft");
+    }
+    const published = rows[0];
+
+    if (firstPublish) {
+      await notifyTenantPublished(universityId, published, actorUserId);
+    }
+
+    await announcementEffects.universityChanged.emit(universityId);
+    return published;
+  },
+
   async update(clubId: string, announcementId: string, data: UpdateAnnouncementDTO) {
     const existing = await announcementsRepository.findInClub(clubId, announcementId);
     if (!existing) {
@@ -97,6 +178,33 @@ export const announcementsService = {
     return updated;
   },
 
+  async updateUniversity(
+    universityId: string,
+    announcementId: string,
+    data: UpdateUniversityAnnouncementDTO
+  ) {
+    const existing = await announcementsRepository.findInUniversity(universityId, announcementId);
+    if (!existing) {
+      throw notFound("announcement.notFound");
+    }
+
+    if (data.pinned === true && !existing.pinned) {
+      await assertUniversityPinnedCapacity(universityId);
+    }
+
+    const [updated] = await announcementsRepository.updateInUniversity(
+      universityId,
+      announcementId,
+      data
+    );
+    if (!updated) {
+      throw notFound("announcement.notFound");
+    }
+
+    await announcementEffects.universityChanged.emit(universityId);
+    return updated;
+  },
+
   async remove(clubId: string, announcementId: string) {
     const existing = await announcementsRepository.findInClub(clubId, announcementId);
     if (!existing) {
@@ -105,7 +213,22 @@ export const announcementsService = {
     await announcementsRepository.removeFromClub(clubId, announcementId);
     await announcementEffects.changed.emit(clubId);
   },
+
+  async removeUniversity(universityId: string, announcementId: string) {
+    const existing = await announcementsRepository.findInUniversity(universityId, announcementId);
+    if (!existing) {
+      throw notFound("announcement.notFound");
+    }
+    await announcementsRepository.removeFromUniversity(universityId, announcementId);
+    await announcementEffects.universityChanged.emit(universityId);
+  },
 };
+
+function assertTenantViewer(universityId: string, viewerUniversityId: string | null) {
+  if (viewerUniversityId !== universityId) {
+    throw notFound("announcement.notFound");
+  }
+}
 
 function filterForViewer(
   rows: AnnouncementRow[],
@@ -128,6 +251,13 @@ async function assertPinnedCapacity(clubId: string) {
   }
 }
 
+async function assertUniversityPinnedCapacity(universityId: string) {
+  const pinnedCount = await announcementsRepository.countPinnedInUniversity(universityId);
+  if (pinnedCount >= MAX_PINNED_UNIVERSITY_ANNOUNCEMENTS) {
+    throw badRequest("announcement.universityPinnedLimit");
+  }
+}
+
 /** Yayın bildirimi: kulüp üyelerine (görünürlükten bağımsız); yazar hariç. */
 async function notifyClubMembersPublished(
   clubId: string,
@@ -136,10 +266,26 @@ async function notifyClubMembersPublished(
 ) {
   const memberIds = await announcementsRepository.getApprovedMemberIds(clubId);
   const recipients = memberIds.filter((id) => id !== authorId);
-  await notificationsService.notifyManySafe(recipients, {
+  await dispatchNotificationFanout(recipients, {
     type: NotificationType.ANNOUNCEMENT_PUBLISHED,
     title: "Yeni duyuru",
     body: announcement.title,
     data: { announcementId: announcement.id, clubId },
+  });
+}
+
+/** Okul geneli yayın bildirimi: tenant'taki tüm aktif kullanıcılara; yazar hariç. */
+async function notifyTenantPublished(
+  universityId: string,
+  announcement: Announcement,
+  authorId: string
+) {
+  const userIds = await announcementsRepository.getTenantActiveUserIds(universityId);
+  const recipients = userIds.filter((id) => id !== authorId);
+  await dispatchNotificationFanout(recipients, {
+    type: NotificationType.ANNOUNCEMENT_UNIVERSITY_PUBLISHED,
+    title: "Okul duyurusu",
+    body: announcement.title,
+    data: { announcementId: announcement.id, universityId },
   });
 }

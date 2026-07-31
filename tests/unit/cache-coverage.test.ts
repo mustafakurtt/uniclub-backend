@@ -60,7 +60,10 @@ describe("cache kapsam denetimi — her girdiyi düşüren bir efekt var mı?", 
 
   it("announcements", () => {
     expect(
-      uncoveredEntries(announcementsCache, [announcementEffects.changed.entries(C)])
+      uncoveredEntries(announcementsCache, [
+        announcementEffects.changed.entries(C),
+        announcementEffects.universityChanged.entries(U),
+      ])
     ).toEqual([]);
   });
 

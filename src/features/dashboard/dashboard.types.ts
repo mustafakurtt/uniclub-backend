@@ -17,6 +17,12 @@ export interface CompactClub {
 
 /** Öğrenci akışında tek öğe — duyuru VEYA yayınlanmış etkinlik. */
 export type FeedItem =
+  | {
+      type: "university_announcement";
+      at: string;
+      club: null;
+      item: InferSelectModel<typeof announcements>;
+    }
   | { type: "announcement"; at: string; club: CompactClub | null; item: Omit<InferSelectModel<typeof announcements>, "club"> }
   | { type: "activity"; at: string; club: CompactClub | null; item: InferSelectModel<typeof activities> };
 

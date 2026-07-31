@@ -3,7 +3,11 @@ import { notificationMutesRepository } from "./notification-mutes.repository";
 import { publish } from "./notifications.gateway";
 import { webPushSender } from "./push.gateway";
 import { pushSubscriptionStore } from "./push.store";
-import { CreateNotificationPayload, Notification } from "./notifications.types";
+import {
+  CreateNotificationPayload,
+  Notification,
+  isOptOutableNotificationType,
+} from "./notifications.types";
 import { logger } from "../../shared/logger/logger";
 import { badRequest, notFound } from "../../shared/utils/errors";
 import type { WebPushPayload, WebPushSubscription } from "../../core/notifications";
@@ -63,9 +67,15 @@ export const notificationsService = {
    * `notifySafe`'i tercih edin — bu fonksiyon hata FIRLATIR.
    */
   async notify(userId: string, payload: CreateNotificationPayload): Promise<Notification | null> {
-    const clubId = extractClubIdFromPayload(payload);
-    const muted = await notificationMutesRepository.findMutedUserIds([userId], payload.type, clubId);
-    if (muted.has(userId)) return null;
+    if (isOptOutableNotificationType(payload.type)) {
+      const clubId = extractClubIdFromPayload(payload);
+      const muted = await notificationMutesRepository.findMutedUserIds(
+        [userId],
+        payload.type,
+        clubId
+      );
+      if (muted.has(userId)) return null;
+    }
 
     // 1. Önce DB (kalıcılık): çevrimdışı cihaz sonra bağlanınca geçmişi görsün.
     const notification = await notificationsRepository.add(userId, payload);
@@ -112,13 +122,16 @@ export const notificationsService = {
   async notifyManySafe(userIds: string[], payload: CreateNotificationPayload): Promise<void> {
     if (userIds.length === 0) return;
     try {
-      const clubId = extractClubIdFromPayload(payload);
-      const muted = await notificationMutesRepository.findMutedUserIds(
-        userIds,
-        payload.type,
-        clubId
-      );
-      const recipients = userIds.filter((id) => !muted.has(id));
+      let recipients = userIds;
+      if (isOptOutableNotificationType(payload.type)) {
+        const clubId = extractClubIdFromPayload(payload);
+        const muted = await notificationMutesRepository.findMutedUserIds(
+          userIds,
+          payload.type,
+          clubId
+        );
+        recipients = userIds.filter((id) => !muted.has(id));
+      }
       if (recipients.length === 0) return;
 
       const rows = await notificationsRepository.addMany(recipients, payload);
