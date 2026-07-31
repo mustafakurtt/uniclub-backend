@@ -74,6 +74,8 @@ feat(clubs): add full-text search to club browsing
 fix(auth): invalidate permission cache on email verification
 ```
 
+Her PR, `CHANGELOG.md` dosyasındaki `[Unreleased]` bölümünü günceller (eklenen/değişen/fix maddeleri).
+
 ## Code conventions
 
 Read [docs/architecture/overview.md](docs/architecture/overview.md) first. The non-negotiables:
