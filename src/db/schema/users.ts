@@ -34,6 +34,9 @@ export const users = table("users", {
   // Admin şifre sıfırlaması sonrası true; kullanıcı bir sonraki girişte şifresini
   // değiştirmeye zorlanır (moderation feature'ı set eder, self change-password sıfırlar).
   mustChangePassword: t.boolean("must_change_password").default(false).notNull(),
+  // Oturum iptali (session epoch). JWT claim ile karşılaştırılır — enforceAuthzPolicy.
+  // Şifre değişimi / sıfırlama bump eder; askıya alma status üzerinden (bump yok).
+  tokenVersion: t.integer("token_version").default(0).notNull(),
   ...timestamps,
   // KVKK silme talebi = ANONİMLEŞTİRME (bkz. docs/planning/schema-product.md §1.2).
   // Satır fiziksel olarak silinmez: `auditLogs`, `announcements`, moderasyon
@@ -108,4 +111,18 @@ export const emailVerifications = table("email_verifications", {
 }, (cols) => [
   // Kullanıcının açık token'larını iptal etme (resend akışı) bu index'i kullanır.
   t.index("email_verifications_user_idx").on(cols.userId),
+]);
+
+// ═══════════════════════════════════════════════
+// PASSWORD RESETS (self-servis şifre sıfırlama)
+// ═══════════════════════════════════════════════
+export const passwordResets = table("password_resets", {
+  id: t.uuid().primaryKey().defaultRandom(),
+  userId: t.uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tokenHash: t.varchar("token_hash", { length: 64 }).notNull().unique(),
+  expiresAt: t.timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: t.timestamp("used_at", { withTimezone: true }),
+  ...createdAtColumn,
+}, (cols) => [
+  t.index("password_resets_user_idx").on(cols.userId),
 ]);

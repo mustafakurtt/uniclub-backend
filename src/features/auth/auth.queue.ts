@@ -6,6 +6,8 @@ import {
   buildVerifyLink,
   buildTenantAdminInvitationEmail,
   buildTenantAdminInvitationAcceptLink,
+  buildPasswordResetEmail,
+  buildPasswordResetLink,
 } from "./auth.email";
 import { logger } from "../../shared/logger/logger";
 
@@ -32,7 +34,15 @@ export interface TenantAdminInvitationEmailJob {
   token: string;
 }
 
-export const emailQueue = new Queue<VerificationEmailJob | TenantAdminInvitationEmailJob>(
+export interface PasswordResetEmailJob {
+  email: string;
+  firstName: string;
+  token: string;
+}
+
+export const emailQueue = new Queue<
+  VerificationEmailJob | TenantAdminInvitationEmailJob | PasswordResetEmailJob
+>(
   "email-verification-queue",
   {
     connection,
@@ -45,7 +55,9 @@ export const emailQueue = new Queue<VerificationEmailJob | TenantAdminInvitation
   }
 );
 
-const emailWorker = new Worker<VerificationEmailJob | TenantAdminInvitationEmailJob>(
+const emailWorker = new Worker<
+  VerificationEmailJob | TenantAdminInvitationEmailJob | PasswordResetEmailJob
+>(
   "email-verification-queue",
   async (job) => {
     if (job.name === "send-verify-email") {
@@ -66,6 +78,15 @@ const emailWorker = new Worker<VerificationEmailJob | TenantAdminInvitationEmail
         { link: buildTenantAdminInvitationAcceptLink(token), inbox: "http://localhost:8025" },
         "davet kabul linki (Mailpit)"
       );
+      return;
+    }
+
+    if (job.name === "send-password-reset") {
+      const { email, firstName, token } = job.data as PasswordResetEmailJob;
+      const { subject, html, text } = buildPasswordResetEmail({ firstName, token });
+      const info = await sendMail({ to: email, subject, html, text });
+      log.info({ email, firstName, messageId: info.messageId }, "✅ şifre sıfırlama maili gönderildi");
+      log.debug({ link: buildPasswordResetLink(token), inbox: "http://localhost:8025" }, "sıfırlama linki (Mailpit)");
       return;
     }
 

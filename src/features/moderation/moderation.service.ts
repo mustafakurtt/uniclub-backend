@@ -2,6 +2,7 @@ import { moderationRepository } from "./moderation.repository";
 import { ModerationAction } from "./moderation.types";
 import { BanUserDTO, AnonymizeUserDTO } from "./moderation.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
+import { revokeUserSessions } from "../../shared/rbac/session-revocation";
 import { invalidateUserPermissions } from "../../shared/rbac/rbac.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { generatePassword, hashPassword } from "../../core/auth/password";
@@ -36,7 +37,7 @@ export const moderationService = {
       previousStatus: user.status,
       newStatus: "suspended",
     });
-    await invalidateUserPermissions(userId);
+    await revokeUserSessions(userId);
 
     await notificationsService.notifySafe(userId, {
       type: NotificationType.ACCOUNT_SUSPENDED,
@@ -91,6 +92,7 @@ export const moderationService = {
       previousStatus: null,
       newStatus: null,
     });
+    await revokeUserSessions(userId);
 
     await notificationsService.notifySafe(userId, {
       type: NotificationType.ACCOUNT_PASSWORD_RESET,

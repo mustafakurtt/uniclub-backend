@@ -19,9 +19,7 @@ Uygulandı: min 32 karakter, placeholder reddi, prod örnek yasak (`config/jwt-s
 
 ### 1.3 Token iptali (revocation)
 
-Tasarım notu: [session-revocation-and-password-reset.md](session-revocation-and-password-reset.md) (onay bekliyor).
-
-**Özet:** `users.token_version` + JWT claim; karşılaştırma `enforceAuthzPolicy` içinde authz snapshot'tan — blocklist yok, ek Redis okuması yok.
+Uygulandı (2026-07-31): `users.token_version` + JWT claim; karşılaştırma `enforceAuthzPolicy` içinde authz snapshot'tan — blocklist yok. Detay: [session-revocation-and-password-reset.md](session-revocation-and-password-reset.md).
 
 ---
 

@@ -13,7 +13,7 @@ Dağınık borç listeleri: [schema-product.md](schema-product.md) (şema/ürün
 | Kod | Konu | Kaynak |
 |---|---|---|
 | **A1** | Güvenlik temizliği (login timing, `JWT_SECRET` sınırı, `core/` sınır testi) | [security-core.md §Tier 1](security-core.md) |
-| **A2** | Oturum semantiği — `tokenVersion` iptali + self-servis şifre sıfırlama | [session-revocation-and-password-reset.md](session-revocation-and-password-reset.md) (onay bekliyor) · [security-core.md §1.3](security-core.md) · [schema-product.md §2.4](schema-product.md) |
+| **A2** | Oturum semantiği — `tokenVersion` iptali + self-servis şifre sıfırlama | [session-revocation-and-password-reset.md](session-revocation-and-password-reset.md) · uygulandı (2026-07-31) |
 
 ### B — Bildirim tercihleri
 

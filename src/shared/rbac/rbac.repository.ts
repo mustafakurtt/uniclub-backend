@@ -38,6 +38,7 @@ export const rbacRepository = {
         status: "suspended",
         maxRank: 0,
         universityId: user.universityId,
+        tokenVersion: user.tokenVersion,
       };
     }
 
@@ -65,6 +66,7 @@ export const rbacRepository = {
       status,
       maxRank,
       universityId,
+      tokenVersion: user.tokenVersion,
     };
   },
 };

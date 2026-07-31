@@ -43,6 +43,17 @@ export const resendVerificationSchema = z.object({
 });
 export type ResendVerificationDTO = z.infer<typeof resendVerificationSchema>;
 
+export const forgotPasswordSchema = z.object({
+  email: emailField,
+});
+export type ForgotPasswordDTO = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Sıfırlama token'ı eksik."),
+  password: selfServicePasswordSchema,
+});
+export type ResetPasswordDTO = z.infer<typeof resetPasswordSchema>;
+
 export const acceptTenantAdminInvitationSchema = z.object({
   token: z.string().min(1, "Davet token'ı eksik."),
   firstName: z.string().min(2).max(100),

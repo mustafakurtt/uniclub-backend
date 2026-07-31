@@ -1,4 +1,4 @@
-import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDTO, UpdatePermissionDTO, SetUserPermissionDTO, ResendVerificationDTO, AcceptTenantAdminInvitationDTO } from "./auth.schema";
+import { RegisterDTO, LoginDTO, CreatePermissionDTO, CreateRoleDTO, UpdateRoleDTO, UpdatePermissionDTO, SetUserPermissionDTO, ResendVerificationDTO, ForgotPasswordDTO, ResetPasswordDTO, AcceptTenantAdminInvitationDTO } from "./auth.schema";
 import { authRepository } from "./auth.repository";
 import { tenantAdminInvitationsRepository } from "./tenant-admin-invitations.repository";
 import { toTenantAdminInvitationPublic, type TenantAdminInvitationPublic } from "./tenant-admin-invitations.types";
@@ -7,6 +7,7 @@ import { generateToken } from "../../shared/utils/jwt.util"; // JWT üreteci ekl
 import { generateOneTimeToken, hashToken } from "../../core/auth/token"; // e-posta doğrulama token'ı (JWT DEĞİL)
 import { emailQueue } from "./auth.queue";
 import { resolveAuthz, invalidateUserPermissions, invalidateUsersPermissions } from "../../shared/rbac/rbac.cache";
+import { revokeUserSessions } from "../../shared/rbac/session-revocation";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { db } from "../../db";
 import type { DbExecutor } from "../../db/executor";
@@ -221,6 +222,7 @@ async function assertNotLastAdminOfScope(
 /** Doğrulama linkinin geçerlilik süresi. Mail şablonundaki "24 saat" ile eşleşmelidir. */
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const TENANT_ADMIN_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 /**
  * Kullanıcıya yeni bir doğrulama token'ı üretir ve mailini kuyruğa atar.
@@ -251,6 +253,17 @@ async function issueVerificationEmail(user: { id: string; email: string; firstNa
   });
 }
 
+async function queuePasswordResetEmail(email: string, firstName: string, token: string) {
+  await emailQueue.add("send-password-reset", { email, firstName, token });
+}
+
+async function issuePasswordResetEmail(user: { id: string; email: string; firstName: string }) {
+  await authRepository.invalidateUserPasswordResets(user.id);
+  const resetToken = generateOneTimeToken();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+  await authRepository.createPasswordReset(user.id, await hashToken(resetToken), expiresAt);
+  await queuePasswordResetEmail(user.email, user.firstName, resetToken);
+}
 async function queueTenantAdminInvitationEmail(email: string, firstName: string, token: string) {
   await emailQueue.add("send-tenant-admin-invitation", {
     email,
@@ -732,7 +745,8 @@ export const authService = {
     // 4. JWT Üretimi (Kullanıcı ID'sini ve SaaS Tenant ID'sini içine gömüyoruz)
     const token = await generateToken({
       userId: user.id,
-      universityId: user.universityId
+      universityId: user.universityId,
+      tokenVersion: user.tokenVersion,
     });
 
     // 5. Güvenlik: Hashlenmiş şifreyi frontend'e dönme
@@ -800,6 +814,35 @@ export const authService = {
       return; // sessizce yut — dışarıdan başarılı istekten ayırt edilemez
     }
     await issueVerificationEmail(user);
+  },
+
+  /**
+   * Self-servis şifre sıfırlama talebi. Enumeration-safe: her zaman aynı yanıt.
+   * Mail yalnızca aktif, silinmemiş hesaplara gider.
+   */
+  async forgotPassword(data: ForgotPasswordDTO) {
+    const user = await authRepository.findUserByEmail(data.email);
+    if (!user || user.deletedAt || user.status !== "active") {
+      return;
+    }
+    await issuePasswordResetEmail(user);
+  },
+
+  async resetPassword(data: ResetPasswordDTO) {
+    const reset = await authRepository.findPasswordResetByTokenHash(await hashToken(data.token));
+    if (!reset) {
+      throw badRequest("auth.invalidPasswordResetLink");
+    }
+    if (reset.usedAt) {
+      throw badRequest("auth.passwordResetLinkUsed");
+    }
+    if (reset.expiresAt < new Date()) {
+      throw badRequest("auth.passwordResetLinkExpired");
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    await authRepository.completePasswordReset(reset.userId, reset.id, passwordHash);
+    await revokeUserSessions(reset.userId);
   },
 
   async promoteToAdmin(actor: RoleAdminActor, userId: string) {

@@ -1,5 +1,7 @@
 import { db } from "../../db";
 import { users } from "../../db/schema";
+import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { BaseRepository } from "../../core/db";
 import { UpdateProfilePayload } from "./users.types";
 
@@ -29,9 +31,18 @@ class UsersRepository extends BaseRepository<typeof users, typeof db.query.users
   }
 
   async updatePasswordHash(userId: string, passwordHash: string) {
-    // Şifre değişince mustChangePassword sıfırlanır: admin sıfırlaması sonrası
-    // kullanıcı kendi şifresini belirleyince "değiştirmeye zorla" bayrağı kalkar.
-    await this.updateById(userId, { passwordHash, mustChangePassword: false });
+    // Şifre değişince mustChangePassword sıfırlanır; tokenVersion artar (diğer oturumlar düşer).
+    const [updated] = await db
+      .update(users)
+      .set({
+        passwordHash,
+        mustChangePassword: false,
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
   }
 
   findClubMembershipsByUser(userId: string) {

@@ -58,6 +58,20 @@ export function markAlive(ws: WSContext) {
   lastSeen.set(ws, Date.now());
 }
 
+/** Bu instance'daki kullanıcının tüm WS bağlantılarını kapatır (oturum iptali). */
+export function closeConnectionsForUser(userId: string): void {
+  const set = connections.get(userId);
+  if (!set || set.size === 0) return;
+  for (const ws of set) {
+    try {
+      ws.close(4401, "session revoked");
+    } catch {
+      /* zaten kapalı */
+    }
+  }
+  connections.delete(userId);
+}
+
 /** Test/teşhis amaçlı: bu instance'a bağlı soket sayısı. */
 export function connectionCount(userId: string): number {
   return connections.get(userId)?.size ?? 0;

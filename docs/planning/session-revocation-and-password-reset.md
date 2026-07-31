@@ -1,6 +1,6 @@
 # Oturum semantiği — `tokenVersion` iptali + self-servis şifre sıfırlama
 
-**Durum:** Onay bekliyor (2026-07-31)  
+**Durum:** Uygulandı (2026-07-31)  
 **İlgili:** [security-core.md §1.3](security-core.md) · [schema-product.md §2.4](schema-product.md) · [planning/README.md](README.md) A2
 
 Bu not **kod ve migration öncesi** karar kaydıdır. Onaylanmadan uygulanmayacak.
@@ -82,10 +82,16 @@ Ticket akışı doğru (60 sn, `GETDEL` tek kullanım). Soket açıldıktan sonr
 | Seçenek | Değerlendirme |
 |---|---|
 | Periyodik yeniden doğrulama (heartbeat'te cache) | Doğru ama her ping'de Redis/DB; karmaşıklık |
-| İptal olayında soket kapatma | **Önerilen** — invalidate sonrası `closeConnectionsForUser(userId)` (gateway `connections` map'i var; kapatma fonksiyonu eklenecek) |
+| İptal olayında soket kapatma | **Önerilen** — `revokeUserSessions(userId)` (invalidate + WS kopartma); **invalidate primitifine bağlanmaz** |
 | Bilinçli kabul | HTTP güvenli, WS eski oturum — tutarsız |
 
-**Karar:** Oturum iptali turunda **invalidate → WS disconnect** bağla (askı + `tokenVersion` için ortak). Periyodik tam authz taraması **ertelenir** (Tier 2).
+**Karar:** Oturum iptali turunda **`revokeUserSessions(userId)`** — cache invalidate + WS disconnect. `invalidateUserPermissions` **saf cache** kalır (21 çağrı yeri; rol atama / doğrulama / davet bunu kullanır → WS kopmaz). `revokeUserSessions` çağrıları: şifre yolları (bump sonrası), hesap askıya alma. Periyodik tam authz taraması **ertelenir** (Tier 2).
+
+```text
+revokeUserSessions(userId):
+  invalidateUserPermissions(userId)
+  closeConnectionsForUser(userId)   // notifications.gateway
+```
 
 ---
 
@@ -110,8 +116,9 @@ Yanlış sıra eski `tokenVersion`'ı TTL boyunca cache'e yazabilir.
 ```
 1. TRANSACTION: token_version += 1, password_hash = …, must_change_password (gerekiyorsa)
 2. COMMIT
-3. invalidateUserPermissions(userId)     ← commit SONRASI
-4. afterCommit: mail / notifySafe       ← iş akışı düşürülmez
+3. invalidateUserPermissions(userId)     ← commit SONRASI (cache)
+4. revokeUserSessions(userId)            ← invalidate + WS; rol atama bunu ÇAĞIRMAZ
+5. afterCommit: mail / notifySafe       ← iş akışı düşürülmez
 ```
 
 **Asla:** invalidate → commit (ters sıra cache'e eski sürümü 300 sn yazabilir).
@@ -193,9 +200,19 @@ Mail: **commit sonrası** kuyruk (`afterCommit` / BullMQ) — kayıt başarısı
 1. Migration: `token_version` + `password_resets`
 2. `AuthzContext.tokenVersion`, `rbacRepository`, JWT claim, `generateToken`
 3. `enforceAuthzPolicy(authz, subject)` + core `enforce` imzası; `requireActiveUser` subject iletir; `/api/auth/me` politika
-4. `invalidateUserPermissions` → WS disconnect
+4. `revokeUserSessions` + gateway `closeConnectionsForUser`; `/api/auth/me` politika
 5. Şifre yollarında sıra: TX bump → commit → invalidate (`changePassword`, moderation reset)
 6. Self-servis forgot/reset + testler (enumeration, rate limit, epoch, timing)
 7. `security-core.md` / `schema-product.md` borç satırlarını kapat
 
-**Bu tur:** yalnızca bu not — kod yok.
+**Bu tur:** uygulama (not onaylandı).
+
+---
+
+## Uygulama sırasında netleşen kararlar
+
+| Konu | Karar |
+|---|---|
+| Self-servis sıfırlama sonrası `must_change_password` | **false** — kullanıcı şifreyi kendi belirledi; `updatePasswordHash` ile aynı kalıp |
+| Sıfırlama sonrası otomatik giriş | **Yok** — yanıtta JWT üretilmez; istemci login'e yönlendirilir |
+| `POST /api/auth/reset-password` rate limit | **IP tavanı** (`acceptTenantAdminInvitation` ile aynı ilke: 30/dk) — token brute-force anlamsız ama davet ucu ile tutarlı |

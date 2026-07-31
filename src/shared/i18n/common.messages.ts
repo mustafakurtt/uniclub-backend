@@ -13,6 +13,7 @@ export const commonMessages = defineCatalog({
     // kimlik doğrulama (core/auth/auth.middleware)
     "auth.tokenMissing": "Bu işlem için giriş yapmalısınız (token eksik).",
     "auth.tokenInvalid": "Oturum süreniz dolmuş veya token geçersiz. Lütfen tekrar giriş yapın.",
+    "auth.sessionRevoked": "Oturumunuz sonlandırıldı. Lütfen tekrar giriş yapın.",
     // yetkilendirme (core/rbac/rbac.middleware)
     "rbac.accountSuspended": "Hesabınız askıya alınmıştır. Lütfen SKS birimiyle iletişime geçin.",
     "rbac.tenantSuspended": "Üniversitenizin platform erişimi askıya alınmıştır. Lütfen üniversite yönetimiyle iletişime geçin.",
@@ -36,6 +37,7 @@ export const commonMessages = defineCatalog({
     // authentication (core/auth/auth.middleware)
     "auth.tokenMissing": "You must be signed in for this action (token missing).",
     "auth.tokenInvalid": "Your session has expired or the token is invalid. Please sign in again.",
+    "auth.sessionRevoked": "Your session has ended. Please sign in again.",
     // authorization (core/rbac/rbac.middleware)
     "rbac.accountSuspended": "Your account has been suspended. Please contact the student affairs office.",
     "rbac.tenantSuspended": "Your university's platform access has been suspended. Please contact your university administration.",

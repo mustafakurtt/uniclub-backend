@@ -49,9 +49,7 @@ Runbook: [operations/tenant-onboarding.md](../operations/tenant-onboarding.md).
 
 ### 2.4 Self-servis şifre sıfırlama
 
-Tasarım notu: [session-revocation-and-password-reset.md](session-revocation-and-password-reset.md) (onay bekliyor — A2 ile birlikte uygulanacak).
-
-Bugün yalnızca yönetici sıfırlaması (`/api/moderation/.../reset-password`). Şema: `password_resets` (token hash — bkz. [architecture/mail-verification.md](../architecture/mail-verification.md)).
+Uygulandı (2026-07-31): `password_resets` tablosu + `POST /api/auth/forgot-password` / `POST /api/auth/reset-password`; `tokenVersion` artışı ile oturum iptali. Detay: [session-revocation-and-password-reset.md](session-revocation-and-password-reset.md).
 
 ---
 

@@ -15,6 +15,14 @@ import { enforceAuthzPolicy } from "../shared/rbac/authz-policy";
 export const requireActiveUser = async (c: Context<{ Variables: Variables }>, next: Next) => {
   const user = c.get("user");
   const authz = await resolveAuthz(user.userId);
-  await enforceAuthzPolicy(authz);
+  await enforceAuthzPolicy(authz, user);
+  await next();
+};
+
+/** İzin kontrolü olmadan yalnızca authz politikasını uygular (ör. GET /api/auth/me). */
+export const applyAuthzPolicyMiddleware = async (c: Context<{ Variables: Variables }>, next: Next) => {
+  const user = c.get("user");
+  const authz = await resolveAuthz(user.userId);
+  await enforceAuthzPolicy(authz, user);
   await next();
 };

@@ -25,6 +25,8 @@ declare module "../../core/rbac/rbac.types" {
      * "Kendinden düşük rütbe" kuralının girdisi (bkz. auth.service assertActorOutranks*).
      */
     maxRank: number;
+    /** DB `users.token_version` — JWT claim ile karşılaştırılır (enforceAuthzPolicy). */
+    tokenVersion?: number;
   }
 }
 

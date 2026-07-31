@@ -179,3 +179,24 @@ export const acceptTenantAdminInvitationIpLimit = limiter({
   windowSeconds: 60,
   keyFn: (c) => clientIp(c),
 });
+
+export const forgotPasswordEmailLimit = limiter({
+  keyPrefix: "forgot-password:email",
+  limit: 3,
+  windowSeconds: 60 * 60,
+  keyFn: (c) => bodyField(c, "email"),
+});
+
+export const forgotPasswordIpLimit = limiter({
+  keyPrefix: "forgot-password:ip",
+  limit: 20,
+  windowSeconds: 60,
+  keyFn: (c) => clientIp(c),
+});
+
+export const resetPasswordIpLimit = limiter({
+  keyPrefix: "reset-password:ip",
+  limit: 30,
+  windowSeconds: 60,
+  keyFn: (c) => clientIp(c),
+});

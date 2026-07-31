@@ -1,4 +1,4 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import type { DbExecutor } from "../../db/executor";
 import * as schema from "../../db/schema";
@@ -152,6 +152,55 @@ export const authRepository = {
           isNull(schema.emailVerifications.usedAt)
         )
       );
+  },
+
+  async createPasswordReset(userId: string, tokenHash: string, expiresAt: Date) {
+    const [inserted] = await db.insert(schema.passwordResets).values({
+      userId,
+      tokenHash,
+      expiresAt,
+    }).returning();
+    return inserted;
+  },
+
+  async findPasswordResetByTokenHash(tokenHash: string) {
+    const rows = await db
+      .select()
+      .from(schema.passwordResets)
+      .where(eq(schema.passwordResets.tokenHash, tokenHash))
+      .limit(1);
+    return rows[0];
+  },
+
+  async markPasswordResetUsed(id: string): Promise<void> {
+    await db.update(schema.passwordResets).set({ usedAt: new Date() }).where(eq(schema.passwordResets.id, id));
+  },
+
+  async invalidateUserPasswordResets(userId: string): Promise<void> {
+    await db
+      .update(schema.passwordResets)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(schema.passwordResets.userId, userId),
+          isNull(schema.passwordResets.usedAt)
+        )
+      );
+  },
+
+  async completePasswordReset(userId: string, resetId: string, passwordHash: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.update(schema.passwordResets).set({ usedAt: new Date() }).where(eq(schema.passwordResets.id, resetId));
+      await tx
+        .update(schema.users)
+        .set({
+          passwordHash,
+          mustChangePassword: false,
+          tokenVersion: sql`${schema.users.tokenVersion} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.users.id, userId));
+    });
   },
 
   async activateUser(userId: string): Promise<void> {

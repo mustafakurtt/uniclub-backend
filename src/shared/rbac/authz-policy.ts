@@ -1,5 +1,6 @@
-import { ForbiddenError } from "../../core/http/errors";
+import { ForbiddenError, UnauthorizedError } from "../../core/http/errors";
 import type { AuthzContext } from "../../core/rbac/rbac.types";
+import type { AuthClaims } from "../../core/auth/auth.middleware";
 import "./authz"; // AuthzContext'e status alanını ekleyen declaration merging
 import { resolveTenantStatus, tenantBlocksAccess } from "./tenant-status.cache";
 
@@ -15,6 +16,18 @@ import { resolveTenantStatus, tenantBlocksAccess } from "./tenant-status.cache";
 export const enforceAccountStatus = (authz: AuthzContext): void => {
   if (authz.status === "suspended") {
     throw new ForbiddenError("rbac.accountSuspended");
+  }
+};
+
+/**
+ * JWT'deki session epoch ile authz snapshot'taki sürümü karşılaştırır.
+ * Eksik claim → 0 (deploy sonrası kitlesel çıkış yok).
+ */
+export const enforceTokenVersion = (authz: AuthzContext, subject: AuthClaims): void => {
+  const claimVersion = subject.tokenVersion ?? 0;
+  const currentVersion = authz.tokenVersion ?? 0;
+  if (claimVersion !== currentVersion) {
+    throw new UnauthorizedError("auth.sessionRevoked");
   }
 };
 
@@ -36,7 +49,8 @@ export const enforceTenantStatus = async (authz: AuthzContext): Promise<void> =>
  * `requireActiveUser` bu fonksiyonu paylaşır; tenant askısı / hesap durumu tek
  * noktadan zorlanır.
  */
-export const enforceAuthzPolicy = async (authz: AuthzContext): Promise<void> => {
+export const enforceAuthzPolicy = async (authz: AuthzContext, subject: AuthClaims): Promise<void> => {
   enforceAccountStatus(authz);
   await enforceTenantStatus(authz);
+  enforceTokenVersion(authz, subject);
 };
