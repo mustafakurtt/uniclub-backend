@@ -1,5 +1,18 @@
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, spyOn } from "bun:test";
+import { and, eq } from "drizzle-orm";
 import { get, login, me, reqAuth, data } from "./helpers";
+import { db } from "../src/db";
+import { notifications } from "../src/db/schema";
+import { NotificationType } from "../src/features/notifications/notifications.types";
+import * as notificationsRepo from "../src/features/notifications/notifications.repository";
+
+async function countUserNotifications(userId: string, type: string) {
+  const rows = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId), eq(notifications.type, type)));
+  return rows.length;
+}
 
 /**
  * Activities feature'ının uçtan uca davranışı (gerçek Postgres/Redis, app.request):
@@ -230,6 +243,53 @@ describe("Activities", () => {
     const activityId = (await created.json()).data.id;
     expect((await reqAuth("POST", `/api/clubs/${techClubId}/activities/${activityId}/cancel`, mustafa)).status).toBe(200);
     expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, yusuf, { status: "going" })).status).toBe(404);
+  });
+
+  it("iptal bildirimi: katılımcı sayısından bağımsız tek toplu yazım", async () => {
+    const startsAt = new Date(Date.now() + 9 * 864e5).toISOString();
+    const created = await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+      title: "İptal fan-out testi",
+      startsAt,
+    });
+    const activityId = (await created.json()).data.id;
+
+    expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, mustafa, { status: "going" })).status).toBe(200);
+    expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, sen, { status: "interested" })).status).toBe(200);
+
+    const addManySpy = spyOn(notificationsRepo.notificationsRepository, "addMany");
+    expect((await reqAuth("POST", `/api/clubs/${techClubId}/activities/${activityId}/cancel`, mustafa)).status).toBe(200);
+
+    expect(addManySpy.mock.calls.length).toBe(1);
+    expect(addManySpy.mock.calls[0]![0].length).toBeGreaterThanOrEqual(2);
+    addManySpy.mockRestore();
+  });
+
+  it("iptal bildirimi: kulüp bağlamı susturması activity.cancelled'ı süpürmez", async () => {
+    const senId = (await me(sen)).userId;
+    const before = await countUserNotifications(senId, NotificationType.ACTIVITY_CANCELLED);
+
+    await reqAuth("PUT", "/api/users/me/notification-preferences", sen, {
+      type: NotificationType.ACTIVITY_CANCELLED,
+      clubId: techClubId,
+      muted: true,
+    });
+
+    const startsAt = new Date(Date.now() + 10 * 864e5).toISOString();
+    const created = await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+      title: "İptal mute bağlam testi",
+      startsAt,
+    });
+    const activityId = (await created.json()).data.id;
+    expect((await reqAuth("POST", `/api/activities/${activityId}/rsvp`, sen, { status: "going" })).status).toBe(200);
+    expect((await reqAuth("POST", `/api/clubs/${techClubId}/activities/${activityId}/cancel`, mustafa)).status).toBe(200);
+
+    expect(await countUserNotifications(senId, NotificationType.ACTIVITY_CANCELLED)).toBeGreaterThan(before);
+
+    await reqAuth("PUT", "/api/users/me/notification-preferences", sen, {
+      type: NotificationType.ACTIVITY_CANCELLED,
+      clubId: techClubId,
+      muted: false,
+    });
   });
 });
 

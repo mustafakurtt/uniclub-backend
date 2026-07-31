@@ -2,7 +2,7 @@ import { activitiesRepository } from "./activities.repository";
 import { activitiesCache, activityEffects } from "./activities.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { notFound, badRequest, forbidden } from "../../shared/utils/errors";
-import { notificationsService } from "../notifications/notifications.service";
+import { dispatchNotificationFanout } from "../notifications/notifications.fanout";
 import { NotificationType } from "../notifications/notifications.types";
 import { CreateActivityDTO, UpdateActivityDTO, ListActivitiesQueryDTO, RsvpDTO } from "./activities.schema";
 import type { Activity } from "./activities.types";
@@ -426,7 +426,7 @@ function stripJoins<T extends { activityClubs?: unknown; creator?: unknown }>(ro
 async function notifyMembersPublished(hostClubId: string, activity: Activity) {
   const memberIds = await activitiesRepository.getApprovedMemberIds(hostClubId);
   const recipients = memberIds.filter((id) => id !== activity.createdBy);
-  await notificationsService.notifyManySafe(recipients, {
+  await dispatchNotificationFanout(recipients, {
     type: NotificationType.ACTIVITY_PUBLISHED,
     title: "Yeni etkinlik",
     body: activity.title,
@@ -437,29 +437,22 @@ async function notifyMembersPublished(hostClubId: string, activity: Activity) {
 /** Co-host daveti bildirimi: hedef kulübün staff'ına (officer/president + danışman). */
 async function notifyCoHostInvited(hostClubId: string, targetClubId: string, activityId: string) {
   const staffIds = await activitiesRepository.getStaffIds(targetClubId);
-  await Promise.all(
-    staffIds.map((userId) =>
-      notificationsService.notifySafe(userId, {
-        type: NotificationType.ACTIVITY_COHOST_INVITED,
-        title: "Co-host daveti",
-        body: "Kulübünüz bir etkinliğe co-host olarak davet edildi.",
-        data: { activityId, hostClubId, clubId: targetClubId },
-      })
-    )
-  );
+  await dispatchNotificationFanout(staffIds, {
+    type: NotificationType.ACTIVITY_COHOST_INVITED,
+    title: "Co-host daveti",
+    body: "Kulübünüz bir etkinliğe co-host olarak davet edildi.",
+    data: { activityId, hostClubId, clubId: targetClubId },
+  });
 }
 
 /** İptal bildirimi: katılım bildiren herkese (yan etki). */
 async function notifyAttendeesCancelled(activityId: string, activity: Activity) {
   const attendees = await activitiesRepository.listAttendees(activityId);
-  await Promise.all(
-    attendees.map((a) =>
-      notificationsService.notifySafe(a.userId, {
-        type: NotificationType.ACTIVITY_CANCELLED,
-        title: "Etkinlik iptal edildi",
-        body: activity.title,
-        data: { activityId },
-      })
-    )
-  );
+  const userIds = attendees.map((a) => a.userId);
+  await dispatchNotificationFanout(userIds, {
+    type: NotificationType.ACTIVITY_CANCELLED,
+    title: "Etkinlik iptal edildi",
+    body: activity.title,
+    data: { activityId },
+  });
 }

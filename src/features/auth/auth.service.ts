@@ -841,7 +841,10 @@ export const authService = {
     }
 
     const passwordHash = await hashPassword(data.password);
-    await authRepository.completePasswordReset(reset.userId, reset.id, passwordHash);
+    const completed = await authRepository.completePasswordReset(reset.userId, reset.id, passwordHash);
+    if (!completed) {
+      throw badRequest("auth.passwordResetLinkUsed");
+    }
     await revokeUserSessions(reset.userId);
   },
 

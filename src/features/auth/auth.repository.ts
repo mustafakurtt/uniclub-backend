@@ -188,9 +188,15 @@ export const authRepository = {
       );
   },
 
-  async completePasswordReset(userId: string, resetId: string, passwordHash: string): Promise<void> {
-    await db.transaction(async (tx) => {
-      await tx.update(schema.passwordResets).set({ usedAt: new Date() }).where(eq(schema.passwordResets.id, resetId));
+  async completePasswordReset(userId: string, resetId: string, passwordHash: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      const marked = await tx
+        .update(schema.passwordResets)
+        .set({ usedAt: new Date() })
+        .where(and(eq(schema.passwordResets.id, resetId), isNull(schema.passwordResets.usedAt)))
+        .returning({ id: schema.passwordResets.id });
+      if (marked.length === 0) return false;
+
       await tx
         .update(schema.users)
         .set({
@@ -200,6 +206,7 @@ export const authRepository = {
           updatedAt: new Date(),
         })
         .where(eq(schema.users.id, userId));
+      return true;
     });
   },
 

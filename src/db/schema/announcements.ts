@@ -20,7 +20,8 @@ export const announcements = table("announcements", {
     .references(() => universities.id, { onDelete: "restrict" })
     .notNull(), // hızlı sorgu için denormalize
   // NULL = okul geneli duyuru (tenant yayını). Dolu = kulüp duyurusu.
-  clubId: t.uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }),
+  // Kulüp silme yok (yalnızca arşiv) → RESTRICT; activity_clubs ile aynı varsayım.
+  clubId: t.uuid("club_id").references(() => clubs.id, { onDelete: "restrict" }),
 
   authorId: t.uuid("author_id").references(() => users.id, { onDelete: "restrict" }).notNull(),
   title: t.varchar({ length: 256 }).notNull(),
@@ -45,7 +46,7 @@ export const announcements = table("announcements", {
     columns: [cols.clubId, cols.universityId],
     foreignColumns: [clubs.id, clubs.universityId],
     name: "announcements_club_tenant_fkey",
-  }).onDelete("cascade"),
+  }).onDelete("restrict"),
   // Kulüp detay sayfasının duyuru akışı (sabitlenen üstte, yayın zamanı azalan).
   t.index("announcements_club_published_idx").on(
     cols.clubId,

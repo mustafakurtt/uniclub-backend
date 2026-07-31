@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { app, postJson } from "./helpers";
 import { SEED_PASSWORD } from "./config";
+import { emailQueue, type PasswordResetEmailJob, type VerificationEmailJob } from "../src/features/auth/auth.queue";
 
 // Test veritabanı her koşuda sıfırdan seed'lendiği için (bkz. provision.ts)
 // bu senaryolar deterministiktir — yeni kayıt "zaten var" hatası vermez.
@@ -122,5 +123,60 @@ describe("auth: e-posta büyük/küçük harf normalizasyonu", () => {
       password: SEED_PASSWORD,
     });
     expect(res.status).toBe(201);
+  });
+});
+
+describe("auth: şifre sıfırlama", () => {
+  async function getVerificationTokenForEmail(email: string): Promise<string> {
+    const jobs = await emailQueue.getJobs(["waiting", "delayed", "active", "completed"]);
+    const job = jobs.find(
+      (j) => j.name === "send-verify-email" && (j.data as VerificationEmailJob).email === email
+    );
+    expect(job).toBeDefined();
+    return (job!.data as VerificationEmailJob).token;
+  }
+
+  async function getPasswordResetTokenForEmail(email: string): Promise<string> {
+    const jobs = await emailQueue.getJobs(["waiting", "delayed", "active", "completed"]);
+    const job = jobs.find(
+      (j) => j.name === "send-password-reset" && (j.data as PasswordResetEmailJob).email === email
+    );
+    expect(job).toBeDefined();
+    return (job!.data as PasswordResetEmailJob).token;
+  }
+
+  it("aynı token ile eşzamanlı iki şifre sıfırlama — biri 200 diğeri 400", async () => {
+    const email = `reset.concurrent.${Date.now()}@std.antalya.edu.tr`;
+    expect(
+      (
+        await postJson("/api/auth/register", {
+          firstName: "Reset",
+          lastName: "Concurrent",
+          email,
+          password: SEED_PASSWORD,
+        })
+      ).status
+    ).toBe(201);
+
+    const verifyToken = await getVerificationTokenForEmail(email);
+    expect((await app.request(`/api/auth/verify?token=${verifyToken}`)).status).toBe(200);
+
+    expect((await postJson("/api/auth/forgot-password", { email })).status).toBe(200);
+    const resetToken = await getPasswordResetTokenForEmail(email);
+    const newPassword = "ConcurrentReset12!";
+    const body = JSON.stringify({ token: resetToken, password: newPassword });
+    const opts = {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    };
+    const [first, second] = await Promise.all([
+      app.request("/api/auth/reset-password", opts),
+      app.request("/api/auth/reset-password", opts),
+    ]);
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([200, 400]);
+    const failed = first.status === 400 ? first : second;
+    expect((await failed.json()).message).toContain("kullanılmış");
   });
 });

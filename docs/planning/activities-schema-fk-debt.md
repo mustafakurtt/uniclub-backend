@@ -33,18 +33,19 @@
 
 ## 2. Kulüp silme — ürün kararı ve tablolar arası tutarlılık
 
-**Karar:** Bu üründe kulüp **silme yok**. `clubs` şemasında `deletedAt` yok; soft delete yok; kulüp silme API'si yok. Yaşam döngüsü `status` üzerinden (ör. `archived`).
+**Karar (2026-07-31, toparlama turu):** Bu üründe kulüp **silme yok**. `clubs` şemasında `deletedAt` yok; soft delete yok; kulüp silme API'si yok. Yaşam döngüsü `status` üzerinden (ör. `archived`). Tenant offboarding ayrı bir akış olarak ele alınacak; fiziksel kulüp satırı silme varsayılmıyor.
 
-**Şema tepkisi (aynı ürün varsayımı, farklı FK rolleri):**
+**Şema tepkisi — tutarlı RESTRICT:**
 
 | Tablo | FK politikası | Anlam |
 |---|---|---|
-| `announcements` → `clubs` (bileşik FK) | **CASCADE** | Hipotetik fiziksel kulüp silmesinde duyurular orphan kalmasın — defansif içerik temizliği. |
-| `activity_clubs.club_id` → `clubs` | **RESTRICT** | Hipotetik kulüp silmesi etkinlik bağlarını sessizce koparmasın — defansif bağ bütünlüğü (turnuva/co-host). |
+| `announcements.club_id` → `clubs` | **RESTRICT** | Kulüp satırı silinmez; duyurular orphan üretmez çünkü silme yok. CASCADE “kulüp giderse duyuru gitsin” okuması ürün kararıyla çelişiyordu. |
+| `announcements` bileşik FK (`club_id`, `university_id`) → `clubs` | **RESTRICT** | Tenant kilidi + aynı silme yok varsayımı. |
+| `activity_clubs.club_id` → `clubs` | **RESTRICT** | Etkinlik bağ grafiği (turnuva/co-host) sessizce kopmamalı — hipotetik hard-delete yolunda da koruma. |
 
-İkisi çelişkili bir “kulüp silme modeli” taşımıyor: her ikisi de **üründe silme olmadığı** varsayımıyla defansif katmanlar. CASCADE = içerik temizliği; RESTRICT = bağ grafiği koruma.
+**İleride kulüp silme eklenirse:** Önce etkinlik bağları (`activity_clubs`) ve içerik (duyurular, galeri vb.) arşiv veya soft-delete akışına taşınmalı; fiziksel `clubs` satırı silme RESTRICT yüzünden son adım olur veya ürün kararı değişirse migration ile CASCADE politikası yeniden değerlendirilir.
 
-**Ayrı madde (bu turda uygulanmadı):** `announcements` bileşik FK CASCADE, “kulüp silinirse duyurular gitsin” okumasına açık. Ürün kararı “silme yok” ile tam hizalı değil görünür; RESTRICT'e çevrilmesi veya arşiv akışına bağlanması ileride değerlendirilebilir. Bu turda dokunulmadı — önce bu karar kaydı onaylandı.
+**Migration:** `announcements` FK'leri CASCADE → RESTRICT (`202607312*` toparlama migration). Mevcut veride orphan üretmez — hiçbir parent silinmiş değil.
 
 ---
 
