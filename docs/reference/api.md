@@ -169,7 +169,7 @@ Ayrıntılı request/response örnekleri için [auth.md](../integration/auth.md)
 | DELETE | `/api/auth/roles/:roleId/permissions/:permissionId` | `role.manage` | Rolden permission kaldır |
 
 Body şemaları:
-- `POST /register`: `{ firstName (2-100), lastName (2-100), email, studentNumber?, password (min 12) }`
+- `POST /register`: `{ firstName (2-100), lastName (2-100), email, studentNumber?, password (min 8) }`
 - `POST /login`: `{ email, password }`
 - Promote/demote rotaları body almaz.
 - `POST /permissions`: `{ key (3-100), description? (max 256) }`
@@ -208,7 +208,7 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 
 **PATCH /api/users/me/password**
 ```jsonc
-{ "currentPassword": "string", "newPassword": "string (min 12)" }
+{ "currentPassword": "string", "newPassword": "string (min 8)" }
 ```
 
 **GET /api/users/me/clubs** → `data`: `clubMembers` satırları, `club` objesi gömülü (`clubId`, `role`, `status`, `club.{name, slug, ...}`). `status: "pending"` satırlar da gelir — yetki kararında `status === "approved"` filtresi şart.
@@ -224,6 +224,8 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 **Ayrıntılı request/response örnekleri ve frontend akış rehberi için `docs/integration/university.md`'ye bakın.** Bu bölüm özet kataloğudur.
 
 Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda üniversite/fakülte/bölüm seçimi için. Yazma rotaları **granüler `university.*` permission'larıyla** korunur (sistem yönetim paneli). Eski tek `university.manage` yetkisi kaldırıldı; yerine kaynak+aksiyon bazlı 12 ayrı yetki geldi (aşağıdaki tabloda her satırın yetkisi belirtilmiştir). Bu, bir kullanıcıya örneğin "yalnızca fakülte ekleme" yetkisi verip "üniversite silme" yetkisi vermemeyi mümkün kılar.
+
+**Üniversite listesi — üç yüzey:** `GET /api/universities` public kayıt formu listesi; tenant yönetim paneli kendi tenant bağlamında akademik yapıyı bu ağaç üzerinden okur; `GET /api/platform/tenants` operatör paneli için tenant + özet istatistik (kullanıcı/kulüp sayıları) döner — aynı tabloyu listeler ama amaç ve yetki farklıdır.
 
 `:universityId` taşıyan tüm **yazma** rotaları `tenantScoped`'tır: `:universityId` çağıranın kendi üniversitesiyle eşleşmeli — **`super_admin` bu kontrolü bypass eder** (herhangi bir üniversiteyi hedefleyebilir). Üniversite oluşturma (`POST /`) doğası gereği tenantScoped değildir (henüz tenant yoktur).
 

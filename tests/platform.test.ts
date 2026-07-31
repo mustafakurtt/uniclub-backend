@@ -4,6 +4,7 @@ import { SEED_PASSWORD } from "./config";
 import { db } from "../src/db";
 import { eq } from "drizzle-orm";
 import { universities } from "../src/db/schema";
+import { emailQueue } from "../src/features/auth/auth.queue";
 
 describe("platform operasyonları (/api/platform)", () => {
   let superAdmin: string;
@@ -220,6 +221,48 @@ describe("platform operasyonları (/api/platform)", () => {
 
     const invitedToken = await login(inviteEmail, "InviteAdmin123!");
     expect((await me(invitedToken)).universityId).toBe(onboarded.university.id);
+  });
+
+  it("onboard çakışan e-posta ile başarısız olursa rollback olur ve doğrulama maili kuyruğa girmez", async () => {
+    const countsBefore = await emailQueue.getJobCounts();
+    const slug = `rollback-onboard-${Date.now()}`;
+    const staffDomain = `staff.${slug}.edu.tr`;
+
+    const res = await reqAuth("POST", "/api/platform/tenants/onboard", superAdmin, {
+      name: "Rollback Tenant",
+      slug,
+      status: "trial",
+      domains: [
+        { domain: `std.${slug}.edu.tr`, domainType: "student" },
+        { domain: staffDomain, domainType: "staff" },
+      ],
+      faculties: [
+        {
+          name: "Test Fakülte",
+          departments: ["Test Bölüm"],
+        },
+      ],
+      initialAdmin: {
+        firstName: "Dup",
+        lastName: "Admin",
+        email: "superadmin@platform.local",
+        password: "OnboardAdmin123!",
+      },
+    });
+    expect(res.status).toBe(400);
+
+    const uni = await db.query.universities.findFirst({ where: { slug } });
+    expect(uni).toBeUndefined();
+
+    const domainRow = await db.query.universityDomains.findFirst({
+      where: { domain: staffDomain },
+    });
+    expect(domainRow).toBeUndefined();
+
+    const countsAfter = await emailQueue.getJobCounts();
+    expect(countsAfter.waiting).toBe(countsBefore.waiting);
+    expect(countsAfter.active).toBe(countsBefore.active);
+    expect(countsAfter.delayed).toBe(countsBefore.delayed);
   });
 
   it("platform_support onboard ve invite-admin yapamaz", async () => {

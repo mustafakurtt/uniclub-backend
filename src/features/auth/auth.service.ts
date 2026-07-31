@@ -6,6 +6,9 @@ import { generateOneTimeToken, hashToken } from "../../core/auth/token"; // e-po
 import { emailQueue } from "./auth.queue";
 import { resolveAuthz, invalidateUserPermissions, invalidateUsersPermissions } from "../../shared/rbac/rbac.cache";
 import { toSafeUser } from "../../shared/utils/user.util";
+import { db } from "../../db";
+import type { DbExecutor } from "../../db/executor";
+import type { WithAfterCommit } from "../../shared/types/after-commit";
 import { AuthPermission } from "./auth.permissions";
 import { AdminPermission } from "../admin/admin.permissions";
 import { ClubPermission } from "../clubs/clubs.permissions";
@@ -305,17 +308,15 @@ async function removeGlobalRole(actor: RoleAdminActor, userId: string, roleName:
 
 export const authService = {
   /**
-   * Yeni bir kullanıcıyı doğrulamalardan geçirerek sisteme kaydeder.
+   * Öğrenci/personel self-service kayıt — e-posta doğrulama zorunlu.
    */
-  async register(data: RegisterDTO) {
-    // 1. İş Kuralı: E-postadan domain'i ayıkla
+  async registerSelfService(data: RegisterDTO) {
     const emailParts = data.email.split("@");
     if (emailParts.length !== 2) {
       throw badRequest("auth.invalidEmailFormat");
     }
     const domain = emailParts[1];
 
-    // 2. İş Kuralı: Domain kayıtlı mı?
     const universityDomain = await authRepository.findUniversityByDomain(domain);
     if (!universityDomain) {
       throw badRequest("auth.emailDomainNotRegistered");
@@ -326,40 +327,183 @@ export const authService = {
       throw badRequest("auth.tenantRegistrationDisabled");
     }
 
-    // 3. İş Kuralı: E-posta müsait mi?
     const existingUser = await authRepository.findUserByEmailAndTenant(
       data.email,
       universityDomain.universityId
     );
-
     if (existingUser) {
       throw badRequest("auth.emailAlreadyInUse");
     }
 
-    // 4. İş Kuralı: Şifreyi güvenlikten geçir
     const hashedPassword = await hashPassword(data.password);
-
-    // 5. İş Kuralı: Hoca ise danışman, öğrenci ise öğrenci rolünü belirle
     const assignedRole = universityDomain.domainType === "staff" ? "advisor" : "student";
 
-    // 6. Veritabanına Yazma İşlemi (Repository'ye devret)
-    const newUser = await authRepository.createUserWithRole({
-      universityId: universityDomain.universityId,
-      email: data.email,
-      passwordHash: hashedPassword,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      studentNumber: data.studentNumber || null,
-      status: "pending", // Mail onayı bekleniyor
-    }, assignedRole);
+    const user = await db.transaction(async (tx) => {
+      return await authRepository.createUserWithRoleInTx(
+        tx,
+        {
+          universityId: universityDomain.universityId,
+          email: data.email,
+          passwordHash: hashedPassword,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          studentNumber: data.studentNumber || null,
+          status: "pending",
+        },
+        assignedRole
+      );
+    });
 
-    // 7. Doğrulama maili (token üretimi + kuyruğa atma tek yerde)
-    await issueVerificationEmail(newUser);
+    await issueVerificationEmail(user);
 
-    // 8. İş Kuralı: Hashlenmiş şifreyi dışarı sızdırma
-    const { passwordHash, ...safeUser } = newUser;
-    
+    const { passwordHash, ...safeUser } = user;
     return safeUser;
+  },
+
+  async register(data: RegisterDTO) {
+    return await authService.registerSelfService(data);
+  },
+
+  /**
+   * Operatör tarafından tenant personeli provision — tx dışında hash'lenmiş şifre alır.
+   */
+  async provisionStaffAccountInTx(params: {
+    tx: DbExecutor;
+    universityId: string;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }): Promise<WithAfterCommit<Omit<import("./auth.types").User, "passwordHash">>> {
+    const existing = await authRepository.findUserByEmailInTx(params.tx, params.email);
+    if (existing) {
+      throw badRequest("auth.emailAlreadyInUse");
+    }
+
+    const user = await authRepository.provisionUserWithRoleInTx(
+      params.tx,
+      {
+        universityId: params.universityId,
+        email: params.email,
+        passwordHash: params.passwordHash,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        studentNumber: null,
+        status: "active",
+        mustChangePassword: true,
+      },
+      params.roleName
+    );
+
+    const { passwordHash, ...safe } = user;
+    return {
+      result: safe,
+      afterCommit: async () => {
+        await invalidateUserPermissions(user.id);
+      },
+    };
+  },
+
+  async provisionStaffAccount(params: {
+    universityId: string;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }) {
+    const afterCommits: Array<() => Promise<void>> = [];
+    const result = await db.transaction(async (tx) => {
+      const wrapped = await authService.provisionStaffAccountInTx({ tx, ...params });
+      if (wrapped.afterCommit) {
+        afterCommits.push(wrapped.afterCommit);
+      }
+      return wrapped.result;
+    });
+    for (const runAfterCommit of afterCommits) {
+      await runAfterCommit();
+    }
+    return result;
+  },
+
+  async provisionPlatformAccount(params: {
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }) {
+    const existing = await authRepository.findPlatformUserByEmail(params.email);
+    if (existing) {
+      throw badRequest("platform.userEmailAlreadyInUse");
+    }
+
+    const role = await authRepository.findRoleByName(params.roleName, null);
+    if (!role) {
+      throw notFound("platform.roleNotFound");
+    }
+
+    const afterCommits: Array<() => Promise<void>> = [];
+    const result = await db.transaction(async (tx) => {
+      const wrapped = await authService.provisionPlatformAccountInTx({
+        tx,
+        ...params,
+      });
+      if (wrapped.afterCommit) {
+        afterCommits.push(wrapped.afterCommit);
+      }
+      return wrapped.result;
+    });
+    for (const runAfterCommit of afterCommits) {
+      await runAfterCommit();
+    }
+    return result;
+  },
+
+  async provisionPlatformAccountInTx(params: {
+    tx: DbExecutor;
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+  }): Promise<WithAfterCommit<{ email: string; roles: string[] } & Omit<import("./auth.types").User, "passwordHash">>> {
+    const existing = await authRepository.findUserByEmailInTx(params.tx, params.email);
+    if (existing) {
+      throw badRequest("platform.userEmailAlreadyInUse");
+    }
+
+    const user = await authRepository.provisionUserWithRoleInTx(
+      params.tx,
+      {
+        universityId: null,
+        email: params.email,
+        passwordHash: params.passwordHash,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        studentNumber: null,
+        status: "active",
+        mustChangePassword: true,
+      },
+      params.roleName
+    );
+
+    const { passwordHash, ...safe } = user;
+    return {
+      result: { ...safe, roles: [params.roleName] },
+      afterCommit: async () => {
+        await invalidateUserPermissions(user.id);
+      },
+    };
+  },
+
+  async findPlatformUserByEmail(email: string) {
+    return await authRepository.findPlatformUserByEmail(email);
+  },
+
+  async listPlatformUsers() {
+    return await authRepository.listPlatformUsers();
   },
 
 

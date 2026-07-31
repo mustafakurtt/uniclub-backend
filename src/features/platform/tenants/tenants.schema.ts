@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { passwordSchema } from "../../../shared/schemas/password.schema";
+import { provisionPasswordSchema } from "../../../shared/schemas/password.schema";
 
 export const UNIVERSITY_STATUS_VALUES = ["trial", "active", "past_due", "suspended"] as const;
 
@@ -22,7 +22,7 @@ export const provisionTenantAdminSchema = z.object({
   firstName: z.string().min(2).max(100),
   lastName: z.string().min(2).max(100),
   email: emailField,
-  password: passwordSchema,
+  password: provisionPasswordSchema,
 });
 
 export type ProvisionTenantAdminDTO = z.infer<typeof provisionTenantAdminSchema>;

@@ -41,3 +41,19 @@ belirsizleşir.
 - Yeni platform endpoint'leri `src/features/platform/<modül>/` konvansiyonunu izler.
 - Frontend tüketici dokümanı: `docs/integration/platform-panel.md`.
 - İlgili: [ADR 0010](0010-platform-vs-tenant-roles.md).
+
+## Orkestrasyon sınırı (2026-07-31 güncellemesi)
+
+`features/platform` **yalnızca orkestrasyon + çapraz-tenant read-model** katmanıdır; başka
+feature'ların sahip tablolarına doğrudan yazım yapmaz.
+
+- **Yazma:** istisnasız sahibi feature servisinden (`universityService`, `authService`).
+- **Transaction:** platform orkestratörü `db.transaction` açar; sahip servisler `*InTx`
+  metotlarıyla yalnızca DB yazımı yapar.
+- **Yan etkiler commit sonrası:** şifre hash'i transaction öncesi; `issueVerificationEmail`,
+  `invalidateUserPermissions`, `effect.emit()`, `notifySafe()` transaction içinde çağrılmaz.
+  Sahip servisler `{ result, afterCommit? }` döndürür; orkestratör commit sonrası çalıştırır.
+- **Çapraz-tenant agregasyon:** salt-okunur `count*` sorguları platform repository'de kalabilir.
+- **Auth provizyon niyetleri:** `registerSelfService`, `provisionStaffAccount`,
+  `provisionPlatformAccount` — `skipVerify` gibi politika bayrakları yok; doğrulama politikası
+  auth'un kararıdır.

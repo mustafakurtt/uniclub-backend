@@ -176,7 +176,7 @@ UI göster/gizle için `permissions.includes("<key>")` kullanın; rol adına gö
   "lastName": "Veli",            // zorunlu, 2-100 karakter
   "email": "ali@std.antalya.edu.tr", // zorunlu, geçerli e-posta; domain sistemde kayıtlı olmalı
   "studentNumber": "250803999",  // opsiyonel
-  "password": "gizliParola123"   // zorunlu, min 12 karakter
+  "password": "gizliParola123"   // zorunlu, min 8 karakter (self-service)
 }
 ```
 
@@ -361,7 +361,7 @@ Response `data`: güncellenmiş safe user (ilişkiler olmadan, düz kolonlar).
 ### 5.3. `PATCH /api/users/me/password`
 
 ```jsonc
-{ "currentPassword": "eski", "newPassword": "yeni (min 12)" }
+{ "currentPassword": "eski", "newPassword": "yeni (min 8)" }
 ```
 
 `200` `"Şifre güncellendi."` — Hata (400): `"Mevcut şifre yanlış."` Şifre değişince mevcut token'lar **geçersiz kılınmaz** (JWT stateless'tır); frontend isterse başarı sonrası yeniden login isteyebilir ama zorunlu değildir.

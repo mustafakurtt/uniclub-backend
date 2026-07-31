@@ -27,7 +27,7 @@ import { provisionRbacCatalog } from "./rbac-catalog";
  * Çalıştırma:  bun run db:bootstrap
  */
 
-const MIN_PASSWORD_LENGTH = 12;
+import { PROVISION_PASSWORD_MIN_LENGTH } from "../shared/schemas/password.schema";
 
 async function main() {
   const email = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
@@ -45,8 +45,8 @@ async function main() {
       console.log("ℹ️  SUPER_ADMIN_EMAIL/PASSWORD verilmedi — süper yönetici oluşturma atlandı.");
       return;
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      throw new Error(`SUPER_ADMIN_PASSWORD en az ${MIN_PASSWORD_LENGTH} karakter olmalı.`);
+    if (password.length < PROVISION_PASSWORD_MIN_LENGTH) {
+      throw new Error(`SUPER_ADMIN_PASSWORD en az ${PROVISION_PASSWORD_MIN_LENGTH} karakter olmalı.`);
     }
 
     // Platform hesabı: universityId IS NULL. Aynı e-postayla zaten varsa dokunma.

@@ -11,6 +11,7 @@ import { ActivityPermission, ACTIVITY_PERMISSION_CATALOG } from "../features/act
 import { DashboardPermission, DASHBOARD_PERMISSION_CATALOG } from "../features/dashboard/dashboard.permissions";
 import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/audit.permissions";
 import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
+import type { DbExecutor } from "./executor";
 
 /**
  * Global RBAC kataloğunun TEK KAYNAĞI (roller, yetkiler, rol→yetki demetleri).
@@ -105,9 +106,6 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     PlatformPermission.TENANT_VIEW,
   ],
 };
-
-/** seed / bootstrap'in verdiği transaction ya da doğrudan db. */
-export type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Rolleri, yetkileri ve rol→yetki bağlarını kurar. IDEMPOTENT — mevcut bir

@@ -8,6 +8,9 @@ export type TenantListItem = {
   name: string;
   slug: string;
   status: UniversityStatus;
+  statusReason: string | null;
+  statusChangedAt: Date | null;
+  statusChangedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
   domainCount: number;

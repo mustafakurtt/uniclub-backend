@@ -3,7 +3,6 @@ import { guard, guardRole } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { validate } from "../../../shared/utils/validate";
 import { ok, created } from "../../../shared/utils/respond";
-import { invalidateUserPermissions } from "../../../shared/rbac/rbac.cache";
 import { PlatformPermission } from "../platform.permissions";
 import { createPlatformUserSchema } from "./operator-users.schema";
 import { operatorUsersService } from "./operator-users.service";
@@ -30,7 +29,6 @@ operatorUsersRoutes.post(
   async (c) => {
     const body = c.req.valid("json");
     const user = await operatorUsersService.createPlatformUser(body);
-    await invalidateUserPermissions(user.id);
     return created(c, user, "platform.userCreated");
   }
 );

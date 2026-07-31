@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { passwordSchema } from "../../../shared/schemas/password.schema";
+import { provisionPasswordSchema } from "../../../shared/schemas/password.schema";
 import { PLATFORM_ACCOUNT_ROLE_NAMES } from "./operator-users.types";
 
 const emailField = z
@@ -12,7 +12,7 @@ export const createPlatformUserSchema = z.object({
   firstName: z.string().min(2).max(100),
   lastName: z.string().min(2).max(100),
   email: emailField,
-  password: passwordSchema,
+  password: provisionPasswordSchema,
   role: z.enum(PLATFORM_ACCOUNT_ROLE_NAMES),
 });
 

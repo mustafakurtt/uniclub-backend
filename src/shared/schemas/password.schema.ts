@@ -1,8 +1,21 @@
 import { z } from "zod";
 
-/** Tüm şifre alanları (kayıt, provision, şifre değiştirme) için tek minimum uzunluk. */
-export const PASSWORD_MIN_LENGTH = 12;
+/** Self-service kayıt ve şifre değiştirme. */
+export const SELF_SERVICE_PASSWORD_MIN_LENGTH = 8;
 
-export const passwordSchema = z
+/** Operatör provizyonu (tenant admin, platform hesabı) ve bootstrap. */
+export const PROVISION_PASSWORD_MIN_LENGTH = 12;
+
+export const selfServicePasswordSchema = z
   .string()
-  .min(PASSWORD_MIN_LENGTH, `Şifre en az ${PASSWORD_MIN_LENGTH} karakter olmalıdır.`);
+  .min(
+    SELF_SERVICE_PASSWORD_MIN_LENGTH,
+    `Şifre en az ${SELF_SERVICE_PASSWORD_MIN_LENGTH} karakter olmalıdır.`
+  );
+
+export const provisionPasswordSchema = z
+  .string()
+  .min(
+    PROVISION_PASSWORD_MIN_LENGTH,
+    `Şifre en az ${PROVISION_PASSWORD_MIN_LENGTH} karakter olmalıdır.`
+  );

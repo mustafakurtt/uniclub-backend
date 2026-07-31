@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { passwordSchema } from "../../shared/schemas/password.schema";
+import { selfServicePasswordSchema } from "../../shared/schemas/password.schema";
 
 export const updateProfileSchema = z.object({
   firstName: z.string().min(2, "Ad en az 2 karakter olmalıdır.").max(100).optional(),
@@ -13,6 +13,6 @@ export type UpdateProfileDTO = z.infer<typeof updateProfileSchema>;
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Mevcut şifre boş bırakılamaz."),
-  newPassword: passwordSchema,
+  newPassword: selfServicePasswordSchema,
 });
 export type ChangePasswordDTO = z.infer<typeof changePasswordSchema>;

@@ -6,6 +6,10 @@
  */
 import { readdirSync, readFileSync, statSync, existsSync } from "fs";
 import { join, dirname, resolve, relative } from "path";
+import {
+  SELF_SERVICE_PASSWORD_MIN_LENGTH,
+  PROVISION_PASSWORD_MIN_LENGTH,
+} from "../src/shared/schemas/password.schema";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DOCS = join(ROOT, "docs");
@@ -245,6 +249,29 @@ scanDeadPaths(ROOT);
 
 if (deadRefCount === 0) {
   ok("Ölü docs path referansı yok");
+}
+
+// ── 5. Şifre minimum uzunlukları (kod sabitleriyle senkron) ─────────────────
+
+const AUTH_MD = join(DOCS, "integration", "auth.md");
+const PLATFORM_PANEL_MD = join(DOCS, "integration", "platform-panel.md");
+
+const authText = readFileSync(AUTH_MD, "utf8");
+if (!authText.includes(`min ${SELF_SERVICE_PASSWORD_MIN_LENGTH} karakter`)) {
+  fail(
+    `auth.md self-service şifre minimumu kod sabitiyle uyumlu değil (beklenen: ${SELF_SERVICE_PASSWORD_MIN_LENGTH})`
+  );
+} else {
+  ok(`auth.md self-service şifre min ${SELF_SERVICE_PASSWORD_MIN_LENGTH} ile uyumlu`);
+}
+
+const platformPanelText = readFileSync(PLATFORM_PANEL_MD, "utf8");
+if (!platformPanelText.includes(`en az **${PROVISION_PASSWORD_MIN_LENGTH}** karakter`)) {
+  fail(
+    `platform-panel.md provision şifre minimumu kod sabitiyle uyumlu değil (beklenen: ${PROVISION_PASSWORD_MIN_LENGTH})`
+  );
+} else {
+  ok(`platform-panel.md provision şifre min ${PROVISION_PASSWORD_MIN_LENGTH} ile uyumlu`);
 }
 
 // ── Sonuç ───────────────────────────────────────────────────────────────────

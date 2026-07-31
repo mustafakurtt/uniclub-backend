@@ -16,6 +16,8 @@ import {
   CreateDepartmentDTO,
   UpdateDepartmentDTO,
 } from "./university.schema";
+import type { CreateTenantPackagePayload, UpdateTenantLifecyclePayload } from "./university.types";
+import type { DbExecutor } from "../../db/executor";
 
 /**
  * university iş kuralları. Veri erişimi kaynak-başına repository'lere dağıtılmıştır
@@ -52,10 +54,56 @@ export const universityService = {
     return university;
   },
 
+  async getUniversitySummary(universityId: string) {
+    const university = await universityRepository.findByIdSummary(universityId);
+    if (!university) {
+      throw notFound("university.notFound");
+    }
+    return university;
+  },
+
+  async createTenantPackage(data: CreateTenantPackagePayload, options?: { tx?: DbExecutor }) {
+    return await universityRepository.createTenantPackage(data, options);
+  },
+
+  async updateTenantLifecycle(
+    universityId: string,
+    data: UpdateTenantLifecyclePayload,
+    options?: { tx?: DbExecutor }
+  ) {
+    const university = await universityRepository.findByIdSummary(universityId);
+    if (!university) {
+      throw notFound("university.notFound");
+    }
+    return await universityRepository.updateTenantLifecycle(universityId, data, options);
+  },
+
+  assertStaffDomainsForAdmin(
+    domains: { domain: string; domainType: string }[],
+    email: string
+  ) {
+    const hasStaffDomain = domains.some((d) => d.domainType === "staff");
+    if (!hasStaffDomain) {
+      throw badRequest("platform.tenantStaffDomainRequired");
+    }
+
+    const emailDomain = extractEmailDomain(email);
+    const matchesStaff = domains.some((d) => d.domain === emailDomain && d.domainType === "staff");
+    if (!matchesStaff) {
+      throw badRequest("platform.adminEmailDomainMismatch");
+    }
+  },
+
+  async assertStaffEmailForTenant(universityId: string, email: string) {
+    const emailDomain = extractEmailDomain(email);
+    const staffDomain = await domainRepository.findStaffDomainInUniversity(universityId, emailDomain);
+    if (!staffDomain) {
+      throw badRequest("platform.adminEmailDomainMismatch");
+    }
+  },
+
   /**
    * Yeni üniversite oluşturur.
-   * 1. slug sistemde benzersiz olmalı (silinmiş kayıtlar DAHİL — unique kısıt hepsini kapsar).
-   * 2. Verilen domainlerin hiçbiri (istekte ve DB'de) daha önce kayıtlı olmamalı.
    */
   async createUniversity(data: CreateUniversityDTO) {
     await universityService.validateSlugAndDomains(data.slug, data.domains);
@@ -326,3 +374,11 @@ export const universityService = {
     return { id: departmentId };
   },
 };
+
+function extractEmailDomain(email: string): string {
+  const parts = email.split("@");
+  if (parts.length !== 2 || !parts[1]) {
+    throw badRequest("auth.invalidEmailFormat");
+  }
+  return parts[1];
+}

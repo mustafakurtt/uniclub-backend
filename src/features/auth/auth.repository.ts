@@ -1,8 +1,9 @@
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../../db";
+import type { DbExecutor } from "../../db/executor";
 import * as schema from "../../db/schema";
 import { BaseRepository } from "../../core/db";
-import { CreateUserPayload, UniversityDomain, User } from "./auth.types";
+import { CreateUserPayload, UniversityDomain, User, ProvisionUserPayload } from "./auth.types";
 
 /**
  * auth/RBAC aggregate'i tek bir sahip tabloya oturmaz (users + roles + permissions
@@ -53,27 +54,58 @@ export const authRepository = {
    * Yeni kullanıcıyı ve rolünü tek bir Transaction (İşlem bloğu) içinde kaydeder.
    */
   async createUserWithRole(userData: CreateUserPayload, roleName: string): Promise<User> {
-    return await db.transaction(async (tx) => {
-      // 1. Kullanıcıyı oluştur
-      const [insertedUser] = await tx.insert(schema.users).values(userData).returning();
+    return await db.transaction(async (tx) => createUserWithRoleInTx(tx, userData, roleName));
+  },
 
-      // 2. İstenen rolü bul (V2 obje syntax'ı ile)
-      const roleRecord = await tx.query.roles.findFirst({
-        where: { 
-          name: roleName 
-        },
-      });
+  async createUserWithRoleInTx(tx: DbExecutor, userData: CreateUserPayload, roleName: string): Promise<User> {
+    return createUserWithRoleInTx(tx, userData, roleName);
+  },
 
-      // 3. Kullanıcıya rolü ata
-      if (roleRecord) {
-        await tx.insert(schema.userRoles).values({
-          userId: insertedUser.id,
-          roleId: roleRecord.id,
-        });
-      }
+  async provisionUserWithRoleInTx(tx: DbExecutor, userData: ProvisionUserPayload, roleName: string): Promise<User> {
+    return provisionUserWithRoleInTx(tx, userData, roleName);
+  },
 
-      return insertedUser;
+  async findUserByEmailInTx(tx: DbExecutor, email: string) {
+    return await tx.query.users.findFirst({
+      where: { email, deletedAt: { isNull: true } },
     });
+  },
+
+  async findPlatformUserByEmail(email: string) {
+    return await db.query.users.findFirst({
+      where: { email, universityId: { isNull: true }, deletedAt: { isNull: true } },
+      columns: { id: true },
+    });
+  },
+
+  async listPlatformUsers() {
+    const rows = await db.query.users.findMany({
+      where: { universityId: { isNull: true }, deletedAt: { isNull: true } },
+      columns: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+        mustChangePassword: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      with: { roles: { columns: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      status: row.status,
+      mustChangePassword: row.mustChangePassword,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      roles: row.roles.map((r) => r.name),
+    }));
   },
 
   async findUserByEmail(email: string): Promise<User | undefined> {
@@ -372,3 +404,55 @@ export const authRepository = {
     return rows.map((r) => r.role).filter((role): role is NonNullable<typeof role> => !!role);
   },
 };
+
+async function createUserWithRoleInTx(tx: DbExecutor, userData: CreateUserPayload, roleName: string): Promise<User> {
+  const [insertedUser] = await tx.insert(schema.users).values(userData).returning();
+
+  const roleRecord = await tx.query.roles.findFirst({
+    where: { name: roleName },
+  });
+
+  if (roleRecord) {
+    await tx.insert(schema.userRoles).values({
+      userId: insertedUser.id,
+      roleId: roleRecord.id,
+    });
+  }
+
+  return insertedUser;
+}
+
+async function provisionUserWithRoleInTx(
+  tx: DbExecutor,
+  userData: ProvisionUserPayload,
+  roleName: string
+): Promise<User> {
+  const [insertedUser] = await tx
+    .insert(schema.users)
+    .values({
+      universityId: userData.universityId,
+      departmentId: userData.departmentId ?? null,
+      studentNumber: userData.studentNumber ?? null,
+      email: userData.email,
+      passwordHash: userData.passwordHash,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      status: userData.status,
+      mustChangePassword: userData.mustChangePassword,
+    })
+    .returning();
+
+  const roleRecord = await tx.query.roles.findFirst({
+    where: { name: roleName, universityId: { isNull: true } },
+  });
+  if (!roleRecord) {
+    throw new Error(`RBAC rolü bulunamadı: ${roleName}`);
+  }
+
+  await tx.insert(schema.userRoles).values({
+    userId: insertedUser.id,
+    roleId: roleRecord.id,
+  });
+
+  return insertedUser;
+}

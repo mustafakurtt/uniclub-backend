@@ -20,6 +20,10 @@ export const universities = table("universities", {
   name: t.varchar({ length: 256 }).notNull(),
   slug: t.varchar({ length: 256 }).notNull().unique(), // ileride SaaS subdomain için: xyz-universitesi.uygulaman.com
   status: universityStatusEnum().default("active").notNull(),
+  statusReason: t.varchar("status_reason", { length: 500 }),
+  statusChangedAt: t.timestamp("status_changed_at", { withTimezone: true, mode: "date" }),
+  /** FK users.id — migration'da ON DELETE SET NULL (şema döngüsü nedeniyle burada referans yok). */
+  statusChangedBy: t.uuid("status_changed_by"),
   ...timestamps,
   ...softDeleteColumn,
 });

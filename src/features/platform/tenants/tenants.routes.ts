@@ -64,7 +64,7 @@ tenantsRoutes.patch(
   async (c) => {
     const { universityId } = c.req.param();
     const body = c.req.valid("json");
-    const updated = await tenantsService.updateTenantStatus(universityId, body);
+    const updated = await tenantsService.updateTenantStatus(universityId, body, c.get("user").userId);
     return ok(c, updated, "platform.tenantStatusUpdated");
   }
 );
