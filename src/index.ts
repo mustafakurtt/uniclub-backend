@@ -38,6 +38,7 @@ import { verifyMailConnection, mailer } from "./shared/mail/mailer";
 import { redisSubscriber } from "./shared/redis/redis.subscriber";
 import { closeEmailQueue } from "./features/auth/auth.queue";
 import { closeNotificationFanoutQueue } from "./features/notifications/notifications.fanout";
+import { closeScheduledPublishQueue } from "./shared/publishing/scheduled-publish.queue";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
 import { metrics } from "./shared/metrics/metrics";
@@ -221,6 +222,7 @@ if (import.meta.main) {
   shutdown.register("http-server", () => server.stop()); // yeni bağlantı yok, uçuştakini bekle
   shutdown.register("email-queue", closeEmailQueue); // worker önce (job'u bitir), sonra queue
   shutdown.register("notification-fanout-queue", closeNotificationFanoutQueue);
+  shutdown.register("scheduled-publish-queue", closeScheduledPublishQueue);
   shutdown.register("redis-subscriber", async () => void (await redisSubscriber.quit()));
   shutdown.register("redis", async () => void (await redis.quit()));
   shutdown.register("db", () => db.$client.end({ timeout: 5 }));

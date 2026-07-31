@@ -1,15 +1,16 @@
 import { createMiddleware } from "hono/factory";
-import { eq } from "drizzle-orm";
 import type { LocaleVariables } from "../core/i18n/locale";
 import type { Variables } from "../core/auth/auth.middleware";
-import { db } from "../db";
-import { users, universities } from "../db/schema";
 import { resolveAppLocale } from "../shared/i18n/locale-resolution";
+import {
+  resolveTenantDefaultLocale,
+  resolveUserPreferredLanguage,
+} from "../shared/i18n/locale.cache";
 import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "../shared/i18n/translator";
 
 /**
  * Uygulama dil önceliği: kullanıcı tercihi → Accept-Language → tenant varsayılanı → tr.
- * `optionalAuthMiddleware` SONRASINDA mount edilir.
+ * `optionalAuthMiddleware` SONRASINDA mount edilir. Dil tercihleri cache'lenir.
  */
 export function createAppLocaleMiddleware() {
   return createMiddleware<{ Variables: Variables & LocaleVariables }>(async (c, next) => {
@@ -18,20 +19,9 @@ export function createAppLocaleMiddleware() {
 
     const user = c.get("user");
     if (user?.userId) {
-      const [userRow] = await db
-        .select({ preferredLanguage: users.preferredLanguage })
-        .from(users)
-        .where(eq(users.id, user.userId))
-        .limit(1);
-      userPreferred = userRow?.preferredLanguage;
-
+      userPreferred = await resolveUserPreferredLanguage(user.userId);
       if (user.universityId) {
-        const [uniRow] = await db
-          .select({ defaultLocale: universities.defaultLocale })
-          .from(universities)
-          .where(eq(universities.id, user.universityId))
-          .limit(1);
-        tenantDefault = uniRow?.defaultLocale;
+        tenantDefault = await resolveTenantDefaultLocale(user.universityId);
       }
     }
 

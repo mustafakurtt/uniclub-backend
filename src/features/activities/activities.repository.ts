@@ -42,6 +42,7 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
         capacity: data.capacity,
         visibility: data.visibility,
         status,
+        scheduledPublishAt: data.scheduledPublishAt ?? null,
         createdBy,
       }).returning();
 
@@ -64,7 +65,7 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
   }
 
   publishActivity(activityId: string) {
-    return this.updateById(activityId, { status: "published" });
+    return this.updateById(activityId, { status: "published", scheduledPublishAt: null });
   }
 
   /** Etkinlik bu üniversiteye ait mi? (accepted bir kulüp bağı o tenant'ta) — moderasyon tenant kontrolü. */
@@ -103,6 +104,15 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
       columns: { clubId: true },
     });
     return row?.clubId;
+  }
+
+  /** Host kulübün tenant id'si — zamanlanmış yayın saat dilimi için. */
+  async getClubUniversityId(clubId: string): Promise<string | null> {
+    const row = await db.query.clubs.findFirst({
+      where: { id: clubId },
+      columns: { universityId: true },
+    });
+    return row?.universityId ?? null;
   }
 
   /** Bu kulüp bu etkinliğin host'u mu? (staff yönetim rotalarının sahiplik kontrolü) */

@@ -14,6 +14,8 @@ sürüm numaraları [Semantic Versioning](https://semver.org/) ile uyumludur.
 - **Bildirim tercihleri** (tip/kulüp bazlı susturma), toplu fan-out ve kuyruk eşiği (500+ alıcı).
 - **`tenant_settings`:** tenant başına yapılandırılabilir kurallar (sabitleme kotası, okul geneli duyuru hızı) — `GET/PATCH /api/universities/:universityId/settings`.
 - **Tenant profili (C2):** `timezone`, `defaultLocale`, `logoUrl`, `primaryColor` — `PATCH /api/universities/:universityId`.
+- **Zamanlanmış yayın (T2.1):** duyuru ve etkinlik için `scheduledPublishAtLocal` (tenant yerel saat → UTC); BullMQ gecikmeli iş; iptal/değiştirme; geçmiş reddi.
+- **Locale cache:** kullanıcı tercihi ve tenant `defaultLocale` ayrı cache anahtarları (`i18n:locale`, TTL 600s); profil/tenant güncellemesinde invalidate.
 - **Core:** taşınabilir hız sınırı fabrikası (`core/ratelimit`), sağlık/hazırlık mekanizması geliştirmeleri.
 - **Operasyon:** açılışta migration açığı kontrolü.
 

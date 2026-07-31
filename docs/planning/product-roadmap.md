@@ -105,15 +105,15 @@ Bugün temel var: duyuru yaşam döngüsü (`draft`/`published`, `pinned`,
 `visibility`), etkinlik (`draft`/`published`/`cancelled`, RSVP, co-host,
 kapasite/bekleme listesi), okul geneli duyuru.
 
-### T2.1 Zamanlanmış yayın ★
+### T2.1 Zamanlanmış yayın ★ — **tamamlandı**
 
-Taslağı belirli bir tarih/saatte otomatik yayınlama. Kuyruk altyapısı hazır
-(BullMQ). Dikkat: **tenant saat dilimi** gerekiyor (T9 → C2) — aksi halde
-"yarın 09:00" belirsiz.
+Tenant `timezone` (C2) üzerinden duvar saat → UTC; BullMQ **geçikmeli iş** (`jobId`
+idempotency, reschedule'da eski iş kaldırılır). Duyuru ve etkinlik taslakları.
 
-- Zamanlanmış yayın iptali/değiştirilmesi
-- Yayın anında bildirim fan-out'unun zamanlanması
-- Geçmişe dönük yayın engeli
+- `scheduledPublishAtLocal` istek alanı (`YYYY-MM-DDTHH:mm`, offset yok)
+- Geçmişe dönük zaman **400**; iptal (`null`) ve tarih değişimi
+- Yayın anında `published` + `publishedAt` + bildirim fan-out (`firstPublish` korunur)
+- Zamanlanmış taslak feed/keşif listesinde görünmez
 
 ### T2.2 Çoklu ve tekrarlayan etkinlik ★
 
@@ -463,7 +463,7 @@ Mevcut teknik roadmap ([planning/README.md](README.md)) bu izin içinde yaşar.
 
 | Madde | Durum | Not |
 | --- | --- | --- |
-| C2 tenant profili (timezone, locale, branding) | Sırada | **T2.1 zamanlanmış yayının önkoşulu** |
+| C2 tenant profili (timezone, locale, branding) | Tamamlandı | T2.1 önkoşulu karşılandı |
 | D1–D2 akademik dönem + üyelik tarihçesi | Sırada | **T1.3 devir teslim ve T3.2 sezon sıfırlamanın önkoşulu** |
 | E medya varlıkları | Planlı | T2.6 afiş/görsel için gerekli |
 | G OpenAPI | Planlı | FE izinin sözleşmesi; yüzey stabilleşince |

@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
-import { db } from "../../db";
-import { users, universities } from "../../db/schema";
 import { resolveAppLocale } from "./locale-resolution";
+import {
+  resolveTenantDefaultLocale,
+  resolveUserPreferredLanguage,
+} from "./locale.cache";
 import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./translator";
 
 /**
@@ -12,24 +13,11 @@ export async function resolveBackgroundLocale(
   userId: string,
   universityId: string | null
 ): Promise<string> {
-  const [userRow] = await db
-    .select({ preferredLanguage: users.preferredLanguage })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  let tenantDefault: string | undefined;
-  if (universityId) {
-    const [uniRow] = await db
-      .select({ defaultLocale: universities.defaultLocale })
-      .from(universities)
-      .where(eq(universities.id, universityId))
-      .limit(1);
-    tenantDefault = uniRow?.defaultLocale;
-  }
+  const userPreferred = await resolveUserPreferredLanguage(userId);
+  const tenantDefault = universityId ? await resolveTenantDefaultLocale(universityId) : undefined;
 
   return resolveAppLocale({
-    userPreferredLanguage: userRow?.preferredLanguage,
+    userPreferredLanguage: userPreferred,
     tenantDefaultLocale: tenantDefault,
     supported: SUPPORTED_LOCALES,
     systemDefault: DEFAULT_LOCALE,
@@ -39,14 +27,10 @@ export async function resolveBackgroundLocale(
 
 /** Davet maili gibi henüz hesabı olmayan alıcılar — yalnızca tenant varsayılanı. */
 export async function resolveBackgroundLocaleForTenant(universityId: string): Promise<string> {
-  const [uniRow] = await db
-    .select({ defaultLocale: universities.defaultLocale })
-    .from(universities)
-    .where(eq(universities.id, universityId))
-    .limit(1);
+  const tenantDefault = await resolveTenantDefaultLocale(universityId);
 
   return resolveAppLocale({
-    tenantDefaultLocale: uniRow?.defaultLocale,
+    tenantDefaultLocale: tenantDefault,
     supported: SUPPORTED_LOCALES,
     systemDefault: DEFAULT_LOCALE,
     useAcceptLanguage: false,

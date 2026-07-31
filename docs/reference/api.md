@@ -269,7 +269,7 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | GET | `/api/universities/:universityId/announcements` | Bearer | Tenant duyuruları (öğrenci: yalnızca yayınlanmış) |
 | POST | `/api/universities/:universityId/announcements` | `announcement.university.manage` | Oluştur / yayınla (saatte 5 hız sınırı) |
 | POST | `/api/universities/:universityId/announcements/:id/publish` | `announcement.university.manage` | Taslak yayınla |
-| PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sabitleme güncelle |
+| PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sabitleme / zamanlanmış yayın güncelle |
 | DELETE | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sil |
 
 **Tenant ayarları** (`university.settings.manage`, tenantScoped):
@@ -371,10 +371,12 @@ Body şemaları:
 | GET | `/api/clubs/:clubId/announcements` | Bearer | Kulübün duyurularını listele (görünürlük serviste) |
 | POST | `/api/clubs/:clubId/announcements` | staff (danışman/officer/president) | Duyuru oluştur |
 | POST | `/api/clubs/:clubId/announcements/:announcementId/publish` | staff | Taslak duyuruyu yayınla |
-| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff | Sabitleme / görünürlük güncelle |
+| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff | Sabitleme / görünürlük / zamanlanmış yayın güncelle |
 | DELETE | `/api/clubs/:clubId/announcements/:announcementId` | staff (danışman/officer/president) | Duyuru sil |
 
-**POST** body: `{ "title": "string (3-256)", "content": "string (1-5000)", "visibility?": "university"|"members", "pinned?": bool, "publish?": bool (vars. true) }`. Ayrıntı: [integration/announcements.md](../integration/announcements.md).
+**POST** body: `{ "title": "string (3-256)", "content": "string (1-5000)", "visibility?": "university"|"members", "pinned?": bool, "publish?": bool (vars. true), "scheduledPublishAtLocal?": "YYYY-MM-DDTHH:mm" (tenant yerel) }`. Ayrıntı: [integration/announcements.md](../integration/announcements.md).
+
+**PATCH** body: `{ "pinned?", "visibility?", "scheduledPublishAtLocal?": "YYYY-MM-DDTHH:mm" | null }` — `null` zamanlamayı iptal eder.
 
 ---
 
@@ -587,7 +589,7 @@ etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva s
 | POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
 | POST | `/api/admin/universities/:uid/activities/:activityId/cancel` | `activity.moderate` (tenant) | **Moderasyon:** tenant'taki herhangi bir kulübün etkinliğini iptal etme |
 
-Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true) }`; `PATCH` aynı alanlar opsiyonel (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
+Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true), scheduledPublishAtLocal? ("YYYY-MM-DDTHH:mm", tenant yerel) }`; `PATCH` aynı alanlar opsiyonel + `scheduledPublishAtLocal: null` iptal (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
 
 ---
 

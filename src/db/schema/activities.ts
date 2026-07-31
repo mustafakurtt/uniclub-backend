@@ -44,6 +44,8 @@ export const activities = table("activities", {
 
   status: activityStatusEnum().default("draft").notNull(),
   visibility: activityVisibilityEnum().default("university").notNull(),
+  /** Planlanan yayın anı (UTC); taslak kalır, job tetiklenince published olur. */
+  scheduledPublishAt: t.timestamp("scheduled_publish_at", { withTimezone: true }),
 
   createdBy: t.uuid("created_by").references(() => users.id, { onDelete: "restrict" }).notNull(),
   ...timestamps,
