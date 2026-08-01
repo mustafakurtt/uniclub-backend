@@ -674,6 +674,15 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 | GET | `/api/universities/:universityId/poster-qr/analytics` | aynı | Kurum geneli kaynak karşılaştırması |
 | GET | `/api/universities/:universityId/poster-qr/:qrId/analytics` | aynı | Kod bazlı özet |
 
+**Kurumsal rapor dışa aktarma** (`university.export.generate`):
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/universities/:universityId/exports` | Rapor kataloğu |
+| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (dosya yanıtı; `clubs`, `club-members`, `activities`) |
+
+Detay: [integration/exports.md](../integration/exports.md).
+
 
 ---
 

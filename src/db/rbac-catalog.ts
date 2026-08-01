@@ -13,6 +13,7 @@ import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/aud
 import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
 import { TENANT_SETTINGS_PERMISSION_CATALOG, TenantSettingsPermission } from "../features/tenant-settings/tenant-settings.permissions";
 import { POSTER_QR_PERMISSION_CATALOG, PosterQrPermission } from "../features/poster-qr/poster-qr.permissions";
+import { EXPORT_PERMISSION_CATALOG, ExportPermission } from "../features/exports/exports.permissions";
 import type { DbExecutor } from "./executor";
 
 /**
@@ -53,6 +54,7 @@ export const PERMISSION_CATALOG: { key: string; description: string }[] = [
   ...PLATFORM_PERMISSION_CATALOG,
   ...TENANT_SETTINGS_PERMISSION_CATALOG,
   ...POSTER_QR_PERMISSION_CATALOG,
+  ...EXPORT_PERMISSION_CATALOG,
   { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
   { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
 ];
@@ -79,6 +81,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     UniversityPermission.DEPARTMENT_CREATE, UniversityPermission.DEPARTMENT_UPDATE, UniversityPermission.DEPARTMENT_DELETE,
     UniversityPermission.DOMAIN_CREATE, UniversityPermission.DOMAIN_UPDATE, UniversityPermission.DOMAIN_DELETE,
     TenantSettingsPermission.MANAGE,
+    ExportPermission.GENERATE,
     AuthPermission.ROLE_MANAGE,
     AuditPermission.VIEW,
   ],
@@ -90,6 +93,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
     AnnouncementPermission.UNIVERSITY_MANAGE,
     PosterQrPermission.UNIVERSITY_MANAGE,
+    ExportPermission.GENERATE,
     DashboardPermission.VIEW,
   ],
   // Öğrenci İşleri / BİDB: akademik yapı + bölüm atama.

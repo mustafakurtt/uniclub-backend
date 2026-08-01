@@ -26,6 +26,7 @@ import {
 } from "../../features/tenant-settings/tenant-settings.messages";
 import { publicMessages, type PublicMessageKey } from "../../features/public/public.messages";
 import { posterQrMessages, type PosterQrMessageKey } from "../../features/poster-qr/poster-qr.messages";
+import { exportsMessages, type ExportsMessageKey } from "../../features/exports/exports.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -52,7 +53,8 @@ export const messages = mergeCatalogs(
   platformMessages,
   tenantSettingsMessages,
   publicMessages,
-  posterQrMessages
+  posterQrMessages,
+  exportsMessages
 );
 
 /**
@@ -79,4 +81,5 @@ export type MessageKey =
   | PlatformMessageKey
   | TenantSettingsMessageKey
   | PublicMessageKey
-  | PosterQrMessageKey;
+  | PosterQrMessageKey
+  | ExportsMessageKey;
