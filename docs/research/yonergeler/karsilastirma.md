@@ -88,7 +88,24 @@ const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
 
 ---
 
-## İlk sentez (n=2 — bağlayıcı değil)
+## Akdeniz Üniversitesi (devlet, büyük — pilot bölge)
+
+Yönergenin kendisi henüz elimizde yok; elimizdeki "Genel Kurallar" belgesi
+**operasyonel** kuralları veriyor. Ayrıntı: [akdeniz/bulgular.md](akdeniz/bulgular.md).
+
+| Alan | Akdeniz |
+| --- | --- |
+| D1 Etkinlik izni | **Evet** — normal **15 gün**, kurum dışı katılımlı **1 ay** önce, danışman imzalı |
+| D4 Etkinlik sonrası rapor | **7 iş günü** içinde değerlendirme formu (Form 3) |
+| D6 Sponsorluk | Etkinlik öncesi Kültür Şube'ye bilgi |
+| **Mekân** | **Kurum rezerve ediyor** — adlandırılmış salonlar, SKS personeli yapıyor |
+| **Afiş** | Logo sol üstte, düzenleyenler hiyerarşik; **danışman imzasıyla onay** |
+| **Ek belgeler** | Yurtdışı: davet yazısı · Film: **telif izni** · Araç: tahsis formu |
+| E1 Bütçe | **Kurumda** — 5018 sayılı kamu mali yönetimi kanunu kapsamında |
+| E3 Genel Kurul | Yılda en az 1 kez (Antalya ile aynı) |
+| Otomasyon | **`topluluk.akdeniz.edu.tr` — üye kaydı ZORUNLU olarak sistemden** |
+
+## İlk sentez (n=3 — bağlayıcı değil)
 
 **1. Onay şekli yapısal olarak ikiye ayrılıyor.** Antalya bir **kurul oylaması**
 (5 üye, salt çoğunluk), Konya bir **sıralı zincir** (SKS → Koordinatörlük).
@@ -119,6 +136,31 @@ sonraki başvurunun bloke olması, uyarı → ikinci uyarı → kapatma merdiven
 **7. Kişisel veri deseni ortak:** ikisi de TC kimlik + adres + telefon istiyor.
 Kâğıt süreçte standart. **Karar:** dijitalde bunları toplamak zorunda mıyız?
 Öğrenci numarası + kurumsal e-posta kimliği zaten doğruluyor.
+
+**8. Bütçe modeli tenant ayarıyla çözülmüyor — iki AYRI AKIŞ.**
+Akdeniz (devlet): para **kurumda**, 5018 sayılı kamu mali yönetimi kanunu geçerli,
+kulüp talep ediyor. Antalya Bilim (vakıf): kulübün **kendi kasa hesabı** var.
+Bu bir sayı farkı değil; T4.6 iki modeli de desteklemek zorunda. Devlet/vakıf
+ayrımının başka yerlerde de çıkması muhtemel — tabloya bu sütunu ekleyin.
+
+**9. Mekân rezervasyonu kulüpte değil, kurumda.** Akdeniz'de salonları SKS
+personeli tahsis ediyor. T2.4 bu yüzden bir "rezervasyon sistemi" değil,
+**talep → kurum tahsisi** akışı olmalı.
+
+**10. Etkinlik izni tek süre değil, kapsama bağlı.** Akdeniz: normal 15 gün,
+kurum dışı katılımlı 1 ay. Bizim modelimizde etkinliğin türü var ama **türe bağlı
+önceden-bildirim süresi ve türe bağlı ek belge** yok (film → telif izni,
+yurtdışı → davet yazısı).
+
+**11. Afişin marka kuralları ve onay adımı var.** Logo konumu, düzenleyen
+sıralaması, kurumsal kimlik kılavuzu, ve **danışman imzalı afiş onayı**.
+Bizim afiş/QR özelliğimiz görsel üretiyor ama bu katmanı hiç bilmiyor.
+
+**12. Rakip var ve pazar kanıtlandı.** İncelenen iki devlet üniversitesinin de
+çalışan topluluk yazılımı var: Konya "topluluk otomasyonu", Akdeniz
+`topluluk.akdeniz.edu.tr` (üye kaydı **zorunlu** olarak sistemden). İkisi de
+incelenmeli — hem rakip analizi hem de "kurum bu işi yazılımla yapmak istiyor"
+kanıtı.
 
 ---
 
