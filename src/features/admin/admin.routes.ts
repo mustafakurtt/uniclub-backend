@@ -125,7 +125,7 @@ adminRoutes.get(
 // 5. KULÜP BAŞVURUSUNU ONAYLAMA (gerçek bir kulüp oluşturur)
 adminRoutes.patch(
   "/universities/:universityId/club-applications/:applicationId/approve",
-  ...guard(ClubPermission.APPROVE, { tenantScoped: true }),
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
   validate("json", approveApplicationSchema),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
@@ -139,7 +139,7 @@ adminRoutes.patch(
 // 6. KULÜP BAŞVURUSUNU REDDETME (gerekçe zorunlu)
 adminRoutes.patch(
   "/universities/:universityId/club-applications/:applicationId/reject",
-  ...guard(ClubPermission.APPROVE, { tenantScoped: true }),
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
   validate("json", rejectApplicationSchema),
   async (c) => {
     const { universityId, applicationId } = c.req.param();

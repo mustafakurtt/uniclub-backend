@@ -19,6 +19,8 @@ export const adminMessages = defineCatalog({
     "admin.applicationNotFound": "Başvuru bulunamadı.",
     "admin.rejectionNoteRequired": "Ret gerekçesi zorunludur.",
     "admin.applicationAlreadyDecided": "Bu başvuru zaten değerlendirilmiş.",
+    "admin.approvalStepForbidden": "Bu başvuru adımında karar verme yetkiniz yok.",
+    "admin.approvalStepNotReady": "Önce önceki onay kademesi tamamlanmalı.",
     "admin.slugGenerationFailed": "Kulüp için uygun bir slug bulunamadı, lütfen tekrar deneyin.",
     "admin.clubNotArchivedOrRejected":
       "Yalnızca arşivlenmiş veya reddedilmiş kulüpler silinebilir. Önce kulübü arşivleyin.",
@@ -57,6 +59,8 @@ export const adminMessages = defineCatalog({
     "admin.applicationNotFound": "Application not found.",
     "admin.rejectionNoteRequired": "A rejection reason is required.",
     "admin.applicationAlreadyDecided": "This application has already been decided.",
+    "admin.approvalStepForbidden": "You are not authorized to decide at this approval step.",
+    "admin.approvalStepNotReady": "The previous approval step must be completed first.",
     "admin.slugGenerationFailed": "Could not find a suitable slug for the club, please try again.",
     "admin.clubNotArchivedOrRejected":
       "Only archived or rejected clubs can be deleted. Archive the club first.",

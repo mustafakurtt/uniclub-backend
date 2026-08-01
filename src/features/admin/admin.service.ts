@@ -34,6 +34,13 @@ async function notifyApplicationDecision(
   });
 }
 
+async function notifyApplicationDecisionIfFinal(result: DecideClubApplicationResult) {
+  const { application } = result;
+  if (application.status === "pending") return;
+  const decision = application.status as "approved" | "rejected";
+  await notifyApplicationDecision(result, decision);
+}
+
 export const adminService = {
   /**
    * Aktörün YÖNETİM bağlamında görebileceği üniversiteler.
@@ -125,9 +132,10 @@ export const adminService = {
    */
   async approveClubApplication(universityId: string, applicationId: string, actorUserId: string, note?: string) {
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved", note ?? null);
-    await notifyApplicationDecision(result, "approved");
-    // Yeni onaylı kulüp public listeye girer.
-    await clubEffects.clubApproved.emit(universityId);
+    await notifyApplicationDecisionIfFinal(result);
+    if (result.application.status === "approved") {
+      await clubEffects.clubApproved.emit(universityId);
+    }
     return result;
   },
 
@@ -143,7 +151,7 @@ export const adminService = {
       throw badRequest("admin.rejectionNoteRequired");
     }
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "rejected", note.trim());
-    await notifyApplicationDecision(result, "rejected");
+    await notifyApplicationDecisionIfFinal(result);
     return result;
   },
 

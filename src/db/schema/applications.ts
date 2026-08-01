@@ -49,7 +49,9 @@ export const clubApplicationApprovals = table("club_application_approvals", {
     .notNull(),
 
   step: t.integer().notNull(), // 1: danışman, 2: SKS (ileride)...
-  approverRole: t.varchar("approver_role", { length: 100 }), // bilgi amaçlı: "advisor", "sks_officer"
+  // Karar verici belirteci — tenant zincirindeki rol veya `club_approver` (club.approve yetkisi).
+  // Çok kademede gerçek yetki kapısı; eski tek adımlı "advisor" satırları kod/migration ile uyumlu tutulur.
+  approverRole: t.varchar("approver_role", { length: 100 }),
   approverId: t.uuid("approver_id").references(() => users.id, { onDelete: "set null" }), // gerçekte onaylayan kişi
 
   status: applicationApprovalStatusEnum().default("pending").notNull(),

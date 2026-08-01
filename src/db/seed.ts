@@ -4,6 +4,12 @@ import * as schema from "./schema";
 import { env } from "../config/env";
 import { hashPassword } from "../shared/utils/password.util";
 import { provisionRbacCatalog } from "./rbac-catalog";
+import {
+  DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN,
+  buildApprovalInsertRows,
+  type ApprovalChainRoleToken,
+} from "../features/clubs/club-application-chain.core";
+import { TenantSettingKey } from "../features/tenant-settings/tenant-settings.catalog";
 
 /**
  * ÇOK ÜNİVERSİTELİ (multi-tenant) TEST SEED'İ
@@ -162,14 +168,21 @@ async function main() {
       return inserted.id;
     }
 
-    /** Kulüp başvurusu + step 1 (danışman) onay satırını birlikte oluşturur. */
+    const approvalChainsByUniversity: Record<string, ApprovalChainRoleToken[]> = {};
+
+    function getApprovalChain(universityId: string): ApprovalChainRoleToken[] {
+      return approvalChainsByUniversity[universityId] ?? DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN;
+    }
+
+    /** Kulüp başvurusu + tenant onay zinciri adımlarını birlikte oluşturur. */
     async function createApplication(app: {
       universityId: string;
       proposedName: string;
       description: string;
       applicantId: string;
       status: "pending" | "approved" | "rejected";
-      reviewerId?: string; // approved/rejected ise adımı kimin karara bağladığı
+      reviewerId?: string;
+      rejectionNote?: string;
     }) {
       const [inserted] = await tx.insert(schema.clubApplications).values({
         universityId: app.universityId,
@@ -179,14 +192,38 @@ async function main() {
         status: app.status,
       }).returning();
 
-      await tx.insert(schema.clubApplicationApprovals).values({
-        applicationId: inserted.id,
-        step: 1,
-        approverRole: "advisor",
-        approverId: app.status === "pending" ? null : app.reviewerId ?? null,
-        status: app.status,
-        reviewedAt: app.status === "pending" ? null : new Date(),
-      });
+      const chain = getApprovalChain(app.universityId);
+      const stepRows = buildApprovalInsertRows(chain);
+
+      await tx.insert(schema.clubApplicationApprovals).values(
+        stepRows.map((row) => {
+          let status: "pending" | "approved" | "rejected" = "pending";
+          let approverId: string | null = null;
+          let reviewedAt: Date | null = null;
+          let note: string | null = null;
+
+          if (app.status === "approved") {
+            status = "approved";
+            approverId = app.reviewerId ?? null;
+            reviewedAt = new Date();
+          } else if (app.status === "rejected" && row.step === 1) {
+            status = "rejected";
+            approverId = app.reviewerId ?? null;
+            reviewedAt = new Date();
+            note = app.rejectionNote ?? "Seed ret gerekçesi.";
+          }
+
+          return {
+            applicationId: inserted.id,
+            step: row.step,
+            approverRole: row.approverRole,
+            status,
+            approverId,
+            reviewedAt,
+            note,
+          };
+        })
+      );
       return inserted;
     }
 
@@ -304,7 +341,7 @@ async function main() {
     // platform hesaplarıdır ve yukarıda (üniversitelerden önce) kurulur.
     await createUser({ universityId: antalya.id, firstName: "Elif", lastName: "Demir", email: "elif.demir@antalya.edu.tr", role: "university_admin" }); // tenant yöneticisi
     await createUser({ universityId: antalya.id, firstName: "Ahmet", lastName: "Yönetici", email: "ahmet.yonetici@antalya.edu.tr", role: "university_admin" }); // 2. admin — "son admin" korumasını test etmek için
-    await createUser({ universityId: antalya.id, firstName: "SKS", lastName: "Görevlisi", email: "sks@antalya.edu.tr", role: "student_affairs" }); // kulüp onay/danışman/moderasyon
+    const antalyaSks = await createUser({ universityId: antalya.id, firstName: "SKS", lastName: "Görevlisi", email: "sks@antalya.edu.tr", role: "student_affairs" }); // kulüp onay/danışman/moderasyon
     await createUser({ universityId: antalya.id, firstName: "Öğrenci İşleri", lastName: "Görevlisi", email: "ogrenci.isleri@antalya.edu.tr", role: "academic_affairs" }); // akademik yapı
     await createUser({ universityId: antalya.id, firstName: "İçerik", lastName: "Moderatörü", email: "moderator@antalya.edu.tr", role: "content_moderator" }); // duyuru/galeri moderasyonu
     await createUser({ universityId: antalya.id, firstName: "Denetim", lastName: "Görevlisi", email: "denetci@antalya.edu.tr", role: "auditor" }); // salt-okunur izleme
@@ -434,8 +471,8 @@ async function main() {
     console.log("   📝 Antalya başvuruları...");
     await createApplication({ universityId: antalya.id, proposedName: "Satranç Kulübü", description: "Satranç oynamayı ve öğrenmeyi seven herkes için bir kulüp.", applicantId: sen, status: "pending" });
     await createApplication({ universityId: antalya.id, proposedName: "Doğa Yürüyüşü Kulübü", description: "Hafta sonları birlikte doğa yürüyüşlerine çıkmak isteyenler için.", applicantId: can, status: "pending" });
-    await createApplication({ universityId: antalya.id, proposedName: "Müzik Kulübü", description: "Koro, orkestra ve akustik geceler.", applicantId: can, status: "approved", reviewerId: ahmetHoca }); // yukarıdaki Müzik Kulübü bundan doğdu
-    await createApplication({ universityId: antalya.id, proposedName: "Kripto Para Kulübü", description: "Kripto piyasaları üzerine konuşma grubu.", applicantId: burak, status: "rejected", reviewerId: ahmetHoca });
+    await createApplication({ universityId: antalya.id, proposedName: "Müzik Kulübü", description: "Koro, orkestra ve akustik geceler.", applicantId: can, status: "approved", reviewerId: antalyaSks }); // yukarıdaki Müzik Kulübü bundan doğdu
+    await createApplication({ universityId: antalya.id, proposedName: "Kripto Para Kulübü", description: "Kripto piyasaları üzerine konuşma grubu.", applicantId: burak, status: "rejected", reviewerId: antalyaSks, rejectionNote: "Kurum politikasına uygun değil." });
 
     // ═══════════════════════════════════════════════════════════════
     // 3. ÜNİVERSİTE 2 — EGE BİLİM (tenant izolasyon senaryoları)
@@ -464,8 +501,16 @@ async function main() {
 
     const leylaHoca = await createUser({ universityId: ege.id, departmentId: egeDept["Bilgisayar Mühendisliği"], firstName: "Leyla", lastName: "Hoca", email: "leyla.hoca@egebilim.edu.tr", role: "advisor" });
     await createUser({ universityId: ege.id, departmentId: egeDept["Matematik"], firstName: "Kemal", lastName: "Hoca", email: "kemal.hoca@egebilim.edu.tr", role: "advisor" }); // kulüpsüz danışman (atama havuzu)
-    await createUser({ universityId: ege.id, firstName: "Okan", lastName: "Yıldız", email: "okan.yildiz@egebilim.edu.tr", role: "university_admin" });
-    await createUser({ universityId: ege.id, firstName: "Ege SKS", lastName: "Görevlisi", email: "sks@egebilim.edu.tr", role: "student_affairs" }); // tenant izolasyon testi için
+    const okan = await createUser({ universityId: ege.id, firstName: "Okan", lastName: "Yıldız", email: "okan.yildiz@egebilim.edu.tr", role: "university_admin" });
+    const egeSks = await createUser({ universityId: ege.id, firstName: "Ege SKS", lastName: "Görevlisi", email: "sks@egebilim.edu.tr", role: "student_affairs" }); // tenant izolasyon testi için
+
+    await tx.insert(schema.tenantSettings).values({
+      universityId: ege.id,
+      key: TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN,
+      value: ["advisor", "student_affairs"],
+      updatedBy: okan,
+    });
+    approvalChainsByUniversity[ege.id] = ["advisor", "student_affairs"];
 
     console.log("   🏕️ Ege kulüpleri ve üyelikleri...");
 
@@ -512,7 +557,7 @@ async function main() {
 
     console.log("   📝 Ege başvuruları...");
     await createApplication({ universityId: ege.id, proposedName: "Yapay Zeka Kulübü", description: "ML/AI okuma grubu ve proje atölyeleri.", applicantId: nazli, status: "pending" });
-    await createApplication({ universityId: ege.id, proposedName: "Airsoft Kulübü", description: "Kampüs dışı airsoft etkinlikleri.", applicantId: tolga, status: "rejected", reviewerId: leylaHoca });
+    await createApplication({ universityId: ege.id, proposedName: "Airsoft Kulübü", description: "Kampüs dışı airsoft etkinlikleri.", applicantId: tolga, status: "rejected", reviewerId: leylaHoca, rejectionNote: "Güvenlik prosedürleri karşılanmıyor." });
 
     // ═══════════════════════════════════════════════════════════════
     // 4. ÜNİVERSİTE 3 — KARADENİZ TEKNOLOJİ (çapraz rol senaryoları)
@@ -538,7 +583,7 @@ async function main() {
 
     const omerHoca = await createUser({ universityId: kartek.id, departmentId: kartekDept["Mekatronik Mühendisliği"], firstName: "Ömer", lastName: "Hoca", email: "omer.hoca@kartek.edu.tr", role: "advisor" });
     await createUser({ universityId: kartek.id, departmentId: kartekDept["Deniz Ulaştırma İşletme Mühendisliği"], firstName: "Sevgi", lastName: "Hoca", email: "sevgi.hoca@kartek.edu.tr", role: "advisor" }); // kulüpsüz danışman
-    await createUser({ universityId: kartek.id, firstName: "Hülya", lastName: "Özkan", email: "hulya.ozkan@kartek.edu.tr", role: "university_admin" });
+    const hulyaAdmin = await createUser({ universityId: kartek.id, firstName: "Hülya", lastName: "Özkan", email: "hulya.ozkan@kartek.edu.tr", role: "university_admin" });
 
     console.log("   🏕️ Karadeniz kulüpleri ve üyelikleri...");
 
@@ -585,7 +630,7 @@ async function main() {
 
     console.log("   📝 Karadeniz başvuruları...");
     await createApplication({ universityId: kartek.id, proposedName: "Satranç Kulübü", description: "Antalya'daki başvuruyla AYNI isim — tenant izolasyon testi.", applicantId: esra, status: "pending" });
-    await createApplication({ universityId: kartek.id, proposedName: "Havacılık Kulübü", description: "Model uçak ve drone atölyeleri.", applicantId: hakan, status: "rejected", reviewerId: omerHoca });
+    await createApplication({ universityId: kartek.id, proposedName: "Havacılık Kulübü", description: "Model uçak ve drone atölyeleri.", applicantId: hakan, status: "rejected", reviewerId: hulyaAdmin, rejectionNote: "Atölye alanı uygun değil." });
 
     // ═══════════════════════════════════════════════════════════════
     // 5. ETKİNLİKLER (activities) — tüm kulüpler kurulduktan SONRA
@@ -635,6 +680,16 @@ async function main() {
       location: "Mekatronik Lab", startsAt: inDays(-20), endsAt: inDays(-18), capacity: 40,
       attendees: [{ userId: yusuf }, { userId: merve }, { userId: hakan }],
     });
+
+    // 6) ⏱ ŞU AN DEVAM EDEN — yoklama penceresi (başlangıç−30dk … bitiş+30dk) içinde.
+    await createActivity({
+      hostClubId: techClub.id, createdBy: mustafa,
+      title: "Yoklama Demo — Şu An Devam Eden Etkinlik",
+      description: "Seed her çalıştığında now()-15dk / now()+2saat ile üretilir.",
+      location: "A Blok Salon", startsAt: new Date(Date.now() - 15 * 60 * 1000),
+      endsAt: new Date(Date.now() + 2 * 60 * 60 * 1000), capacity: 50,
+      attendees: [{ userId: sen }, { userId: can }, { userId: emre }],
+    });
   });
 
   console.log("✅ Seeding başarıyla tamamlandı!");
@@ -666,7 +721,7 @@ async function main() {
   console.log("             Tiyatro(pending, danışmansız) Robotik(archived) E-Spor(rejected)");
   console.log("\n── EGE BİLİM (ege-bilim) ──────────────────────────");
   console.log("   okan.yildiz@egebilim.edu.tr      → university_admin (sadece Ege)");
-  console.log("   sks@egebilim.edu.tr              → student_affairs  (Ege — tenant izolasyon testi)");
+  console.log("   sks@egebilim.edu.tr              → student_affairs  (Ege — tenant izolasyon + 2. onay kademesi)");
   console.log("   leyla.hoca@egebilim.edu.tr       → advisor  (Yazılım ve Teknoloji danışmanı)");
   console.log("   kemal.hoca@egebilim.edu.tr       → advisor  (KULÜPSÜZ — atama havuzu)");
   console.log("   cem.arslan@std.egebilim.edu.tr   → student  (Yazılım ve Teknoloji başkanı — Antalya'dakiyle AYNI slug!)");
@@ -693,6 +748,7 @@ async function main() {
   console.log("   Karanlık Oda Atölyesi (Fotoğrafçılık)   → members görünürlük (yalnızca üyeler)");
   console.log("   Üniversitelerarası Hackathon (Antalya + Ege) → ⭐ ÇOK-ÜNİVERSİTELİ turnuva (M:N)");
   console.log("   Teknofest Hazırlık Kampı (Karadeniz)    → GEÇMİŞ etkinlik (scope=past)");
+  console.log("   ⏱ ŞU AN DEVAM EDİYOR — Yoklama Demo (Yazılım) → yoklama denenebilir");
 }
 
 // Bağlantı havuzu kapatılmadan süreç sonlanmaz: postgres-js açık soketleri

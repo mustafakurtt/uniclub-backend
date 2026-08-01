@@ -6,7 +6,9 @@ import {
   type ResolvedTenantSettings,
   type TenantSettingKey,
   isTenantSettingKey,
+  TENANT_SETTING_CATALOG,
 } from "./tenant-settings.catalog";
+import { parseApprovalChain } from "../clubs/club-application-chain.core";
 import { tenantSettingsRepository } from "./tenant-settings.repository";
 
 const log = logger.child({ module: "tenant-settings.cache" });
@@ -16,7 +18,6 @@ const TTL_SECONDS = 300;
 
 /**
  * Tenant ayarları cache — fail-open: Redis/DB hatasında koddaki varsayılanlara düşer.
- * (tenant-status cache fail-closed çünkü güvenlik kapısı; bu politika tuşu.)
  */
 export async function getTenantSettings(universityId: string): Promise<ResolvedTenantSettings> {
   try {
@@ -44,11 +45,16 @@ export async function setTenantSettingsCache(
 
 async function loadResolvedFromDb(universityId: string): Promise<ResolvedTenantSettings> {
   const rows = await tenantSettingsRepository.listOverrides(universityId);
-  const overrides: Partial<Record<TenantSettingKey, number>> = {};
+  const overrides: Partial<Record<TenantSettingKey, number | string[]>> = {};
   for (const row of rows) {
     if (!isTenantSettingKey(row.key)) continue;
-    if (typeof row.value !== "number" || !Number.isInteger(row.value)) continue;
-    overrides[row.key] = row.value;
+    const def = TENANT_SETTING_CATALOG[row.key];
+    if (def.kind === "integer" && typeof row.value === "number" && Number.isInteger(row.value)) {
+      overrides[row.key] = row.value;
+    } else if (def.kind === "role_chain") {
+      const chain = parseApprovalChain(row.value);
+      if (chain) overrides[row.key] = chain;
+    }
   }
   return mergeOverridesIntoResolved(overrides);
 }

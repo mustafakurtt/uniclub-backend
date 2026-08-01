@@ -62,6 +62,8 @@ export const PERMISSION_CATALOG: { key: string; description: string }[] = [
  * super_admin BURADA yok — tüm yetkileri ayrıca alır.
  */
 export const ROLE_BUNDLES: Record<string, string[]> = {
+  // Danışman: başvuru inceleme (karar yetkisi adım bazında serviste — global club.approve yok).
+  advisor: [ClubPermission.APPLICATION_VIEW],
   // Tenant yöneticisi: kendi üniversitesinin tamamı + moderasyon + (tenant-scoped)
   // rol yönetimi. Platform işleri (university.create/delete, permission.manage) HARİÇ.
   university_admin: [

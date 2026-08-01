@@ -407,9 +407,11 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/users/:userId/department` | `user.manage` | Kullanıcının bölümünü güncelle |
 
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/integration/moderation.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
-| GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele |
-| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `club.approve` | Başvuruyu onayla (**gerçek bir kulüp oluşturur, başvuran başkan olur**) |
-| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `club.approve` | Başvuruyu reddet |
+| GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü) |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
+
+Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Özet `application.status` adımlardan türetilir; bildirim yalnızca nihai `approved`/`rejected` kararında. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |
 | PATCH | `/api/admin/universities/:universityId/clubs/:clubId/status` | `club.update` | Kulüp durumunu güncelle |
 | PATCH | `/api/admin/universities/:universityId/clubs/:clubId` | `club.update` | Kulüp bilgilerini güncelle (ad, açıklama, logo, kapak, joinPolicy) |

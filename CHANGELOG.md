@@ -12,7 +12,8 @@ sürüm numaraları [Semantic Versioning](https://semver.org/) ile uyumludur.
 - **Oturum iptali (`tokenVersion`)** ve self-servis şifre sıfırlama (`POST /api/auth/forgot-password`, `POST /api/auth/reset-password`).
 - **Duyuru yaşam döngüsü** (draft/published, pinned, visibility) ve **okul geneli duyuru** (`/api/universities/:universityId/announcements`).
 - **Bildirim tercihleri** (tip/kulüp bazlı susturma), toplu fan-out ve kuyruk eşiği (500+ alıcı).
-- **`tenant_settings`:** tenant başına yapılandırılabilir kurallar (sabitleme kotası, okul geneli duyuru hızı) — `GET/PATCH /api/universities/:universityId/settings`.
+- **`tenant_settings`:** tenant başına yapılandırılabilir kurallar (sabitleme kotası, okul geneli duyuru hızı, kulüp başvuru onay zinciri) — `GET/PATCH /api/universities/:universityId/settings`.
+- **Çok kademeli kulüp başvuru onay zinciri (T4.2):** tenant ayarı `club.application.approval_chain`; özet durum adımlardan türetilir; bildirim yalnızca nihai kararda.
 - **Tenant profili (C2):** `timezone`, `defaultLocale`, `logoUrl`, `primaryColor` — `PATCH /api/universities/:universityId`.
 - **Zamanlanmış yayın (T2.1):** duyuru ve etkinlik için `scheduledPublishAtLocal` (tenant yerel saat → UTC); BullMQ gecikmeli iş; iptal/değiştirme; geçmiş reddi.
 - **Zamanlanmış yayın mutabakatı:** açılış + 3 dk periyodik Postgres→BullMQ tarama; Redis iş kaybında yeniden kuyruk / gecikmiş yayın.

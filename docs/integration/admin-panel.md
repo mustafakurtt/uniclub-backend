@@ -226,14 +226,50 @@ tenant'ı hedefler; diğerleri yalnızca kendi tenant'ını.
 
 ### 5.2. Kulüp Başvuruları
 
+Onay **çok kademeli zincir** ile çalışır. Kademe sayısı ve her kademedeki karar
+verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılır
+(bkz. [tenant-settings.md](tenant-settings.md)). Varsayılan: tek kademe
+`["club_approver"]` — `club.approve` yetkisini taşıyanlar (ör. `university_admin`,
+`student_affairs`).
+
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
-| GET | `/universities/:uid/club-applications?status=` | `application.view` | Başvuru listesi (`applicant` gömülü) |
-| PATCH | `/universities/:uid/club-applications/:id/approve` | `club.approve` | Onayla → **gerçek kulüp oluşur**, başvuran başkan olur |
-| PATCH | `/universities/:uid/club-applications/:id/reject` | `club.approve` | Reddet |
+| GET | `/universities/:uid/club-applications?status=` | `application.view` | Başvuru listesi (`applicant` + `approvals` gömülü) |
+| PATCH | `/universities/:uid/club-applications/:id/approve` | `application.view` | Sıradaki kademeyi onayla — **tüm kademeler** onaylandığında gerçek kulüp oluşur |
+| PATCH | `/universities/:uid/club-applications/:id/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 
-Onay `data`: `{ application, club }`. Zaten değerlendirilmişse
+**Özet durum** (`application.status`) onay adımlarından türetilir:
+- Herhangi bir adım `rejected` → `rejected`
+- Tüm adımlar `approved` → `approved` (+ kulüp oluşur)
+- Aksi → `pending` (ara kademe onayında da `pending` kalır)
+
+**Sıra:** Kademe N, kademe N−1 onaylanmadan karar verilemez. İlerideki kademede
+yetkili aktör erken karar vermeye çalışırsa `400` (`admin.approvalStepNotReady`).
+Zincirde hiç yetkisi olmayan aktör → `403` (`admin.approvalStepForbidden`).
+
+**Bildirim:** Başvuru sahibine yalnızca **nihai** kararda (`approved` veya
+`rejected`) `club.application.decided` bildirimi gider; ara kademe onaylarında
+bildirim yok (gürültü azaltma).
+
+Onay tamamlandığında `data`: `{ application, club }`. Zaten değerlendirilmişse
 `400 "Bu başvuru zaten değerlendirilmiş."`
+
+**GET yanıtı — `approvals` örneği (Ege, iki kademe):**
+
+```json
+{
+  "id": "...",
+  "status": "pending",
+  "proposedName": "Yapay Zeka Kulübü",
+  "approvals": [
+    { "step": 1, "approverRole": "advisor", "status": "pending", "approverId": null, "reviewedAt": null, "note": null },
+    { "step": 2, "approverRole": "student_affairs", "status": "pending", "approverId": null, "reviewedAt": null, "note": null }
+  ]
+}
+```
+
+`approverRole` değerleri: global RBAC rol adları veya `club_approver` (özel token —
+`club.approve` yetkisi taşıyan herkes).
 
 ### 5.3. Kulüpler
 
