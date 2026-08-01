@@ -4,10 +4,71 @@
 İşleyiş ile İlgili Genel Kurallar". Tam metin: `genel-kurallar-metin.txt`.
 **Çıkarım:** 2026-08-01, pdfjs-dist.
 
-> ⚠️ **Elimizde yönergenin kendisi YOK.** Bu belge yönergeye atıf yapıyor
-> ("MADDE 9 – c", "Yönerge eki Form 2/Form 3") ama kuruluş şartlarını (kaç kurucu,
-> onay mercii, organlar) içermiyor. **Yönerge ayrıca bulunmalı** — kuruluş
-> sütununu ancak o zaman doldurabiliriz.
+> ⚠️ **Yönergenin tam metni hâlâ YOK.** Bu belge yönergeye atıf yapıyor
+> ("MADDE 9 – c", "Yönerge eki Form 2/Form 3"). Kuruluş bilgileri aşağıda
+> **SKS'nin SSS sayfasından** alındı (`sks.akdeniz.edu.tr/tr/s_s_s-2251`),
+> iki ayrı sorguda birebir aynı ifadeyle doğrulandı. Organlar, seçim ve kapatma
+> kuralları için yönergenin kendisi hâlâ gerekli.
+
+---
+
+## 0. Kuruluş — YÖNERGEDEN (asıl kaynak)
+
+**MADDE 10:** *"Topluluk kurmak için topluluk iç tüzüğünün hazır olması ve
+**en az üç farklı akademik birimde** aktif kayıtlı ve **disiplin cezası almamış
+elli öğrencinin** başvurusu gerekir. Başvuru, kurucu üyeler tarafından **ıslak
+imzalanan** başvuru formunun (Form 4) eklendiği dilekçenin, **akademik danışman
+tarafından elektronik belge yönetim sistemi (EBYS) üzerinden** Daire Başkanlığına
+sunulmasıyla yapılır."*
+
+> ⚠️ **SSS sayfası yanlış/eski.** `sks.akdeniz.edu.tr/tr/s_s_s-2251` "en az 30
+> (otuz) öğrenci" diyor; **yönerge 50 diyor** ve iki ek şart koyuyor (üç farklı
+> akademik birim + disiplin cezası yok). **Yönerge esastır.**
+> **Ders:** SSS/tanıtım sayfaları yönergeden kayar. Tabloyu her zaman yönergeden
+> doldurun; SSS yalnızca ipucu.
+
+**Kuruluş iki aşamalı (MADDE 10/5):** Değerlendirme Kurulu onay verdikten sonra
+topluluk **60 gün içinde** genel kurulunu yapıp yönetim ve denetim kurulunu
+oluşturmak zorunda; kurullar **7 gün içinde** bildirilir. *"Topluluk, bu kurulların
+oluşturulması ve bildirilmesiyle kurulmuş olur."* → Konya'nın "geçici kuruluş"una
+benzer ama ölçütü farklı (Konya: 1 yılda 3 etkinlik).
+
+**Karar organı — yine KURUL (MADDE 6):** Değerlendirme Kurulu = rektör yardımcısı
+(başkan) + Daire Başkanı + bir şube müdürü → **3 kişi**.
+Antalya 5 kişilik kurul, Akdeniz 3 kişilik kurul, Konya sıralı zincir.
+
+**Islak imza hâlâ var:** kurucu üyeler başvuru formunu ıslak imzalıyor. Yani
+T1.1'de kurduğumuz "imza yerine dijital destek" tam da bu acıyı hedefliyor —
+ama kurum EBYS kullandığı için dijital kanal zaten mevcut.
+
+**EBYS entegrasyonu gerçek bir gereksinim:** başvuru EBYS üzerinden sunuluyor.
+Yol haritasında T5.3 (resmî yazışma ve imza) "gerekli mi bilmiyoruz" durumundaydı
+— **Akdeniz için gerekli.**
+
+**İki yapısal fark:**
+
+**a) Kurucu sayısı üçe katlanıyor.** Antalya Bilim **8**, Konya Teknik **15**,
+Akdeniz **30**. Aralık geniş → `club.formation.support_threshold` ayarının
+üst sınırı (şu an 500) rahat; ama varsayılanın kuruma göre çok değiştiği kesin.
+
+**b) BAŞVURAN ÖĞRENCİ DEĞİL, DANIŞMAN.** Dilekçeyi danışman öğretim elemanı
+hazırlıyor. Antalya ve Konya'da öğrenci başvuruyor, danışman yalnızca kabul
+belgesi imzalıyor. Bizim modelimizde başvuran **her zaman öğrenci**
+(`clubApplications.applicantId` → öğrenci). Akdeniz'de bu ters.
+
+Aynı ters durum etkinlikte de var: **etkinlik ön talep formunu akademik danışman
+dolduruyor**, kulüp değil.
+
+→ Yani "kim başvurur" bile kurumdan kuruma değişiyor. Bu, rol modelimizi
+etkileyen bir bulgu; tabloya ayrı satır eklendi.
+
+## 0b. Üyelik ücretsiz — Antalya'nın tersi
+
+> *"Üyelik tamamen ücretsizdir"* · *"Birden fazla topluluğa üye olmak mümkündür"*
+
+Antalya Bilim'de **aidat var** (Genel Kurul saptar, SKS onaylar). Akdeniz'de yok,
+çünkü masrafları üniversite karşılıyor. Bu, §6'daki bütçe farkının doğrudan
+sonucu: devlet üniversitesinde para kurumda, vakıfta kulüpte.
 
 Akdeniz **büyük bir devlet üniversitesi** ve Antalya bazlı ilerleme hedefimizde
 pilot bölgedeki ikinci büyük oyuncu. Kuralları Antalya Bilim'den belirgin biçimde
@@ -110,3 +171,51 @@ Kuruluş şartları (kurucu sayısı, onay mercii, organlar, üyelik, kapatma) b
 belgede yok. `sks.akdeniz.edu.tr` üzerinde yönerge sayfası var ama doğrudan PDF
 bağlantısı bulunamadı. **Bir sonraki adım:** yönergeyi bul, karşılaştırma
 tablosunun A/B/C/E bölümlerini doldur.
+
+---
+
+## 13. Organlar ve seçim (yönergeden)
+
+- **Genel kurul** (MADDE 14): tüm üyelerden oluşur. Salt çoğunlukla toplanır;
+  ilk toplantıda yeter sayı yoksa **en az iki gün sonra** yapılacak ikinci
+  toplantıda çoğunluk aranmaz. Kararlar katılanların salt çoğunluğuyla;
+  **oy eşitliğinde başkanın bulunduğu taraf çoğunluk sayılır.**
+- **Divan kurulu**: başkan + iki yazman. Kararlar "genel kurul karar kayıt
+  belgesi"ne (Form 6) yazılıp imzalanır.
+- **Yönetim kurulu** (MADDE 15): genel kurul tarafından **bir yıl için** seçilir,
+  **başkan dâhil beş asil + beş yedek**.
+- **Denetim kurulu** ayrıca var.
+
+→ **Yedek üye** kavramı bizde yok. Konya'da da geçiyordu ("yedek üyeler dâhil").
+İki kurumda birden çıktığına göre gerçek bir ihtiyaç.
+
+## 14. Afiş izni ZORUNLU ve sosyal medyayı da bağlıyor
+
+MADDE 9(2): *"Topluluk tarafından düzenlenen etkinliklerin afişleri Daire
+Başkanlığının iznine tabidir. İzin almamış etkinlik afişleri kullanılamaz.
+Topluluğun sosyal medya hesaplarında etkinlik duyurulurken **sadece izin verilen
+etkinlik afişi** kullanılır, bunun dışında reklam ve gelir amaçlı paylaşımlar
+yapılamaz."*
+
+→ Afiş onayı sadece basılı değil **dijital yayını da** kapsıyor. Bizim afiş/QR
+özelliğimizde onay adımı yok.
+
+## 15. Süreli yayın için editör kurulu ve telif
+
+MADDE 9(3): bülten/dergi/gazete çıkarılabilir; akademik danışman + topluluk
+başkanı + üye öğrencilerden **editör kurulu** oluşturulur, içerikten sorumludur.
+Üçüncü kişilere ait eser/görsel/kimlik bilgisi kullanılıyorsa **izin alınır**.
+
+## 16. Form seti (12 form) — bizde karşılığı olmayanlar
+
+`1 Yıllık Faaliyet Planı` · `2 Etkinlik Talep` · `3 Etkinlik Geri Bildirim` ·
+`4 Topluluk Kurma` · **`5 Üyelikten Ayrılma`** · **`6 Genel Kurul Toplantı
+Tutanağı`** · **`7 Yönetim Kurulu Toplantı Tutanağı`** · `8 Araç Takip` ·
+`9 Araç Talep` · `10 Topluluk Üyelik` · **`11 RİSK KABUL BEYANI`** ·
+`12 Topluluk Üye Kayıt (xlsx)`
+
+**Risk Kabul Beyanı** üç kurum içinde ilk kez çıkıyor: riskli etkinliklerde
+katılımcıdan alınan sorumluluk beyanı. Bizde hiç yok ve hukuki karşılığı var.
+
+**Toplantı tutanakları** (Form 6 ve 7) da bizde yok — oysa genel kurul ve yönetim
+kurulu kararları bunlarla kayda geçiyor. T4.5 resmî çıktılar bunları üretebilmeli.
