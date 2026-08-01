@@ -238,6 +238,24 @@ Yani sınırsız eşzamanlılık kimseye yaramıyor: ne siteye, ne kayıt olana.
 
 ---
 
+## 4. Postgres bağlantı havuzu (postgres-js)
+
+Uygulama sunucusu ve CLI scriptleri **aynı havuz boyutunu paylaşmaz**. Varsayılanlar
+`src/db/pool-config.ts` içinde; isteğe bağlı env ile override (zorunlu değil):
+
+| Env | Varsayılan | Gerekçe |
+|---|---|---|
+| `DATABASE_POOL_MAX` | 10 | Tek Bun süreci; perf ölçümünde doygunluk ~50 eşzamanlı istek civarında. postgres-js varsayılanı 10; açık ayar ile tutarlı. |
+| `DATABASE_POOL_IDLE_TIMEOUT` | 20 sn | Boşta bağlantıları kapat — postgres-js varsayılanı kapalı kalır; seed + test + dev üst üste gelince `max_connections` dolmasın. |
+| `DATABASE_POOL_MAX_LIFETIME` | 1800 sn (30 dk) | Uzun ömürlü süreçte bağlantı rotasyonu. |
+| `DATABASE_POOL_CONNECT_TIMEOUT` | 10 sn | DB yanıt vermezse hızlı fail. |
+| `DATABASE_SCRIPT_POOL_MAX` | 2 | `db:seed`, `db:bootstrap` — kısa ömürlü, küçük havuz. |
+
+Test preload (`tests/setup.ts`) süreç başına `DATABASE_POOL_MAX=4` set eder — `bun test`
+paralel worker'ları aynı Postgres'e bağlanır.
+
+---
+
 ## Testi tekrar koşmak
 
 ```sh
@@ -253,3 +271,21 @@ PERF_CONNECTIONS=1,50,200 PERF_DURATION=6 bun run perf
 
 Ham arka uç kapasitesi: `bun run perf/backend.ts` ·
 Codec/dekoratör mikro-ölçümü: `bun run perf/micro.ts`
+
+---
+
+## 6. Postgres bağlantı havuzu
+
+`src/db/pool-config.ts` + `src/config/env.ts` (opsiyonel override, **zorunlu env yok**).
+
+| Süreç | `max` | `idle_timeout` | `max_lifetime` | `connect_timeout` |
+|---|---|---|---|---|
+| Uygulama sunucusu (`src/db/index.ts`) | **10** (varsayılan) | **20 s** | **1800 s (30 dk)** | **10 s** |
+| CLI scriptleri (`src/db/script-db.ts` — seed, bootstrap) | **2** | **10 s** | **300 s (5 dk)** | **10 s** |
+| Test provision (`tests/provision.ts`) | **1** | — | — | — |
+
+**Gerekçe:** Docker dev Postgres `max_connections≈100`. Perf ölçümünde doygunluk ~50 eşzamanlı istek; tek Hono süreci için `max=10` postgres-js varsayılanıyla uyumlu (~10 süreçe kadar yer). `idle_timeout` boşta kalan soketleri serbest bırakır (postgres-js varsayılanı: süresiz → kısa ömürlü script + test + dev üst üste gelince sızıntı). Script havuzu küçük tutulur; seed ardından `close()` ile bağlantı bırakılmaz.
+
+**Override:** `DATABASE_POOL_MAX`, `DATABASE_POOL_IDLE_TIMEOUT`, `DATABASE_POOL_MAX_LIFETIME`, `DATABASE_POOL_CONNECT_TIMEOUT`, `DATABASE_SCRIPT_POOL_MAX`.
+
+**Doğrulama (2026-08-01, `test:all` sonrası `uniclub_test`):** `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()` → **22** aktif oturum (`max_connections=100`). Sınıra yaklaşma yok; önceki sızıntı senaryosu (`too many clients`) idle timeout + script havuzu ile giderildi.

@@ -7,6 +7,16 @@ const envSchema = z
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   DATABASE_URL: z.string().url("Geçerli bir veritabanı URL'si girilmelidir."),
+  /** Uygulama sunucusu postgres-js havuz boyutu (tek süreç). */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
+  /** Boşta bağlantı kapatma (saniye). postgres-js varsayılanı kapalı kalır; sınırı doldurmamak için kısa tutulur. */
+  DATABASE_POOL_IDLE_TIMEOUT: z.coerce.number().int().min(1).default(20),
+  /** Bağlantı yenileme üst sınırı (saniye). */
+  DATABASE_POOL_MAX_LIFETIME: z.coerce.number().int().min(60).default(1800),
+  /** İlk bağlantı timeout (saniye). */
+  DATABASE_POOL_CONNECT_TIMEOUT: z.coerce.number().int().min(1).default(10),
+  /** CLI scriptleri (seed/bootstrap) — küçük havuz. */
+  DATABASE_SCRIPT_POOL_MAX: z.coerce.number().int().min(1).max(10).default(2),
   REDIS_URL: z.string().url("Geçerli bir Redis URL'si girilmelidir."),
   JWT_SECRET: z.string().min(1),
 

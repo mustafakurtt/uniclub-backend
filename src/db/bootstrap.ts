@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "./index";
+import { createScriptDb } from "./script-db";
 import * as schema from "./schema";
 import { hashPassword } from "../shared/utils/password.util";
 import { provisionRbacCatalog } from "./rbac-catalog";
@@ -29,7 +29,9 @@ import { provisionRbacCatalog } from "./rbac-catalog";
 
 import { PROVISION_PASSWORD_MIN_LENGTH } from "../shared/schemas/password.schema";
 
-async function main() {
+async function main(): Promise<() => Promise<void>> {
+  const { db, close: closeDb } = createScriptDb();
+
   const email = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SUPER_ADMIN_PASSWORD;
   const firstName = process.env.SUPER_ADMIN_FIRST_NAME?.trim() || "Sistem";
@@ -82,11 +84,14 @@ async function main() {
     console.log(`✓ super_admin oluşturuldu: ${email}`);
   });
 
-  await db.$client.end();
+  return closeDb;
 }
 
-main().catch(async (err) => {
-  console.error("❌ Bootstrap başarısız:", err instanceof Error ? err.message : err);
-  await db.$client.end().catch(() => {});
-  process.exit(1);
-});
+main()
+  .then(async (closeDb) => {
+    await closeDb().catch(() => {});
+  })
+  .catch(async (err) => {
+    console.error("❌ Bootstrap başarısız:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  });

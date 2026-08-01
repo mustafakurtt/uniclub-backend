@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db } from "./index";
+import { createScriptDb } from "./script-db";
 import * as schema from "./schema";
 import { env } from "../config/env";
 import { hashPassword } from "../shared/utils/password.util";
@@ -59,10 +59,12 @@ function assertSafeToSeed() {
   process.exit(1);
 }
 
-async function main() {
+async function main(): Promise<() => Promise<void>> {
   console.log("🌱 Veritabanı tohumlama (seeding) başlatılıyor...");
 
   assertSafeToSeed();
+
+  const { db, close: closeDb } = createScriptDb();
 
   const mockPassword = await hashPassword("Password123!");
 
@@ -192,6 +194,12 @@ async function main() {
         description: app.description,
         applicantId: app.applicantId,
         status: app.status,
+        ...(app.status === "rejected"
+          ? {
+              rejectedAt: new Date(),
+              rejectApproverId: app.reviewerId ?? null,
+            }
+          : {}),
       }).returning();
 
       const chain = getApprovalChain(app.universityId);
@@ -778,6 +786,7 @@ async function main() {
   console.log("   Üniversitelerarası Hackathon (Antalya + Ege) → ⭐ ÇOK-ÜNİVERSİTELİ turnuva (M:N)");
   console.log("   Teknofest Hazırlık Kampı (Karadeniz)    → GEÇMİŞ etkinlik (scope=past)");
   console.log("   ⏱ ŞU AN DEVAM EDİYOR — Yoklama Demo (Yazılım) → yoklama denenebilir");
+  return closeDb;
 }
 
 // Bağlantı havuzu kapatılmadan süreç sonlanmaz: postgres-js açık soketleri
@@ -788,17 +797,16 @@ async function main() {
 // için `invalidateTenantSettingsCache` import ediyor; bu da redis.client'ı
 // modül yüklemesinde açıyor. Yalnızca Postgres kapatılırsa `test:setup`
 // sonsuza kadar asılır — bu hata bir kez yaşandı, tekrarlanmasın.
-async function closeConnections(): Promise<void> {
-  await db.$client.end().catch(() => {});
+async function closeConnections(closeDb: () => Promise<void>): Promise<void> {
+  await closeDb().catch(() => {});
   await redis.quit().catch(() => {});
 }
 
 main()
-  .then(async () => {
-    await closeConnections();
+  .then(async (closeDb) => {
+    await closeConnections(closeDb);
   })
   .catch(async (err) => {
     console.error("❌ Seeding sırasında hata oluştu:", err);
-    await closeConnections();
     process.exit(1);
   });
