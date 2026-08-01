@@ -14,6 +14,7 @@
 - [4. Kulüp Yaşam Döngüsü (durumlar)](#4-kulüp-yaşam-döngüsü-durumlar)
 - [5. Keşif ve Üyelik (her üye)](#5-keşif-ve-üyelik-her-üye)
 - [6. Kulüp Kurma Başvuruları (başvuran)](#6-kulüp-kurma-başvuruları-başvuran)
+- [6A. Kuruluş önerisi ve dijital destek (T1.1)](#6a-kuruluş-önerisi-ve-dijital-destek-t11)
 - [7. Kulüp-içi Üyelik Yönetimi (officer / başkan)](#7-kulüp-içi-üyelik-yönetimi-officer--başkan)
 - [8. Kulüp Profili ve İletişim Linkleri (başkan / officer)](#8-kulüp-profili-ve-i̇letişim-linkleri-başkan--officer)
 - [9. Duyurular ve Galeri (alt-kaynaklar)](#9-duyurular-ve-galeri-alt-kaynaklar)
@@ -141,6 +142,8 @@ Hepsi yalnızca `Bearer` ister; kendi üniversitenin `approved` kulüpleriyle s�
 
 Bir öğrenci yeni bir kulüp kurmak için **başvuru** açar; okul yöneticisi onaylarsa gerçek kulüp oluşur ve başvuran başkan olur.
 
+Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı endpoint önce **kuruluş önerisi** oluşturur (destek toplama); eşik aşıldığında otomatik olarak aşağıdaki onay zincirine düşer. `0` ise davranış eskisi gibi doğrudan `pending` başvuru (bkz. [§6A](#6a-kuruluş-önerisi-ve-dijital-destek-t11)).
+
 | Method | Path | Açıklama |
 |---|---|---|
 | POST | `/api/clubs/applications` | Yeni başvuru oluştur |
@@ -155,7 +158,7 @@ Bir öğrenci yeni bir kulüp kurmak için **başvuru** açar; okul yöneticisi 
 // Body
 { "proposedName": "string (3-256)", "description": "string (max 2000, opsiyonel)" }
 ```
-`201` + oluşan başvuru (`status: "pending"`). İş kuralı: **aynı anda birden fazla aktif başvuru olamaz** (`pending` veya `revision_requested`) → `400 "Zaten bekleyen bir kulüp başvurunuz var."`. (Reddedilen/geri çekilen başvuru bunu bloklamaz — yeniden başvurulabilir.)
+`201` + oluşan başvuru (`status: "pending"`, `kind: "application"`) veya öneri (`kind: "formation_proposal"`, `status: "collecting_support"`). İş kuralı: **aynı anda birden fazla aktif başvuru veya açık öneri olamaz** (`pending`/`revision_requested` başvuru veya `collecting_support` öneri) → `400 "Zaten bekleyen bir kulüp başvurunuz var."`. (Reddedilen/geri çekilen başvuru bunu bloklamaz — yeniden başvurulabilir.)
 
 ### 6.2 Başvuru detayı — `GET /api/clubs/applications/:applicationId`
 
@@ -189,6 +192,26 @@ Yalnızca `status: "revision_requested"` başvurular. Body başvuru oluşturma i
 Yalnızca **`pending`** başvuru geri çekilebilir. Hatalar: `404 "Başvuru bulunamadı."`, `400 "Yalnızca bekleyen bir başvuru geri çekilebilir."`.
 
 > Değerlendirme (onay/red) başvuranın işi DEĞİLDİR — bkz. [§11 admin](#11-okul-yöneticisi-admin-kulüp-yönetimi).
+
+---
+
+## 6A. Kuruluş önerisi ve dijital destek (T1.1)
+
+Tenant `club.formation.support_threshold > 0` olduğunda `POST /api/clubs/applications` bir **öneri** oluşturur; eşik aşıldığında sistem otomatik `clubApplications` kaydı açar ve mevcut onay zinciri devam eder.
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/clubs/formation-proposals` | Destek toplanan açık öneriler (keşif; yalnızca sayı, destekçi kimliği yok) |
+| GET | `/api/clubs/formation-proposals/:id` | Öneri detayı (sahip: sayı + eşik; diğerleri: keşif görünümü) |
+| POST | `/api/clubs/formation-proposals/:id/support` | Destek ver (kendi önerisine destek verilemez) |
+| DELETE | `/api/clubs/formation-proposals/:id/support` | Desteği geri çek (eşik altına düşerse zincire düşmez) |
+| DELETE | `/api/clubs/formation-proposals/:id` | Öneriyi geri çek (yalnızca sahip, `collecting_support`) |
+
+**Eşik:** tam sayı (`club.formation.support_threshold`). **Süre:** `club.formation.proposal_expiry_days` (varsayılan 90); süresi dolan öneriler listelenmez ve desteklenemez.
+
+**Bildirim:** Eşik ilk kez aşıldığında öneri sahibine `club.formation.threshold_reached` (her destekte gitmez).
+
+**SKS görünürlüğü:** Destekçi listesi yalnızca admin detayında (`GET .../formation-proposals/:id`) — bkz. [admin-panel.md](admin-panel.md), [kvkk.md](../compliance/kvkk.md).
 
 ---
 

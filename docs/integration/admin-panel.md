@@ -239,6 +239,10 @@ verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılı
 | PATCH | `/universities/:uid/club-applications/:id/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/universities/:uid/club-applications/:id/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) — öğrenci düzeltip yeniden gönderir |
 | GET | `/universities/:uid/club-applications/:id/history` | `application.view` | Olay geçmişi (append-only `club_application_events`) |
+| GET | `/universities/:uid/formation-proposals?status=` | `application.view` | Kuruluş önerileri (destek toplama / gönderilmiş / süresi dolmuş) |
+| GET | `/universities/:uid/formation-proposals/:id` | `application.view` | Öneri detayı + **destekçi listesi** (denetim) |
+
+**Kuruluş önerileri (T1.1):** Tenant destek toplama açıkken öğrenci önce öneri açar; eşik aşıldığında otomatik `club_applications` oluşur ve yukarıdaki zincir devam eder. SKS öneri aşamasında destekçi kimliklerini yalnızca admin detayında görür; öğrenci keşif listesinde yalnızca sayı görür.
 
 **Özet durum** (`application.status`) onay adımlarından türetilir:
 - Herhangi bir adım `rejected` → `rejected`

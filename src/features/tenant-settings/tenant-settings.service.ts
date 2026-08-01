@@ -41,6 +41,10 @@ function resolvedValueForKey(resolved: ResolvedTenantSettings, key: TenantSettin
       return resolved.universityAnnouncementPublishPerHour;
     case TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN:
       return resolved.clubApplicationApprovalChain;
+    case TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD:
+      return resolved.clubFormationSupportThreshold;
+    case TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS:
+      return resolved.clubFormationProposalExpiryDays;
   }
 }
 

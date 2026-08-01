@@ -97,6 +97,8 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `announcement.university.pinned.max` | 3 | 0–10 | tenant |
 | `announcement.university.publish.per_hour` | 5 | 1–100 | platform |
 | `club.application.approval_chain` | `["club_approver"]` | 1–3 kademe, `allowedRoles` katalogda | tenant |
+| `club.formation.support_threshold` | `0` | 0–500 (0 = destek toplama kapalı, doğrudan başvuru) | tenant |
+| `club.formation.proposal_expiry_days` | `90` | 7–180 | tenant |
 
 `club.application.approval_chain` — JSON dizi: her eleman bir kademenin karar verici rolü.
 `club_approver` özel token: `club.approve` yetkisini taşıyanlar. Örnek iki kademe:

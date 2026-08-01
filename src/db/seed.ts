@@ -585,6 +585,13 @@ async function main() {
     await createUser({ universityId: kartek.id, departmentId: kartekDept["Deniz Ulaştırma İşletme Mühendisliği"], firstName: "Sevgi", lastName: "Hoca", email: "sevgi.hoca@kartek.edu.tr", role: "advisor" }); // kulüpsüz danışman
     const hulyaAdmin = await createUser({ universityId: kartek.id, firstName: "Hülya", lastName: "Özkan", email: "hulya.ozkan@kartek.edu.tr", role: "university_admin" });
 
+    await tx.insert(schema.tenantSettings).values({
+      universityId: kartek.id,
+      key: TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD,
+      value: 3,
+      updatedBy: hulyaAdmin,
+    });
+
     console.log("   🏕️ Karadeniz kulüpleri ve üyelikleri...");
 
     const [mechClub] = await tx.insert(schema.clubs).values({

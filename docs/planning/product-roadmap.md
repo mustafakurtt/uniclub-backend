@@ -66,10 +66,15 @@ riski yüksek, denetlenemez. Yerine:
   otomatik olarak SKS kuyruğuna düşer.
 - SKS inceler; onaylarsa kulüp `pending` yerine gerçek kulüp olarak doğar.
 
-**Karar gerektiren:** Destek geri çekilebilir mi? Eşik sayı mı yüzde mi? Destekleyen
-kimliği kulüp yönetimine görünür mü (KVKK)? Süre sınırı var mı?
+**Karar gerektiren:** ~~Destek geri çekilebilir mi? Eşik sayı mı yüzde mi? Destekleyen
+kimliği kulüp yönetimine görünür mü (KVKK)? Süre sınırı var mı?~~ → **v1 kararları
+uygulandı** (bkz. `docs/compliance/kvkk.md`, `tenant-settings.md`).
 
-Bugünkü `clubApplications` bu akışın basitleştirilmiş hâli; genişletilecek.
+**Durum:** v1 dijital destek toplama + tenant eşik ayarı uygulandı; danışman adayı ve
+taslak tüzük PDF henüz yok.
+
+Bugünkü `clubApplications` bu akışın basitleştirilmiş hâli; destek toplama açık
+tenant'larda ön aşama olarak genişletildi.
 
 ### T1.2 Danışman ve onay zinciri
 

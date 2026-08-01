@@ -24,6 +24,8 @@ export const NotificationType = {
   CLUB_APPLICATION_DECIDED: "club.application.decided",
   /** Başvuruda revizyon talebi — öğrenci düzeltip yeniden göndermeli. data: { applicationId, step } */
   CLUB_APPLICATION_REVISION_REQUESTED: "club.application.revision_requested",
+  /** Kuruluş önerisi destek eşiğini aştı — başvuru onay zincirine düştü. data: { proposalId, applicationId } */
+  CLUB_FORMATION_THRESHOLD_REACHED: "club.formation.threshold_reached",
   /** Kulübe katılma isteği karara bağlandı. data: { clubId, status } */
   CLUB_MEMBERSHIP_DECIDED: "club.membership.decided",
   /** Kullanıcıya global bir rol atandı. data: { roleId, roleName } */
@@ -76,6 +78,11 @@ export const NotificationTypeMeta: Record<
     optOutable: false,
     labelTr: "Kulüp başvurusu revizyon talebi",
     labelEn: "Club application revision request",
+  },
+  [NotificationType.CLUB_FORMATION_THRESHOLD_REACHED]: {
+    optOutable: false,
+    labelTr: "Kuruluş önerisi eşiği aşıldı",
+    labelEn: "Formation proposal threshold reached",
   },
   [NotificationType.CLUB_MEMBERSHIP_DECIDED]: {
     optOutable: false,

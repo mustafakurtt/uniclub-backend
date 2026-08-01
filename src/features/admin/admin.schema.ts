@@ -16,6 +16,11 @@ export const listClubApplicationsQuerySchema = z.object({
 });
 export type ListClubApplicationsQueryDTO = z.infer<typeof listClubApplicationsQuerySchema>;
 
+export const listFormationProposalsQuerySchema = z.object({
+  status: z.enum(["collecting_support", "submitted", "withdrawn", "expired"]).optional(),
+});
+export type ListFormationProposalsQueryDTO = z.infer<typeof listFormationProposalsQuerySchema>;
+
 export const listClubsQuerySchema = z.object({
   status: z.enum(["pending", "approved", "rejected", "archived"]).optional(),
 });

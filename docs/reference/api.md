@@ -328,6 +328,18 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 
+**Kuruluş önerisi / dijital destek (tenant eşik > 0):**
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/clubs/formation-proposals` | Açık öneriler (keşif) |
+| GET | `/api/clubs/formation-proposals/:id` | Öneri detayı |
+| POST | `/api/clubs/formation-proposals/:id/support` | Destek ver |
+| DELETE | `/api/clubs/formation-proposals/:id/support` | Desteği geri çek |
+| DELETE | `/api/clubs/formation-proposals/:id` | Öneriyi geri çek (sahip) |
+
+`POST /api/clubs/applications` tenant ayarına göre `kind: "application"` veya `kind: "formation_proposal"` döner.
+
 **Kulüp-içi yönetim (kulüp rolüne göre):**
 
 | Method | Path | Kim |
@@ -413,6 +425,8 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
+| GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
+| GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
 
 Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Özet `application.status` adımlardan türetilir; bildirim yalnızca nihai `approved`/`rejected` kararında. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |

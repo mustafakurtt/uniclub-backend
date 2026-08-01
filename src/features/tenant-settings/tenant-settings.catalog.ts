@@ -23,6 +23,9 @@ export const TenantSettingKey = {
   UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX: "announcement.university.pinned.max",
   UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR: "announcement.university.publish.per_hour",
   CLUB_APPLICATION_APPROVAL_CHAIN: "club.application.approval_chain",
+  /** 0 = destek toplama kapalı (doğrudan başvuru). >0 = minimum destek sayısı. */
+  CLUB_FORMATION_SUPPORT_THRESHOLD: "club.formation.support_threshold",
+  CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS: "club.formation.proposal_expiry_days",
 } as const;
 
 export type TenantSettingKey = (typeof TenantSettingKey)[keyof typeof TenantSettingKey];
@@ -78,6 +81,24 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Kulüp başvuru onay zinciri (kademe → rol)",
     labelEn: "Club application approval chain (step → role)",
   },
+  [TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD]: {
+    kind: "integer",
+    defaultValue: 0,
+    min: 0,
+    max: 500,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Kulüp kuruluşu dijital destek eşiği (0 = kapalı)",
+    labelEn: "Club formation digital support threshold (0 = disabled)",
+  },
+  [TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS]: {
+    kind: "integer",
+    defaultValue: 90,
+    min: 7,
+    max: 180,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Kuruluş önerisi destek süresi (gün)",
+    labelEn: "Formation proposal support window (days)",
+  },
 };
 
 export const TENANT_SETTING_KEYS = Object.keys(TENANT_SETTING_CATALOG) as TenantSettingKey[];
@@ -113,6 +134,8 @@ export interface ResolvedTenantSettings {
   universityPinnedAnnouncementsMax: number;
   universityAnnouncementPublishPerHour: number;
   clubApplicationApprovalChain: string[];
+  clubFormationSupportThreshold: number;
+  clubFormationProposalExpiryDays: number;
 }
 
 export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
@@ -124,6 +147,10 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
     universityAnnouncementPublishPerHour:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR].defaultValue as number,
     clubApplicationApprovalChain: [...DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN],
+    clubFormationSupportThreshold:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD].defaultValue as number,
+    clubFormationProposalExpiryDays:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS].defaultValue as number,
   };
 }
 
@@ -144,5 +171,11 @@ export function mergeOverridesIntoResolved(
     clubApplicationApprovalChain:
       (overrides[TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN] as string[] | undefined) ??
       defaults.clubApplicationApprovalChain,
+    clubFormationSupportThreshold:
+      (overrides[TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD] as number | undefined) ??
+      defaults.clubFormationSupportThreshold,
+    clubFormationProposalExpiryDays:
+      (overrides[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS] as number | undefined) ??
+      defaults.clubFormationProposalExpiryDays,
   };
 }

@@ -1,4 +1,6 @@
 import { adminRepository } from "./admin.repository";
+import { clubsRepository } from "../clubs/clubs.repository";
+import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
 import { UpdateClubStatusDTO, UpdateClubDTO, UpdateUserDepartmentDTO } from "./admin.schema";
 import { DecideClubApplicationResult, User } from "./admin.types";
 import { toSafeUser } from "../../shared/utils/user.util";
@@ -141,6 +143,39 @@ export const adminService = {
       ...application,
       applicant: application.applicant ? toSafeUser(application.applicant) : null,
     }));
+  },
+
+  async listFormationProposals(
+    universityId: string,
+    status?: "collecting_support" | "submitted" | "withdrawn" | "expired"
+  ) {
+    const settings = await getTenantSettings(universityId);
+    const proposals = await clubsRepository.listFormationProposalsByUniversity(universityId, status);
+    return proposals.map((proposal) => ({
+      ...proposal,
+      supportThreshold: settings.clubFormationSupportThreshold,
+      proposer: proposal.proposer ? toSafeUser(proposal.proposer) : null,
+    }));
+  },
+
+  async getFormationProposal(universityId: string, proposalId: string) {
+    const proposal = await clubsRepository.findFormationProposalInUniversity(universityId, proposalId);
+    if (!proposal) {
+      throw notFound("admin.formationProposalNotFound");
+    }
+    const settings = await getTenantSettings(universityId);
+    const supports = await clubsRepository.listFormationSupports(proposalId);
+    return {
+      ...proposal,
+      supportThreshold: settings.clubFormationSupportThreshold,
+      proposer: proposal.proposer ? toSafeUser(proposal.proposer) : null,
+      supporters: supports
+        .filter((s) => s.supporter)
+        .map((s) => ({
+          supportedAt: s.createdAt,
+          user: toSafeUser(s.supporter!),
+        })),
+    };
   },
 
   /**

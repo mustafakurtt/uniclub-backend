@@ -26,6 +26,12 @@ export const clubsMessages = defineCatalog({
     "club.newPresidentMustBeApprovedMember": "Yeni başkan, kulübün onaylı bir üyesi olmalıdır.",
     "club.contactLinkPlatformExists": "Bu platform için zaten bir bağlantı eklenmiş.",
     "club.contactLinkNotFound": "Bağlantı bulunamadı.",
+    "club.formationProposalNotFound": "Kuruluş önerisi bulunamadı.",
+    "club.formationSupportDisabled": "Bu üniversitede dijital destek toplama kapalı.",
+    "club.cannotSupportOwnProposal": "Kendi kuruluş önerinizi destekleyemezsiniz.",
+    "club.formationAlreadySupported": "Bu öneriyi zaten desteklediniz.",
+    "club.formationSupportNotFound": "Destek kaydı bulunamadı.",
+    "club.formationProposalNotWithdrawable": "Yalnızca destek toplama aşamasındaki öneri geri çekilebilir.",
     // hata — club.middleware (kulüp-içi yetki reddi, 403)
     "club.notStaff": "Bu işlem için kulüp yöneticisi (başkan/officer) veya danışmanı olmalısınız.",
     "club.notOfficer": "Bu işlem için kulüp yöneticisi (başkan/officer) olmalısınız.",
@@ -49,6 +55,11 @@ export const clubsMessages = defineCatalog({
     "club.memberRemoved": "Üye kulüpten çıkarıldı.",
     "club.memberRoleUpdated": "Üye rolü güncellendi.",
     "club.presidencyTransferred": "Başkanlık devredildi.",
+    "club.formationProposalsListed": "Kuruluş önerileri listelendi.",
+    "club.formationProposalFound": "Kuruluş önerisi bulundu.",
+    "club.formationSupportAdded": "Destek kaydedildi.",
+    "club.formationSupportWithdrawn": "Destek geri çekildi.",
+    "club.formationProposalWithdrawn": "Kuruluş önerisi geri çekildi.",
   },
   en: {
     // error
@@ -69,6 +80,12 @@ export const clubsMessages = defineCatalog({
     "club.newPresidentMustBeApprovedMember": "The new president must be an approved member of the club.",
     "club.contactLinkPlatformExists": "A link for this platform has already been added.",
     "club.contactLinkNotFound": "Link not found.",
+    "club.formationProposalNotFound": "Formation proposal not found.",
+    "club.formationSupportDisabled": "Digital support collection is disabled at this university.",
+    "club.cannotSupportOwnProposal": "You cannot support your own formation proposal.",
+    "club.formationAlreadySupported": "You have already supported this proposal.",
+    "club.formationSupportNotFound": "Support record not found.",
+    "club.formationProposalNotWithdrawable": "Only a proposal in the support collection phase can be withdrawn.",
     // error — club.middleware (in-club authorization denial, 403)
     "club.notStaff": "You must be a club officer/president or advisor for this action.",
     "club.notOfficer": "You must be a club officer/president for this action.",
@@ -92,6 +109,11 @@ export const clubsMessages = defineCatalog({
     "club.memberRemoved": "Member removed from club.",
     "club.memberRoleUpdated": "Member role updated.",
     "club.presidencyTransferred": "Presidency transferred.",
+    "club.formationProposalsListed": "Formation proposals listed.",
+    "club.formationProposalFound": "Formation proposal found.",
+    "club.formationSupportAdded": "Support recorded.",
+    "club.formationSupportWithdrawn": "Support withdrawn.",
+    "club.formationProposalWithdrawn": "Formation proposal withdrawn.",
   },
 });
 

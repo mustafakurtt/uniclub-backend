@@ -16,6 +16,7 @@ import {
   updateClubStatusSchema,
   listUsersQuerySchema,
   listClubApplicationsQuerySchema,
+  listFormationProposalsQuerySchema,
   listClubsQuerySchema,
   addAdvisorSchema,
   approveApplicationSchema,
@@ -178,6 +179,29 @@ adminRoutes.get(
     const { universityId, applicationId } = c.req.param();
     const history = await adminService.getClubApplicationHistory(universityId, applicationId);
     return ok(c, history, "admin.applicationHistoryListed");
+  }
+);
+
+// 6d. KURULUŞ ÖNERİLERİ (destek toplama aşaması)
+adminRoutes.get(
+  "/universities/:universityId/formation-proposals",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  validate("query", listFormationProposalsQuerySchema),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const { status } = c.req.valid("query");
+    const proposals = await adminService.listFormationProposals(universityId, status);
+    return ok(c, proposals, "admin.formationProposalsListed");
+  }
+);
+
+adminRoutes.get(
+  "/universities/:universityId/formation-proposals/:proposalId",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, proposalId } = c.req.param();
+    const proposal = await adminService.getFormationProposal(universityId, proposalId);
+    return ok(c, proposal, "admin.formationProposalFound");
   }
 );
 
