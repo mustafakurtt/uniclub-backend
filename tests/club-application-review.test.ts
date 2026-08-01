@@ -1,7 +1,7 @@
 /**
  * Kulüp başvuru kontrol listesi + itiraz (T4.1) — madde işaretleme, kilit, itiraz akışı, tenant izolasyonu.
  */
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { login, me, reqAuth, get } from "./helpers";
 import { db } from "../src/db";
@@ -9,6 +9,12 @@ import { clubApplications } from "../src/db/schema";
 import { tenantSettings } from "../src/db/schema/tenant-settings";
 import { TenantSettingKey } from "../src/features/tenant-settings/tenant-settings.catalog";
 import { invalidateTenantSettingsCache } from "../src/features/tenant-settings/tenant-settings.cache";
+import {
+  restoreAntalyaSeedApprovalChain,
+  restoreAntalyaSeedFormationThreshold,
+  setTenantFormationThreshold,
+  useClubApproverChainForTests,
+} from "./tenant-test-helpers";
 
 const patch = (path: string, token: string, body?: unknown) =>
   reqAuth("PATCH", path, token, body);
@@ -20,11 +26,20 @@ describe("kulüp başvuru kontrol listesi ve itiraz", () => {
   let antalyaUni: string;
   let sksToken: string;
   let adminToken: string;
+  let adminUserId: string;
 
   beforeAll(async () => {
     sksToken = await login("sks@antalya.edu.tr");
     adminToken = await login("elif.demir@antalya.edu.tr");
     antalyaUni = (await me(sksToken)).universityId as string;
+    adminUserId = (await me(adminToken)).userId as string;
+    await setTenantFormationThreshold(antalyaUni, 0, adminUserId);
+    await useClubApproverChainForTests(antalyaUni, adminUserId);
+  });
+
+  afterAll(async () => {
+    await restoreAntalyaSeedFormationThreshold(antalyaUni, adminUserId);
+    await restoreAntalyaSeedApprovalChain(antalyaUni, adminUserId);
   });
 
   async function createPendingApplication(applicantEmail: string) {

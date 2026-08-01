@@ -93,7 +93,7 @@ describe("kulüp başvurusu reddi: gerekçe zorunlu", () => {
     admin = await login("elif.demir@antalya.edu.tr"); // university_admin (Antalya)
     uni = (await me(admin)).universityId as string;
     const pending = await db.query.clubApplications.findFirst({
-      where: { universityId: uni, status: "pending" },
+      where: { proposedName: "Doğa Yürüyüşü Kulübü", status: "pending", universityId: uni },
     });
     if (!pending) throw new Error("seed'de bekleyen başvuru yok");
     applicationId = pending.id;

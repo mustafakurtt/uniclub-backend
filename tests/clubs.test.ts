@@ -1,8 +1,14 @@
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { data, get, login, me, reqAuth } from "./helpers";
 import { db } from "../src/db";
 import { clubs } from "../src/db/schema";
+import {
+  restoreAntalyaSeedApprovalChain,
+  restoreAntalyaSeedFormationThreshold,
+  setTenantFormationThreshold,
+  useClubApproverChainForTests,
+} from "./tenant-test-helpers";
 
 const patch = (path: string, token: string, body?: unknown) =>
   reqAuth("PATCH", path, token, body);
@@ -42,6 +48,15 @@ describe("kulüpler (/api/clubs)", () => {
 
     const robotik = await db.query.clubs.findFirst({ where: { slug: "robotik" } });
     robotikClubId = robotik!.id;
+
+    await setTenantFormationThreshold(antalyaUni, 0, (await me(elif)).userId as string);
+    await useClubApproverChainForTests(antalyaUni, (await me(elif)).userId as string);
+  });
+
+  afterAll(async () => {
+    const actorId = (await me(elif)).userId as string;
+    await restoreAntalyaSeedFormationThreshold(antalyaUni, actorId);
+    await restoreAntalyaSeedApprovalChain(antalyaUni, actorId);
   });
 
   it("joinPolicy open: katılım anında approved", async () => {
@@ -127,8 +142,23 @@ describe("kulüpler (/api/clubs)", () => {
   });
 
   it("kulüp kurma başvurusu reddi kulüp yaratmaz", async () => {
+    await setTenantFormationThreshold(antalyaUni, 0, (await me(elif)).userId as string);
+    await useClubApproverChainForTests(antalyaUni, (await me(elif)).userId as string);
+
     const proposedName = `Red Test Kulüp ${Date.now()}`;
-    const createRes = await reqAuth("POST", "/api/clubs/applications", emre, {
+    const demo = await login("demo.yk3@std.antalya.edu.tr");
+    const demoId = (await me(demo)).userId as string;
+    const active = await db.query.clubApplications.findMany({
+      where: {
+        applicantId: demoId,
+        status: { in: ["pending", "revision_requested"] },
+      },
+    });
+    for (const app of active) {
+      await reqAuth("DELETE", `/api/clubs/applications/${app.id}`, demo);
+    }
+
+    const createRes = await reqAuth("POST", "/api/clubs/applications", demo, {
       proposedName,
       description: "Red akışı test başvurusu.",
     });

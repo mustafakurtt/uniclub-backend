@@ -70,6 +70,24 @@ export const requireClubStaff = async (c: Context<{ Variables: ClubVariables }>,
 };
 
 /**
+ * Onaylı kulüp üyesi (member/officer/president). Kurul künyesi gibi üye görünürlüğü
+ * içerikleri için kullanılır; toplantı tutanakları staff'ta kalır.
+ */
+export const requireClubMember = async (c: Context<{ Variables: ClubVariables }>, next: Next) => {
+  const { clubId } = c.req.param();
+  const user = c.get("user");
+
+  const membership = await loadApprovedMembership(clubId, user.userId);
+  if (!membership) {
+    throw forbidden("club.notMember");
+  }
+
+  c.set("clubMembership", membership);
+  c.set("clubAccess", { via: "member", role: membership.role, status: membership.status });
+  await next();
+};
+
+/**
  * Yapısal karar mercii: officer VEYA president (danışman DAHİL DEĞİL — üyelik
  * isteğini onaylamak, üye çıkarmak, iletişim linki yönetmek yürütme işidir).
  */

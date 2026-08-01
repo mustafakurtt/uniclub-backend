@@ -3,6 +3,7 @@ import { authMiddleware } from "../../core/auth/auth.middleware";
 import {
   requireClubOfficer,
   requireClubStaff,
+  requireClubMember,
   requireClubInTenant,
   ClubVariables,
 } from "../../middlewares/club.middleware";
@@ -16,6 +17,22 @@ import { createGeneralMeetingSchema } from "./general-meetings.schema";
  * Genel kurul kayıtları ve kurul üyeliği (T1.6 temel).
  */
 export const generalMeetingsRoutes = new Hono<{ Variables: ClubVariables }>();
+
+generalMeetingsRoutes.get(
+  "/:clubId/current-board",
+  authMiddleware,
+  requireClubInTenant,
+  requireClubMember,
+  async (c) => {
+    const user = c.get("user");
+    const { clubId } = c.req.param();
+    const board = await generalMeetingsService.getCurrentBoard(
+      requireTenant(user.universityId),
+      clubId
+    );
+    return ok(c, board, "generalMeeting.currentBoardListed");
+  }
+);
 
 generalMeetingsRoutes.get(
   "/:clubId/general-meetings",

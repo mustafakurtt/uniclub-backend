@@ -48,6 +48,19 @@ function mapMeetingSummary(
   };
 }
 
+function mapBoardMember(
+  row: Awaited<ReturnType<typeof generalMeetingsRepository.findActiveBoardMemberships>>[number]
+) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    boardType: row.boardType,
+    seatType: row.seatType,
+    title: row.title,
+    user: row.user ? toSafeUser(row.user) : null,
+  };
+}
+
 export const generalMeetingsService = {
   async create(universityId: string, clubId: string, actorId: string, data: CreateGeneralMeetingDTO) {
     const club = await clubsRepository.findClubInUniversity(universityId, clubId);
@@ -130,6 +143,9 @@ export const generalMeetingsService = {
 
     const settings = await getTenantSettings(universityId);
     const meetings = await generalMeetingsRepository.listMeetingsForClub(clubId);
+    const attendeeCounts = await generalMeetingsRepository.countAttendeesByMeetingIds(
+      meetings.map((m) => m.id)
+    );
     const memberCount = (await generalMeetingsRepository.countApprovedMembers(clubId)).length;
 
     return meetings.map((m) => ({
@@ -140,7 +156,34 @@ export const generalMeetingsService = {
       academicTerm: m.academicTerm ? { id: m.academicTerm.id, name: m.academicTerm.name } : null,
       quorumPercent: settings.clubGeneralMeetingQuorumPercent,
       memberCount,
+      attendeeCount: attendeeCounts.get(m.id) ?? 0,
     }));
+  },
+
+  async getCurrentBoard(universityId: string, clubId: string) {
+    const club = await clubsRepository.findClubInUniversity(universityId, clubId);
+    if (!club) {
+      throw notFound("club.notFound");
+    }
+
+    const rows = await generalMeetingsRepository.findActiveBoardMemberships(clubId);
+    const managementPrincipal = rows
+      .filter((r) => r.boardType === "management" && r.seatType === "principal")
+      .map(mapBoardMember);
+    const managementAlternate = rows
+      .filter((r) => r.boardType === "management" && r.seatType === "alternate")
+      .map(mapBoardMember);
+    const auditPrincipal = rows
+      .filter((r) => r.boardType === "audit" && r.seatType === "principal")
+      .map(mapBoardMember);
+    const auditAlternate = rows
+      .filter((r) => r.boardType === "audit" && r.seatType === "alternate")
+      .map(mapBoardMember);
+
+    return {
+      management: { principal: managementPrincipal, alternate: managementAlternate },
+      audit: { principal: auditPrincipal, alternate: auditAlternate },
+    };
   },
 
   async getById(universityId: string, clubId: string, meetingId: string) {

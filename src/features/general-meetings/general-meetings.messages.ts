@@ -11,6 +11,7 @@ export const generalMeetingsMessages = defineCatalog({
     "generalMeeting.invalidBoardMembers": "Kurul üyeleri kulübün onaylı üyeleri olmalıdır.",
     "generalMeeting.quorumNotMet": "Toplantı yeter sayısına ulaşmadı.",
     "generalMeeting.duplicateBoardPresident": "Yönetim kurulu başkanı (asil) yalnızca bir kişi olabilir.",
+    "generalMeeting.currentBoardListed": "Güncel kurul listelendi.",
   },
   en: {
     "generalMeeting.created": "General meeting record created.",
@@ -22,6 +23,7 @@ export const generalMeetingsMessages = defineCatalog({
     "generalMeeting.invalidBoardMembers": "Board members must be approved club members.",
     "generalMeeting.quorumNotMet": "Meeting quorum was not met.",
     "generalMeeting.duplicateBoardPresident": "Only one principal management board president is allowed.",
+    "generalMeeting.currentBoardListed": "Current board roster listed.",
   },
 });
 

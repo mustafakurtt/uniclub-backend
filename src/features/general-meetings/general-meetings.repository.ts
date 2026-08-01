@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import {
   clubBoardMemberships,
@@ -36,6 +36,26 @@ class GeneralMeetingsRepository {
       with: {
         academicTerm: true,
       },
+    });
+  }
+
+  async countAttendeesByMeetingIds(meetingIds: string[]): Promise<Map<string, number>> {
+    if (meetingIds.length === 0) return new Map();
+    const rows = await db
+      .select({
+        meetingId: clubGeneralMeetingAttendees.meetingId,
+        count: sql<number>`cast(count(*) as int)`,
+      })
+      .from(clubGeneralMeetingAttendees)
+      .where(inArray(clubGeneralMeetingAttendees.meetingId, meetingIds))
+      .groupBy(clubGeneralMeetingAttendees.meetingId);
+    return new Map(rows.map((r) => [r.meetingId, r.count]));
+  }
+
+  findActiveBoardMemberships(clubId: string) {
+    return db.query.clubBoardMemberships.findMany({
+      where: { clubId, endedAt: { isNull: true } },
+      with: { user: true },
     });
   }
 

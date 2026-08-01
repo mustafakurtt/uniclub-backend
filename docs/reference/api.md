@@ -362,7 +362,8 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** (member↔officer) |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** (eski başkan officer olur) |
 | GET | `/api/clubs/:clubId/membership-history` | **staff**: danışman/officer/başkan; sayfalanabilir, `?academicTermId=` |
-| GET | `/api/clubs/:clubId/general-meetings` | **staff**: genel kurul kayıtları |
+| GET | `/api/clubs/:clubId/current-board` | **onaylı üye**: güncel yönetim/denetleme kurulu (asil/yedek, unvan) |
+| GET | `/api/clubs/:clubId/general-meetings` | **staff**: genel kurul kayıtları (`attendeeCount` liste yanıtında) |
 | GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff**: genel kurul detayı |
 | POST | `/api/clubs/:clubId/general-meetings` | officer/başkan: genel kurul + kurul seçimi kaydı |
 | PATCH | `/api/clubs/:clubId` | **yalnızca başkan** (profil düzenle; durum HARİÇ) |

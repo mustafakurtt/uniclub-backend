@@ -1,11 +1,17 @@
 /**
  * Öğrenci başvuru süreç geçmişi (T1.6 ADIM 0).
  */
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { login, me, reqAuth, data, get } from "./helpers";
 import { db } from "../src/db";
 import { clubApplicationEvents } from "../src/db/schema";
+import {
+  restoreAntalyaSeedApprovalChain,
+  restoreAntalyaSeedFormationThreshold,
+  setTenantFormationThreshold,
+  useClubApproverChainForTests,
+} from "./tenant-test-helpers";
 
 const post = (path: string, token: string, body?: unknown) => reqAuth("POST", path, token, body);
 const patch = (path: string, token: string, body?: unknown) => reqAuth("PATCH", path, token, body);
@@ -22,7 +28,9 @@ describe("öğrenci başvuru süreç geçmişi", () => {
   beforeAll(async () => {
     admin = await login("elif.demir@antalya.edu.tr");
     antalyaUni = (await me(admin)).universityId as string;
-    applicantToken = await login("250803001@std.antalya.edu.tr");
+    await setTenantFormationThreshold(antalyaUni, 0, (await me(admin)).userId as string);
+    await useClubApproverChainForTests(antalyaUni, (await me(admin)).userId as string);
+    applicantToken = await login("demo.yk1@std.antalya.edu.tr");
     otherStudentToken = await login("emre.aksoy@std.antalya.edu.tr");
 
     const applicantId = (await me(applicantToken)).userId as string;
@@ -63,6 +71,13 @@ describe("öğrenci başvuru süreç geçmişi", () => {
       actorId: (await me(admin)).userId,
       note: "internal:advisor_nominated:true",
     });
+  });
+
+  afterAll(async () => {
+    const adminToken = await login("elif.demir@antalya.edu.tr");
+    const actorId = (await me(adminToken)).userId as string;
+    await restoreAntalyaSeedFormationThreshold(antalyaUni, actorId);
+    await restoreAntalyaSeedApprovalChain(antalyaUni, actorId);
   });
 
   it("kendi başvurusu → 200 ve süreç olayları", async () => {

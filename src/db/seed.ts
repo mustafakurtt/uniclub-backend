@@ -344,10 +344,20 @@ async function main(): Promise<() => Promise<void>> {
     const selin = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Mimarlık"], firstName: "Selin", lastName: "Koç", email: "selin.koc@std.antalya.edu.tr", studentNumber: "220415008", role: "student" });
     const burak = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Ekonomi"], firstName: "Burak", lastName: "Demirci", email: "burak.demirci@std.antalya.edu.tr", studentNumber: "230522009", role: "student" });
 
+    // Yazılım kulübü kurul/yedek kadrosu + kurul başvuru senaryoları (uydurma kişiler)
+    const demoYk1 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Matematik"], firstName: "Demo", lastName: "Üye Bir", email: "demo.yk1@std.antalya.edu.tr", studentNumber: "240001001", role: "student" });
+    const demoYk2 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Fizik"], firstName: "Demo", lastName: "Üye İki", email: "demo.yk2@std.antalya.edu.tr", studentNumber: "240001002", role: "student" });
+    const demoYk3 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Kimya"], firstName: "Demo", lastName: "Üye Üç", email: "demo.yk3@std.antalya.edu.tr", studentNumber: "240001003", role: "student" });
+    const demoYk4 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Biyoloji"], firstName: "Demo", lastName: "Üye Dört", email: "demo.yk4@std.antalya.edu.tr", studentNumber: "240001004", role: "student" });
+    const demoYk5 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Tarih"], firstName: "Demo", lastName: "Üye Beş", email: "demo.yk5@std.antalya.edu.tr", studentNumber: "240001005", role: "student" });
+    const demoYk6 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Coğrafya"], firstName: "Demo", lastName: "Üye Altı", email: "demo.yk6@std.antalya.edu.tr", studentNumber: "240001006", role: "student" });
+    const demoApp1 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["İşletme"], firstName: "Demo", lastName: "Başvuru Bir", email: "demo.basvuru1@std.antalya.edu.tr", studentNumber: "240002001", role: "student" });
+    const demoApp2 = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Ekonomi"], firstName: "Demo", lastName: "Başvuru İki", email: "demo.basvuru2@std.antalya.edu.tr", studentNumber: "240002002", role: "student" });
+
     // Danışmanlar — Ahmet (2 kulüp), Zeynep (1 kulüp), Murat (KULÜPSÜZ → atama havuzu)
     const ahmetHoca = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Bilgisayar Mühendisliği"], firstName: "Ahmet", lastName: "Hoca", email: "ahmet.hoca@antalya.edu.tr", role: "advisor" });
     const zeynepHoca = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Psikoloji"], firstName: "Zeynep", lastName: "Aydın", email: "zeynep.aydin@antalya.edu.tr", role: "advisor" });
-    await createUser({ universityId: antalya.id, departmentId: antalyaDept["Endüstri Mühendisliği"], firstName: "Murat", lastName: "Tekin", email: "murat.tekin@antalya.edu.tr", role: "advisor" }); // hiçbir kulübün danışmanı DEĞİL
+    const muratTekin = await createUser({ universityId: antalya.id, departmentId: antalyaDept["Endüstri Mühendisliği"], firstName: "Murat", lastName: "Tekin", email: "murat.tekin@antalya.edu.tr", role: "advisor" }); // hiçbir kulübün danışmanı DEĞİL
 
     // Yöneticiler + kurumsal roller (yeni model — bkz. docs/design/06)
     // NOT: super_admin ve platform_support artık BURADA DEĞİL — onlar tenant'sız
@@ -355,7 +365,7 @@ async function main(): Promise<() => Promise<void>> {
     await createUser({ universityId: antalya.id, firstName: "Elif", lastName: "Demir", email: "elif.demir@antalya.edu.tr", role: "university_admin" }); // tenant yöneticisi
     await createUser({ universityId: antalya.id, firstName: "Ahmet", lastName: "Yönetici", email: "ahmet.yonetici@antalya.edu.tr", role: "university_admin" }); // 2. admin — "son admin" korumasını test etmek için
     const antalyaSks = await createUser({ universityId: antalya.id, firstName: "SKS", lastName: "Görevlisi", email: "sks@antalya.edu.tr", role: "student_affairs" }); // kulüp onay/danışman/moderasyon
-    await createUser({ universityId: antalya.id, firstName: "Öğrenci İşleri", lastName: "Görevlisi", email: "ogrenci.isleri@antalya.edu.tr", role: "academic_affairs" }); // akademik yapı
+    const ogrenciIsleri = await createUser({ universityId: antalya.id, firstName: "Öğrenci İşleri", lastName: "Görevlisi", email: "ogrenci.isleri@antalya.edu.tr", role: "academic_affairs" }); // akademik yapı
     await createUser({ universityId: antalya.id, firstName: "İçerik", lastName: "Moderatörü", email: "moderator@antalya.edu.tr", role: "content_moderator" }); // duyuru/galeri moderasyonu
     await createUser({ universityId: antalya.id, firstName: "Denetim", lastName: "Görevlisi", email: "denetci@antalya.edu.tr", role: "auditor" }); // salt-okunur izleme
 
@@ -380,11 +390,19 @@ async function main(): Promise<() => Promise<void>> {
       universityId: antalya.id, name: "Yazılım ve Teknoloji Kulübü", slug: "yazilim-teknoloji",
       description: "Okulun en inek ama en eğlenceli kulübü.", joinPolicy: "open", status: "approved", createdBy: mustafa,
     }).returning();
-    await tx.insert(schema.clubAdvisors).values({ clubId: techClub.id, universityId: techClub.universityId, userId: ahmetHoca });
     await tx.insert(schema.clubMembers).values([
       { clubId: techClub.id, universityId: techClub.universityId, userId: mustafa, role: "president", status: "approved" },
       { clubId: techClub.id, universityId: techClub.universityId, userId: can, role: "officer", status: "approved" },
       { clubId: techClub.id, universityId: techClub.universityId, userId: sen, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: emre, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: burak, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: ayse, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: demoYk1, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: demoYk2, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: demoYk3, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: demoYk4, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: demoYk5, role: "member", status: "approved" },
+      { clubId: techClub.id, universityId: techClub.universityId, userId: demoYk6, role: "member", status: "approved" },
       { clubId: techClub.id, universityId: techClub.universityId, userId: selin, role: "member", status: "pending" }, // bekleyen katılım isteği
     ]);
     await tx.insert(schema.clubContactLinks).values([
@@ -438,6 +456,86 @@ async function main(): Promise<() => Promise<void>> {
       universityId: antalya.id, name: "E-Spor Kulübü", slug: "e-spor",
       description: "Reddedilmiş örnek kulüp.", joinPolicy: "open", status: "rejected", createdBy: burak,
     });
+
+    // --- Yazılım kulübü demo derinliği: danışman daveti, genel kurul, kurullar ---
+    console.log("   📜 Yazılım kulübü genel kurul ve kurul kayıtları...");
+    const advisorAcceptedAt = new Date("2025-09-15T10:00:00+03:00");
+    await tx.insert(schema.clubAdvisorInvitations).values({
+      clubId: techClub.id,
+      universityId: antalya.id,
+      inviteeUserId: ahmetHoca,
+      invitedBy: mustafa,
+      status: "accepted",
+      respondedAt: advisorAcceptedAt,
+      expiresAt: new Date("2025-10-01T23:59:59+03:00"),
+      message: "Yazılım kulübümüze danışmanlık yapmanızı rica ederiz.",
+    });
+    await tx.insert(schema.clubAdvisors).values({
+      clubId: techClub.id,
+      universityId: techClub.universityId,
+      userId: ahmetHoca,
+    });
+    await tx.insert(schema.clubAdvisorInvitations).values({
+      clubId: theatreClub.id,
+      universityId: antalya.id,
+      inviteeUserId: muratTekin,
+      invitedBy: selin,
+      status: "pending",
+      expiresAt: inDays(14),
+      message: "Tiyatro kulübümüze danışmanlık yapmanızı rica ederiz.",
+    });
+
+    const [antalyaTerm] = await tx.insert(schema.academicTerms).values({
+      universityId: antalya.id,
+      name: "2025-2026 Bahar",
+      startsAt: new Date("2026-02-01T00:00:00+03:00"),
+      endsAt: new Date("2026-08-31T23:59:59+03:00"),
+      status: "open",
+    }).returning();
+
+    const gkDecisions =
+      "1) 2025-2026 Bahar dönemi olağan genel kurul toplantısı gerçekleştirildi.\n" +
+      "2) Yönetim kurulu asil ve yedek üyeleri seçildi.\n" +
+      "3) Denetleme kurulu asil ve yedek üyeleri seçildi.\n" +
+      "4) Dönem faaliyet takvimi ve atölye programı onaylandı.";
+
+    const [gkMeeting] = await tx.insert(schema.clubGeneralMeetings).values({
+      clubId: techClub.id,
+      universityId: antalya.id,
+      academicTermId: antalyaTerm.id,
+      meetingType: "ordinary",
+      heldAt: new Date("2026-05-10T14:00:00+03:00"),
+      location: "Öğrenci Merkezi Konferans Salonu",
+      decisions: gkDecisions,
+      recordedBy: mustafa,
+    }).returning();
+
+    const techApprovedMemberIds = [
+      mustafa, can, sen, emre, burak, ayse, demoYk1, demoYk2, demoYk3, demoYk4, demoYk5, demoYk6,
+    ];
+    await tx.insert(schema.clubGeneralMeetingAttendees).values(
+      techApprovedMemberIds.map((userId) => ({
+        meetingId: gkMeeting.id,
+        clubId: techClub.id,
+        userId,
+        universityId: antalya.id,
+      }))
+    );
+
+    await tx.insert(schema.clubBoardMemberships).values([
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: mustafa, boardType: "management", seatType: "principal", title: "president" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: can, boardType: "management", seatType: "principal", title: "vice_president" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: sen, boardType: "management", seatType: "principal", title: "secretary" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: emre, boardType: "management", seatType: "principal", title: "treasurer" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: burak, boardType: "management", seatType: "principal", title: "member" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: ayse, boardType: "management", seatType: "alternate", title: "member" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: demoYk1, boardType: "management", seatType: "alternate", title: "member" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: demoYk2, boardType: "management", seatType: "alternate", title: "member" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: demoYk3, boardType: "management", seatType: "alternate", title: "member" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: demoYk4, boardType: "management", seatType: "alternate", title: "member" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: demoYk5, boardType: "audit", seatType: "principal", title: "member" },
+      { clubId: techClub.id, universityId: antalya.id, generalMeetingId: gkMeeting.id, userId: demoYk6, boardType: "audit", seatType: "alternate", title: "member" },
+    ]);
 
     // --- Duyurular & Galeri (yalnızca aktif kulüplerde) ---
     await tx.insert(schema.announcements).values([
@@ -499,6 +597,67 @@ async function main(): Promise<() => Promise<void>> {
     await createApplication({ universityId: antalya.id, proposedName: "Doğa Yürüyüşü Kulübü", description: "Hafta sonları birlikte doğa yürüyüşlerine çıkmak isteyenler için.", applicantId: can, status: "pending" });
     await createApplication({ universityId: antalya.id, proposedName: "Müzik Kulübü", description: "Koro, orkestra ve akustik geceler.", applicantId: can, status: "approved", reviewerId: antalyaSks }); // yukarıdaki Müzik Kulübü bundan doğdu
     await createApplication({ universityId: antalya.id, proposedName: "Kripto Para Kulübü", description: "Kripto piyasaları üzerine konuşma grubu.", applicantId: burak, status: "rejected", reviewerId: antalyaSks, rejectionNote: "Kurum politikasına uygun değil." });
+
+    console.log("   📋 Antalya Koordinasyon Kurulu ve kurul başvuruları...");
+    const [coordCommittee] = await tx.insert(schema.approvalCommittees).values({
+      universityId: antalya.id,
+      name: "Koordinasyon Kurulu",
+      isActive: true,
+    }).returning();
+    await tx.insert(schema.approvalCommitteeMembers).values([
+      { committeeId: coordCommittee.id, universityId: antalya.id, userId: antalyaSks },
+      { committeeId: coordCommittee.id, universityId: antalya.id, userId: ahmetHoca },
+      { committeeId: coordCommittee.id, universityId: antalya.id, userId: zeynepHoca },
+      { committeeId: coordCommittee.id, universityId: antalya.id, userId: muratTekin },
+      { committeeId: coordCommittee.id, universityId: antalya.id, userId: ogrenciIsleri },
+    ]);
+    const committeeChain: ApprovalChainStep[] = [{ type: "committee_majority", committeeId: coordCommittee.id }];
+    approvalChainsByUniversity[antalya.id] = committeeChain;
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN,
+      value: committeeChain,
+      updatedBy: antalyaSks,
+    });
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD,
+      value: 8,
+      updatedBy: antalyaSks,
+    });
+
+    await createApplication({
+      universityId: antalya.id,
+      proposedName: "Kampüs Girişimcilik Kulübü",
+      description: "Öğrenci girişimciliği ve hackathon organizasyonları.",
+      applicantId: demoApp1,
+      status: "pending",
+    });
+    const partialVoteApp = await createApplication({
+      universityId: antalya.id,
+      proposedName: "Robotik ve Otomasyon Kulübü",
+      description: "Robotik yarışmalarına hazırlık ve atölye çalışmaları.",
+      applicantId: demoApp2,
+      status: "pending",
+    });
+    await tx.insert(schema.clubApplicationCommitteeVotes).values([
+      {
+        applicationId: partialVoteApp.id,
+        universityId: antalya.id,
+        approvalStep: 1,
+        committeeId: coordCommittee.id,
+        voterUserId: antalyaSks,
+        vote: "approve",
+      },
+      {
+        applicationId: partialVoteApp.id,
+        universityId: antalya.id,
+        approvalStep: 1,
+        committeeId: coordCommittee.id,
+        voterUserId: ahmetHoca,
+        vote: "approve",
+      },
+    ]);
 
     // ═══════════════════════════════════════════════════════════════
     // 3. ÜNİVERSİTE 2 — EGE BİLİM (tenant izolasyon senaryoları)
@@ -757,8 +916,11 @@ async function main(): Promise<() => Promise<void>> {
   console.log("   burak.demirci@std.antalya.edu.tr → student  (Fotoğrafçılık üyesi, reddedilmiş Kripto başvurusu)");
   console.log("   deniz.kara@std.antalya.edu.tr    → student  (status: pending)");
   console.log("   fatma.sahin@std.antalya.edu.tr   → student  (status: suspended, giriş engellenir)");
-  console.log("   Kulüpler: Yazılım(approved/open) Fotoğrafçılık(approved/onaylı) Müzik(approved)");
-  console.log("             Tiyatro(pending, danışmansız) Robotik(archived) E-Spor(rejected)");
+  console.log("   Kulüpler: Yazılım(approved/open, tam kurul+GK) Fotoğrafçılık(approved/onaylı) Müzik(approved)");
+  console.log("             Tiyatro(pending, Murat'a bekleyen danışman daveti) Robotik(archived) E-Spor(rejected)");
+  console.log("   Yazılım demo: 5 asil+5 yedek yönetim, denetleme asil/yedek, GK 2025-2026 Bahar, Ahmet davet→kabul");
+  console.log("   Koordinasyon Kurulu (5 üye) + committee_majority zinciri + kuruluş eşiği 8");
+  console.log("   Kurul başvuruları: Kampüs Girişimcilik(bekliyor) Robotik Otomasyon(2/5 oy, pending)");
   console.log("\n── EGE BİLİM (ege-bilim) ──────────────────────────");
   console.log("   okan.yildiz@egebilim.edu.tr      → university_admin (sadece Ege)");
   console.log("   sks@egebilim.edu.tr              → student_affairs  (Ege — tenant izolasyon + 2. onay kademesi)");

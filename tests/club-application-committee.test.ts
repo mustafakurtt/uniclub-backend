@@ -12,6 +12,11 @@ import {
 } from "../src/db/schema";
 import { TenantSettingKey } from "../src/features/tenant-settings/tenant-settings.catalog";
 import { invalidateTenantSettingsCache } from "../src/features/tenant-settings/tenant-settings.cache";
+import {
+  restoreAntalyaSeedApprovalChain,
+  restoreAntalyaSeedFormationThreshold,
+  setTenantFormationThreshold,
+} from "./tenant-test-helpers";
 
 const patch = (path: string, token: string, body?: unknown) =>
   reqAuth("PATCH", path, token, body);
@@ -43,12 +48,14 @@ describe("kurul oylaması (committee_majority)", () => {
   let committeeId: string;
   let voterTokens: string[] = [];
   const applicantEmails = [
-    "250803001@std.antalya.edu.tr",
-    "mustafa.kurt@std.antalya.edu.tr",
-    "ayse.yilmaz@std.antalya.edu.tr",
-    "can.ozturk@std.antalya.edu.tr",
-    "emre.aksoy@std.antalya.edu.tr",
-    "selin.koc@std.antalya.edu.tr",
+    "demo.yk1@std.antalya.edu.tr",
+    "demo.yk2@std.antalya.edu.tr",
+    "demo.yk3@std.antalya.edu.tr",
+    "demo.yk4@std.antalya.edu.tr",
+    "demo.yk5@std.antalya.edu.tr",
+    "demo.yk6@std.antalya.edu.tr",
+    "demo.basvuru1@std.antalya.edu.tr",
+    "demo.basvuru2@std.antalya.edu.tr",
   ];
   let applicantIdx = 0;
 
@@ -69,15 +76,7 @@ describe("kurul oylaması (committee_majority)", () => {
   }
 
   async function clearApprovalChainOverride() {
-    await db
-      .delete(tenantSettings)
-      .where(
-        and(
-          eq(tenantSettings.universityId, uni),
-          eq(tenantSettings.key, TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN)
-        )
-      );
-    await invalidateTenantSettingsCache(uni);
+    await restoreAntalyaSeedApprovalChain(uni, (await me(admin)).userId as string);
   }
 
   async function createApplication(name: string) {
@@ -106,21 +105,21 @@ describe("kurul oylaması (committee_majority)", () => {
     uni = (await me(admin)).universityId as string;
     outsiderToken = await login("burak.demirci@std.antalya.edu.tr");
 
-    voterTokens = await Promise.all(voterEmails.map((email) => login(email)));
-    const memberIds = await Promise.all(
-      voterTokens.map(async (t) => (await me(t)).userId as string)
-    );
+    await setTenantFormationThreshold(uni, 0, (await me(admin)).userId as string);
 
-    const committeeRes = await post(`/api/admin/universities/${uni}/approval-committees`, admin, {
-      name: `Koordinasyon Kurulu ${Date.now()}`,
-      memberUserIds: memberIds,
+    voterTokens = await Promise.all(voterEmails.map((email) => login(email)));
+
+    const seedCommittee = await db.query.approvalCommittees.findFirst({
+      where: { universityId: uni, name: "Koordinasyon Kurulu" },
     });
-    expect(committeeRes.status).toBe(201);
-    committeeId = (await committeeRes.json()).data.id as string;
+    if (!seedCommittee) throw new Error("seed: Koordinasyon Kurulu yok");
+    committeeId = seedCommittee.id;
   });
 
   afterAll(async () => {
+    const actorId = (await me(admin)).userId as string;
     await clearApprovalChainOverride();
+    await restoreAntalyaSeedFormationThreshold(uni, actorId);
   });
 
   it("5 üyeli kurul: 2 onay → karar yok · 3 onay → onaylandı", async () => {

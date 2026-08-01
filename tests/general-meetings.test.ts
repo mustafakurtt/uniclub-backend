@@ -1,7 +1,7 @@
 /**
  * Genel kurul temeli (T1.6 ADIM 1).
  */
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { isNull } from "drizzle-orm";
 import { login, me, get, reqAuth } from "./helpers";
 import { db } from "../src/db";
@@ -10,6 +10,7 @@ import {
   clubMembershipEvents,
   clubMembers,
 } from "../src/db/schema";
+import { antalyaTechClubId, antalyaUniversityId } from "./tenant-test-helpers";
 
 const post = (path: string, token: string, body?: unknown) => reqAuth("POST", path, token, body);
 
@@ -32,9 +33,11 @@ describe("genel kurul temeli", () => {
     officer = await login("burak.demirci@std.antalya.edu.tr");
     student = await login("250803001@std.antalya.edu.tr");
     egeStudent = await login("cem.arslan@std.egebilim.edu.tr");
-    antalyaUni = (await me(admin)).universityId as string;
+    antalyaUni = await antalyaUniversityId();
 
-    const photo = await db.query.clubs.findFirst({ where: { slug: "fotografcilik" } });
+    const photo = await db.query.clubs.findFirst({
+      where: { slug: "fotografcilik", universityId: antalyaUni },
+    });
     if (!photo) throw new Error("seed eksik");
     photoClubId = photo.id;
 
@@ -163,8 +166,30 @@ describe("genel kurul temeli", () => {
     }
   });
 
-  it("yetkisiz öğrenci → 403", async () => {
+  it("yetkisiz öğrenci → 403 (genel kurul listesi)", async () => {
     expect((await get(meetingsUrl(photoClubId), student)).status).toBe(403);
+  });
+
+  it("onaylı üye güncel kurulu görebilir, genel kurul listesine erişemez", async () => {
+    const techId = await antalyaTechClubId();
+    const currentBoardUrl = `/api/clubs/${techId}/current-board`;
+
+    expect((await get(currentBoardUrl, student)).status).toBe(200);
+    expect((await get(meetingsUrl(techId), student)).status).toBe(403);
+
+    const body = await (await get(currentBoardUrl, student)).json();
+    expect(body.data.management.principal.length).toBe(5);
+    expect(body.data.management.alternate.length).toBe(5);
+  });
+
+  it("staff genel kurul listesinde attendeeCount görür", async () => {
+    const techId = await antalyaTechClubId();
+    const mustafa = await login("mustafa.kurt@std.antalya.edu.tr");
+    const res = await get(meetingsUrl(techId), mustafa);
+    expect(res.status).toBe(200);
+    const meetings = (await res.json()).data as Array<{ attendeeCount: number }>;
+    expect(meetings.length).toBeGreaterThan(0);
+    expect(meetings[0].attendeeCount).toBeGreaterThan(0);
   });
 
   it("çapraz tenant kulüp → 404", async () => {

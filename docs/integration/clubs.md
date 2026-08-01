@@ -254,7 +254,8 @@ Yetki **global RBAC'tan değil kulüpteki rolden** gelir (`club.middleware`). Mi
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** |
 | GET | `/api/clubs/:clubId/membership-history` | **staff** (sayfalama + `academicTermId` filtresi) |
-| GET | `/api/clubs/:clubId/general-meetings` | **staff** |
+| GET | `/api/clubs/:clubId/current-board` | **onaylı üye**: güncel yönetim/denetleme kurulu (unvan, asil/yedek) |
+| GET | `/api/clubs/:clubId/general-meetings` | **staff** (liste; `attendeeCount` dahil) |
 | GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff** |
 | POST | `/api/clubs/:clubId/general-meetings` | officer / başkan |
 
@@ -298,6 +299,12 @@ Query: `limit` (varsayılan 50), `cursor` (ISO `occurredAt`), `academicTermId` (
 `data.items[]`: `eventType` (`joined` | `role_changed` | `removed` | `left` | `join_rejected`), `role`, `previousRole`, `occurredAt`, `academicTerm`, `user`, `actor`.
 
 ### 7.7 Genel kurul — `GET/POST /:clubId/general-meetings` (T1.6 temel)
+
+**Görünürlük ayrımı:** Güncel kurul künyesi (`GET /:clubId/current-board`) onaylı **kulüp üyelerine** açık; toplantı listesi, detay (alınan kararlar, katılımcı listesi) yalnızca **staff** (danışman / officer / başkan).
+
+`GET /:clubId/current-board` → `data.management` / `data.audit` altında `principal` ve `alternate` dizileri; her öğe `userId`, `boardType`, `seatType`, `title`, `user`.
+
+`GET /:clubId/general-meetings` liste öğelerinde `attendeeCount` (tek sorguda toplanır; detay çağrısı gerekmez).
 
 Karar organı kaydı: akademik dönem, tarih/saat, yer, tür (`ordinary` | `extraordinary`), alınan kararlar (serbest metin), katılımcı üyeler ve isteğe bağlı kurul seçimi.
 
