@@ -280,7 +280,7 @@ export const adminRepository = {
           orderBy: { step: "asc" },
           with: { approver: true },
         },
-        appeal: true,
+        appeal: { with: { reviewer: true } },
       },
     });
   },

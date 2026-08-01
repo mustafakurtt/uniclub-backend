@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "1e462712-7f47-4593-817b-df75e8899ca7",
+  "id": "7a1b2c3d-4e5f-6789-a0b1-c2d3e4f5a6b7",
   "prevIds": [
-    "1ac55863-6543-4fe5-a111-fdf553ca60b5"
+    "ae498a44-dfb2-4c6c-90a9-1c2f3e35ccf2"
   ],
   "ddl": [
     {
@@ -71,7 +71,8 @@
       "values": [
         "pending",
         "approved",
-        "rejected"
+        "rejected",
+        "revision_requested"
       ],
       "name": "application_approval_status",
       "entityType": "enums",
@@ -81,9 +82,32 @@
       "values": [
         "pending",
         "approved",
-        "rejected"
+        "rejected",
+        "revision_requested"
       ],
       "name": "application_status",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "revision_requested",
+        "resubmitted",
+        "approved",
+        "rejected"
+      ],
+      "name": "club_application_event_type",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "collecting_support",
+        "submitted",
+        "withdrawn",
+        "expired"
+      ],
+      "name": "formation_proposal_status",
       "entityType": "enums",
       "schema": "public"
     },
@@ -292,7 +316,25 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "club_application_events",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "club_applications",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "club_formation_proposals",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "club_formation_supports",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2688,6 +2730,123 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "step",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "club_application_event_type",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "event_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "note",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "varchar(256)",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "proposed_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
       "table": "club_applications"
     },
     {
@@ -2780,6 +2939,227 @@
       "entityType": "columns",
       "schema": "public",
       "table": "club_applications"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "university_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "proposer_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "varchar(256)",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "proposed_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "formation_proposal_status",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'collecting_support'",
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "support_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "submitted_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_supports"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "proposal_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_supports"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "supporter_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_supports"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "university_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_supports"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "club_formation_supports"
     },
     {
       "type": "uuid",
@@ -4507,6 +4887,34 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "club_application_events_application_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "university_id",
           "isExpression": false,
           "asc": true,
@@ -4551,6 +4959,83 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "club_applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "university_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "club_formation_proposals_university_status_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "proposer_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "club_formation_proposals_proposer_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "proposal_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "supporter_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "club_formation_supports_proposal_supporter_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "club_formation_supports"
     },
     {
       "nameExplicit": true,
@@ -5470,6 +5955,40 @@
     {
       "nameExplicit": false,
       "columns": [
+        "application_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "club_applications",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "club_application_events_UbNfOK1XWjeh_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "actor_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "users",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "club_application_events_actor_id_users_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "club_application_events"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "university_id"
       ],
       "schemaTo": "public",
@@ -5502,6 +6021,95 @@
       "entityType": "fks",
       "schema": "public",
       "table": "club_applications"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "university_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "universities",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "club_formation_proposals_university_id_universities_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "application_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "club_applications",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "club_formation_proposals_5zjRdeTmL9yq_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "proposer_id",
+        "university_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "users",
+      "columnsTo": [
+        "id",
+        "university_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "club_formation_proposals_proposer_tenant_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "club_formation_proposals"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "proposal_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "club_formation_proposals",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "club_formation_supports_QJRKWUjbCepT_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "club_formation_supports"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "supporter_id",
+        "university_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "users",
+      "columnsTo": [
+        "id",
+        "university_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "club_formation_supports_supporter_tenant_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "club_formation_supports"
     },
     {
       "nameExplicit": false,
@@ -6073,9 +6681,39 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "club_application_events_pkey",
+      "schema": "public",
+      "table": "club_application_events",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "club_applications_pkey",
       "schema": "public",
       "table": "club_applications",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "club_formation_proposals_pkey",
+      "schema": "public",
+      "table": "club_formation_proposals",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "club_formation_supports_pkey",
+      "schema": "public",
+      "table": "club_formation_supports",
       "entityType": "pks"
     },
     {

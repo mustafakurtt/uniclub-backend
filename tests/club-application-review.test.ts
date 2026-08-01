@@ -162,6 +162,19 @@ describe("kulüp başvuru kontrol listesi ve itiraz", () => {
     });
     expect(appealRes.status).toBe(201);
 
+    const afterAppeal = await get(`/api/clubs/applications/${applicationId}`, applicantToken);
+    const afterBody = (await afterAppeal.json()).data;
+    expect(afterBody.appeal?.reason).toBe("Evrakları tamamladım, yeniden değerlendirme talep ediyorum.");
+    expect(afterBody.appeal?.status).toBe("pending");
+    expect(afterBody.appeal?.submittedAt).toBeTruthy();
+
+    const adminDetail = await get(
+      `/api/admin/universities/${antalyaUni}/club-applications/${applicationId}`,
+      adminToken
+    );
+    const adminBody = (await adminDetail.json()).data;
+    expect(adminBody.appeal?.reason).toBe("Evrakları tamamladım, yeniden değerlendirme talep ediyorum.");
+
     const secondAppeal = await post(`/api/clubs/applications/${applicationId}/appeal`, applicantToken, {
       note: "İkinci itiraz denemesi olmamalı.",
     });
@@ -177,6 +190,12 @@ describe("kulüp başvuru kontrol listesi ve itiraz", () => {
     );
     expect(reviewRes.status).toBe(200);
     expect((await reviewRes.json()).data.application.status).toBe("pending");
+
+    const reviewedDetail = await get(`/api/clubs/applications/${applicationId}`, applicantToken);
+    const reviewedBody = (await reviewedDetail.json()).data;
+    expect(reviewedBody.appeal?.status).toBe("upheld");
+    expect(reviewedBody.appeal?.reviewNote).toContain("yeniden değerlendirme");
+    expect(reviewedBody.appeal?.reviewedBy?.email).toBeTruthy();
 
     const row = await db.query.clubApplications.findFirst({ where: { id: applicationId } });
     expect(row?.status).toBe("pending");

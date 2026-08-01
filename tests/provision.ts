@@ -40,7 +40,7 @@ const childEnv = {
   REDIS_URL: TEST_REDIS_URL,
   NODE_ENV: "development",
 };
-await run(["bunx", "drizzle-kit", "migrate", "--ignore-conflicts"], childEnv);
+await run(["bunx", "drizzle-kit", "migrate"], childEnv);
 await run(["bun", "run", "src/db/seed.ts"], childEnv);
 await backfillMembershipJoinedEvents(TEST_DATABASE_URL);
 

@@ -43,6 +43,27 @@ export function buildMergedChecklist(
   });
 }
 
+export type AppealRecord = {
+  status: string;
+  note: string;
+  createdAt: Date;
+  reviewedAt: Date | null;
+  reviewNote: string | null;
+  reviewer?: { passwordHash: string } | null;
+};
+
+export function toAppealDto(appeal: AppealRecord | null | undefined) {
+  if (!appeal) return null;
+  return {
+    status: appeal.status,
+    reason: appeal.note,
+    submittedAt: appeal.createdAt,
+    reviewedAt: appeal.reviewedAt,
+    reviewNote: appeal.reviewNote,
+    reviewedBy: appeal.reviewer ? toSafeUser(appeal.reviewer) : null,
+  };
+}
+
 export function computeAppealState(
   application: {
     status: string;
@@ -50,7 +71,7 @@ export function computeAppealState(
     rejectApproverId: string | null;
   },
   appealPeriodDays: number,
-  appeal: { status: string } | null | undefined,
+  appeal: AppealRecord | null | undefined,
   rejectionNote: string | null
 ) {
   const rejectionReason = application.status === "rejected" ? rejectionNote : null;
@@ -68,11 +89,7 @@ export function computeAppealState(
     rejectionReason,
     appealDeadline,
     canAppeal,
-    appeal: appeal
-      ? {
-          status: appeal.status,
-        }
-      : null,
+    appeal: toAppealDto(appeal),
   };
 }
 
@@ -287,7 +304,7 @@ export const clubApplicationReviewService = {
       rejectApproverId: string | null;
       approvals: { step: number; status: string; note: string | null; approverId: string | null; approverRole: string | null }[];
     },
-    appeal: { status: string } | null | undefined
+    appeal: AppealRecord | null | undefined
   ) {
     const settings = await getTenantSettings(universityId);
     const stored = await clubApplicationReviewRepository.listChecklistItems(applicationId);
@@ -307,7 +324,7 @@ export const clubApplicationReviewService = {
       rejectionReason: appealState.rejectionReason,
       appealDeadline: appealState.appealDeadline,
       canAppeal: appealState.canAppeal,
-      appeal: appeal ? { status: appeal.status } : null,
+      appeal: appealState.appeal,
     };
   },
 };

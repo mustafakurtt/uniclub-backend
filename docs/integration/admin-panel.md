@@ -258,6 +258,8 @@ verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılı
 
 **Kontrol listesi ve itiraz:** SKS uzmanı tenant kataloğundaki maddeleri `GET/PATCH .../checklist` ile işaretler (audit'e düşer). `club.application.require_checklist_for_approval` açıksa zorunlu maddeler işaretlenmeden onay 400 döner (varsayılan **kapalı**). Reddedilen başvuruda öğrenci `rejectionReason` görür; `POST /api/clubs/applications/:id/appeal` ile **bir kez** itiraz edebilir (`club.application.appeal_period_days` içinde). İtiraz `PATCH .../appeal/review` ile incelenir — `upheld` → `pending`, `dismissed` → kapalı.
 
+**Başvuru detayı** (`GET .../club-applications/:id`) ve öğrenci detayı (`GET /api/clubs/applications/:id`) itiraz varsa aynı `appeal` sözleşmesini taşır: `status`, `reason`, `submittedAt`, `reviewedAt`, `reviewNote`, `reviewedBy` (SafeUser). Öğrenci yalnızca kendi başvurusunda görür; SKS/admin tenant detayında aynı alanları okur.
+
 **Geçmiş sözleşmesi** — `GET .../history` → `data`:
 
 ```jsonc
