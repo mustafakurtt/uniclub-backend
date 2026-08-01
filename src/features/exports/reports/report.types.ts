@@ -69,6 +69,28 @@ export interface GeneralMeetingMinutesMeta {
   auditAlternate: GeneralMeetingMinutesBoardMember[];
 }
 
+export interface ClubHandoverMinutesMeta {
+  clubName: string;
+  academicTermName: string;
+  advisorName: string | null;
+  handoverAtLabel: string;
+  meetingHeldAtLabel: string;
+  meetingLocation: string;
+  outgoingManagementPrincipal: GeneralMeetingMinutesBoardMember[];
+  outgoingManagementAlternate: GeneralMeetingMinutesBoardMember[];
+  outgoingAuditPrincipal: GeneralMeetingMinutesBoardMember[];
+  outgoingAuditAlternate: GeneralMeetingMinutesBoardMember[];
+  incomingManagementPrincipal: GeneralMeetingMinutesBoardMember[];
+  incomingManagementAlternate: GeneralMeetingMinutesBoardMember[];
+  incomingAuditPrincipal: GeneralMeetingMinutesBoardMember[];
+  incomingAuditAlternate: GeneralMeetingMinutesBoardMember[];
+  pendingJoinRequestLabels: string[];
+  ongoingActivityLabels: string[];
+  advisorLabels: string[];
+  outgoingPresidentName: string | null;
+  incomingPresidentName: string | null;
+}
+
 export interface ReportMeta {
   universityName: string;
   universitySlug: string;
@@ -80,6 +102,7 @@ export interface ReportMeta {
   annualActivitySummary?: AnnualActivitySummary;
   applicationMinutes?: ApplicationMinutesHeader;
   generalMeetingMinutes?: GeneralMeetingMinutesMeta;
+  clubHandoverMinutes?: ClubHandoverMinutesMeta;
 }
 
 export interface ReportRenderer {

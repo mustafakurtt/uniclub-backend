@@ -11,6 +11,7 @@ import {
   clubMembersExportParamsSchema,
   clubsExportParamsSchema,
   generalMeetingMinutesParamsSchema,
+  clubHandoverMinutesParamsSchema,
   type ActivitiesExportParams,
   type AnnualActivityReportParams,
   type ApplicationDecisionMinutesParams,
@@ -18,6 +19,7 @@ import {
   type ClubsExportParams,
   type ExportParams,
   type GeneralMeetingMinutesParams,
+  type ClubHandoverMinutesParams,
 } from "./exports.schema";
 import { findReportDefinition, REPORT_CATALOG } from "./reports/report-catalog";
 import { formatApproverRoleLabel, formatDecisionLabel } from "./reports/pdf.renderer";
@@ -55,6 +57,9 @@ function summarizeParamsTr(reportId: string, params: ExportParams): string {
   } else if (reportId === "general-meeting-minutes") {
     const p = params as GeneralMeetingMinutesParams;
     parts.push(`toplantı=${p.meetingId}`);
+  } else if (reportId === "club-handover-minutes") {
+    const p = params as ClubHandoverMinutesParams;
+    parts.push(`devir=${p.handoverId}`);
   }
   return parts.length > 0 ? parts.join(", ") : "tüm kayıtlar";
 }
@@ -86,6 +91,9 @@ function summarizeParamsEn(reportId: string, params: ExportParams): string {
   } else if (reportId === "general-meeting-minutes") {
     const p = params as GeneralMeetingMinutesParams;
     parts.push(`meeting=${p.meetingId}`);
+  } else if (reportId === "club-handover-minutes") {
+    const p = params as ClubHandoverMinutesParams;
+    parts.push(`handover=${p.handoverId}`);
   }
   return parts.length > 0 ? parts.join(", ") : "all records";
 }
@@ -118,6 +126,8 @@ function parseReportParams(reportId: string, body: unknown): ExportParams {
       return applicationDecisionMinutesParamsSchema.parse(body ?? {});
     case "general-meeting-minutes":
       return generalMeetingMinutesParamsSchema.parse(body ?? {});
+    case "club-handover-minutes":
+      return clubHandoverMinutesParamsSchema.parse(body ?? {});
     default:
       throw notFound("exports.reportNotFound");
   }
@@ -178,6 +188,15 @@ async function fetchRows(
       return {
         rows: data.rows,
         metaExtras: { generalMeetingMinutes: data.header },
+      };
+    }
+    case "club-handover-minutes": {
+      const p = params as ClubHandoverMinutesParams;
+      const data = await exportsRepository.fetchClubHandoverMinutes(universityId, p.handoverId);
+      if (!data) throw notFound("exports.handoverNotFound");
+      return {
+        rows: data.rows,
+        metaExtras: { clubHandoverMinutes: data.header },
       };
     }
     default:

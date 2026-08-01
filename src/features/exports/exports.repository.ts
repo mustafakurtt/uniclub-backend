@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, lt, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, lt, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import {
   activities,
@@ -9,6 +9,7 @@ import {
   clubMembers,
   users,
 } from "../../db/schema";
+import type { HandoverBoardMemberSnapshot } from "../../db/schema/handover";
 import { EXPORT_MAX_ROWS } from "./exports.constants";
 import type {
   ActivitiesExportParams,
@@ -76,6 +77,53 @@ function sortMemberships<T extends { title: string; userId: string }>(members: T
     if (aRank !== bRank) return aRank - bRank;
     return a.userId.localeCompare(b.userId);
   });
+}
+
+function sortSnapshotMembers(snapshot: HandoverBoardMemberSnapshot[]): HandoverBoardMemberSnapshot[] {
+  return [...snapshot].sort((a, b) => {
+    const ai = BOARD_TITLE_ORDER.indexOf(a.title);
+    const bi = BOARD_TITLE_ORDER.indexOf(b.title);
+    const aRank = ai === -1 ? BOARD_TITLE_ORDER.length : ai;
+    const bRank = bi === -1 ? BOARD_TITLE_ORDER.length : bi;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.userId.localeCompare(b.userId);
+  });
+}
+
+function mapSnapshotMember(row: HandoverBoardMemberSnapshot): GeneralMeetingMinutesBoardMember {
+  return {
+    fullName: row.fullName ?? "—",
+    titleLabel: BOARD_TITLE_LABELS_TR[row.title] ?? row.title,
+    boardType: row.boardType,
+    seatType: row.seatType,
+  };
+}
+
+function groupBoardMembers(snapshot: HandoverBoardMemberSnapshot[]) {
+  const members = sortSnapshotMembers(snapshot).map(mapSnapshotMember);
+  return {
+    managementPrincipal: members.filter((m) => m.boardType === "management" && m.seatType === "principal"),
+    managementAlternate: members.filter((m) => m.boardType === "management" && m.seatType === "alternate"),
+    auditPrincipal: members.filter((m) => m.boardType === "audit" && m.seatType === "principal"),
+    auditAlternate: members.filter((m) => m.boardType === "audit" && m.seatType === "alternate"),
+  };
+}
+
+function findPresidentName(snapshot: HandoverBoardMemberSnapshot[]): string | null {
+  const president = snapshot.find(
+    (m) => m.boardType === "management" && m.seatType === "principal" && m.title === "president"
+  );
+  return president?.fullName ?? null;
+}
+
+function snapshotToRows(snapshot: HandoverBoardMemberSnapshot[], phaseLabel: string): ReportRow[] {
+  return sortSnapshotMembers(snapshot).map((m) => ({
+    fullName: m.fullName ?? "—",
+    titleLabel: BOARD_TITLE_LABELS_TR[m.title] ?? m.title,
+    seatLabel: SEAT_TYPE_LABELS_TR[m.seatType] ?? m.seatType,
+    boardLabel: BOARD_TYPE_LABELS_TR[m.boardType] ?? m.boardType,
+    phaseLabel,
+  }));
 }
 
 function toIso(value: Date | string | null | undefined): string | null {
@@ -416,6 +464,104 @@ export const exportsRepository = {
       seatLabel: SEAT_TYPE_LABELS_TR[m.seatType] ?? m.seatType,
       boardLabel: BOARD_TYPE_LABELS_TR[m.boardType] ?? m.boardType,
     }));
+
+    return { header, rows };
+  },
+
+  async fetchClubHandoverMinutes(universityId: string, handoverId: string) {
+    const record = await db.query.clubHandoverRecords.findFirst({
+      where: { id: handoverId, universityId },
+      with: {
+        club: { columns: { id: true, name: true } },
+        academicTerm: { columns: { name: true } },
+        generalMeeting: true,
+      },
+    });
+
+    if (!record?.club || !record.academicTerm || !record.generalMeeting) return null;
+
+    const advisorRow = await db
+      .select({
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(clubAdvisors)
+      .innerJoin(users, eq(users.id, clubAdvisors.userId))
+      .where(
+        and(eq(clubAdvisors.clubId, record.clubId), eq(clubAdvisors.universityId, universityId))
+      )
+      .orderBy(asc(users.id))
+      .limit(1);
+
+    const advisor = advisorRow[0];
+    const advisorName = advisor ? `${advisor.firstName} ${advisor.lastName}` : null;
+
+    const items = record.transferredItems;
+    const userIds = [
+      ...items.pendingJoinRequestUserIds,
+      ...items.advisorUserIds,
+    ];
+    const userRows =
+      userIds.length > 0
+        ? await db
+            .select({
+              id: users.id,
+              firstName: users.firstName,
+              lastName: users.lastName,
+            })
+            .from(users)
+            .where(inArray(users.id, userIds))
+        : [];
+    const userNameById = new Map(
+      userRows.map((u) => [u.id, `${u.firstName} ${u.lastName}`])
+    );
+
+    const activityRows =
+      items.ongoingActivityIds.length > 0
+        ? await db
+            .select({ id: activities.id, title: activities.title })
+            .from(activities)
+            .where(inArray(activities.id, items.ongoingActivityIds))
+        : [];
+    const activityTitleById = new Map(activityRows.map((a) => [a.id, a.title]));
+
+    const pendingJoinRequestLabels = items.pendingJoinRequestUserIds.map(
+      (id) => userNameById.get(id) ?? "—"
+    );
+    const ongoingActivityLabels = items.ongoingActivityIds.map(
+      (id) => activityTitleById.get(id) ?? "—"
+    );
+    const advisorLabels = items.advisorUserIds.map((id) => userNameById.get(id) ?? "—");
+
+    const outgoing = groupBoardMembers(record.outgoingBoardSnapshot);
+    const incoming = groupBoardMembers(record.incomingBoardSnapshot);
+
+    const header = {
+      clubName: record.club.name,
+      academicTermName: record.academicTerm.name,
+      advisorName,
+      handoverAtLabel: formatHeldAtLabel(record.handoverAt),
+      meetingHeldAtLabel: formatHeldAtLabel(record.generalMeeting.heldAt),
+      meetingLocation: record.generalMeeting.location,
+      outgoingManagementPrincipal: outgoing.managementPrincipal,
+      outgoingManagementAlternate: outgoing.managementAlternate,
+      outgoingAuditPrincipal: outgoing.auditPrincipal,
+      outgoingAuditAlternate: outgoing.auditAlternate,
+      incomingManagementPrincipal: incoming.managementPrincipal,
+      incomingManagementAlternate: incoming.managementAlternate,
+      incomingAuditPrincipal: incoming.auditPrincipal,
+      incomingAuditAlternate: incoming.auditAlternate,
+      pendingJoinRequestLabels,
+      ongoingActivityLabels,
+      advisorLabels,
+      outgoingPresidentName: findPresidentName(record.outgoingBoardSnapshot),
+      incomingPresidentName: findPresidentName(record.incomingBoardSnapshot),
+    };
+
+    const rows: ReportRow[] = [
+      ...snapshotToRows(record.outgoingBoardSnapshot, "Devreden"),
+      ...snapshotToRows(record.incomingBoardSnapshot, "Devralan"),
+    ];
 
     return { header, rows };
   },

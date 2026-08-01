@@ -40,6 +40,7 @@ describe("kurumsal rapor dışa aktarma (/api/universities/:id/exports)", () => 
       "annual-activity-report",
       "application-decision-minutes",
       "general-meeting-minutes",
+      "club-handover-minutes",
     ]);
     expect(catalog.every((r) => ["clubs", "club-members", "activities"].includes(r.id) ? r.format === "xlsx" : r.format === "pdf")).toBe(true);
   });

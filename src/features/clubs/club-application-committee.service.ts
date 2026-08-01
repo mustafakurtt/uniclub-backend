@@ -19,7 +19,8 @@ export type CommitteeTallySummary = {
   committeeId: string;
   committeeName: string;
   memberCount: number;
-  threshold: number;
+  /** Salt çoğunluk eşiği: floor(n/2)+1 */
+  requiredApprovals: number;
   approveCount: number;
   rejectCount: number;
   notVotedCount: number;
@@ -133,7 +134,7 @@ export const clubApplicationCommitteeService = {
       committeeId,
       universityId
     );
-    const threshold = computeCommitteeMajorityThreshold(memberCount);
+    const requiredApprovals = computeCommitteeMajorityThreshold(memberCount);
 
     const voteRows = await db.query.clubApplicationCommitteeVotes.findMany({
       where: {
@@ -154,7 +155,7 @@ export const clubApplicationCommitteeService = {
       committeeId,
       committeeName: committee.name,
       memberCount,
-      threshold,
+      requiredApprovals,
       approveCount,
       rejectCount,
       notVotedCount,

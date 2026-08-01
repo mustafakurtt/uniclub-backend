@@ -76,6 +76,14 @@ Unicode font gömülü (DejaVu Sans). Kurum adı + tenant `primaryColor` başlı
 
 `meetingId` zorunlu. Tenant dışı veya olmayan kayıt → `404`. İçerik: kurum başlığı, topluluk adı, akademik danışman, toplantı tarihi/saati/yeri, tür (olağan/olağanüstü), alınan kararlar, yönetim ve denetleme kurulu (asil/yedek, unvanlarla), imza blokları (danışman «Uygundur»). Gövdede üretim tarihi yok; aynı `meetingId` → aynı SHA-256.
 
+### `club-handover-minutes` — devir teslim tutanağı (SK-FR-0008)
+
+```jsonc
+{ "handoverId": "uuid" }
+```
+
+`handoverId` zorunlu. Tenant dışı veya olmayan kayıt → `404`. İçerik: kurum başlığı, kulüp adı, akademik dönem, danışman, devir tarihi, dayandığı genel kurul (tarih/yer), devreden ve devralan kurul (asil/yedek, unvanlarla), devredilen kalemler (bekleyen katılım istekleri, devam eden etkinlikler, danışman ilişkisi), imza blokları (devreden başkan, devralan başkan, danışman «Uygundur»). Gövdede üretim tarihi yok; aynı `handoverId` → aynı SHA-256.
+
 ## Sınırlar
 
 - Üst satır sınırı: **50.000** — aşılırsa `400` + `exports.rowLimitExceeded`.

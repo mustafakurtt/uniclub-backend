@@ -182,6 +182,29 @@ export const REPORT_CATALOG: ReportDefinition[] = [
       { key: "boardLabel", labelTr: "Kurul", labelEn: "Board", type: "text", width: 18 },
     ],
   },
+  {
+    id: "club-handover-minutes",
+    format: "pdf",
+    labelTr: "Devir teslim tutanağı",
+    labelEn: "Handover minutes",
+    featureFlagKey: TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED,
+    parameters: [
+      {
+        name: "handoverId",
+        type: "string",
+        required: true,
+        labelTr: "Devir teslim kaydı",
+        labelEn: "Handover record",
+      },
+    ],
+    columns: [
+      { key: "fullName", labelTr: "Ad", labelEn: "Name", type: "text", width: 28 },
+      { key: "titleLabel", labelTr: "Unvan", labelEn: "Title", type: "text", width: 22 },
+      { key: "seatLabel", labelTr: "Koltuk", labelEn: "Seat", type: "text", width: 14 },
+      { key: "boardLabel", labelTr: "Kurul", labelEn: "Board", type: "text", width: 18 },
+      { key: "phaseLabel", labelTr: "Devir", labelEn: "Phase", type: "text", width: 16 },
+    ],
+  },
 ];
 
 export function findReportDefinition(reportId: string): ReportDefinition | undefined {

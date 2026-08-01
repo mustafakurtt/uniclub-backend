@@ -713,7 +713,7 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 | Method | Path | Açıklama |
 |---|---|---|
 | GET | `/api/universities/:universityId/exports` | Rapor kataloğu |
-| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (`clubs`, `club-members`, `activities`, PDF: `annual-activity-report`, `application-decision-minutes`, `general-meeting-minutes`) |
+| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (`clubs`, `club-members`, `activities`, PDF: `annual-activity-report`, `application-decision-minutes`, `general-meeting-minutes`, `club-handover-minutes`) |
 
 Detay: [integration/exports.md](../integration/exports.md).
 

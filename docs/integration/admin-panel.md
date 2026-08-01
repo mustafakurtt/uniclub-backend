@@ -239,7 +239,7 @@ ile verilir (`PATCH .../committee-vote`); doğrudan `approve`/`reject` bu kademe
 veya çekimser üye fiilen onayı engeller (çoğunluğa ulaşılamaz). Karar kesinleşene
 kadar üye oyunu değiştirebilir (upsert). Her oy `audit_logs`'a düşer.
 
-**Kurul oy tally (okuma):** `committee_majority` kademelerinde admin detay (`GET .../club-applications/:id`) ve öğrenci detay (`GET /api/clubs/applications/:id`) yanıtında `approvals[].committeeTally` gömülüdür. Admin/kurul üyesi (veya `application.view` yetkili, kurul üyesi olmasa bile) tam liste: bireysel oylar (`votes`: kim, yön, zaman, gerekçe) ve istek yapanın `myVote`. Öğrenci yalnızca özet — kurul adı, üye sayısı, eşik (`floor(n/2)+1`), onay/ret/oy vermeyen sayıları; kim oyladı bilgisi **sızmaz**. Tek kurul okuma: `GET .../approval-committees/:committeeId` — `application.view`.
+**Kurul oy tally (okuma):** `committee_majority` kademelerinde admin detay (`GET .../club-applications/:id`) ve öğrenci detay (`GET /api/clubs/applications/:id`) yanıtında `approvals[].committeeTally` gömülüdür. Admin/kurul üyesi (veya `application.view` yetkili, kurul üyesi olmasa bile) tam liste: bireysel oylar (`votes`: kim, yön, zaman, gerekçe) ve istek yapanın `myVote`. Öğrenci yalnızca özet — kurul adı, üye sayısı, `requiredApprovals` (eşik `floor(n/2)+1`), onay/ret/oy vermeyen sayıları; kim oyladı bilgisi **sızmaz**. Tek kurul okuma: `GET .../approval-committees/:committeeId` — `application.view`.
 
 **Onay kurulu yönetimi** (`university.approval_committee.manage` — `university_admin` ve `student_affairs`):
 
@@ -252,7 +252,7 @@ kadar üye oyunu değiştirebilir (upsert). Her oy `audit_logs`'a düşer.
 
 SKS kendi koordinasyon kurulunu `university.settings.manage` (yalnızca `university_admin`) olmadan yönetebilir. Tenant onay zinciri (`club.application.approval_chain`) hâlâ `university.settings.manage` altında — bkz. [tenant-settings.md](tenant-settings.md).
 
-**Devir teslim (T1.3):** Kulüp tarafında `POST/GET /api/clubs/:clubId/handover-records` — genel kurul kararına (`generalMeetingId`) bağlı dönemsel görev devri; `transfer-presidency` hızlı yol olarak kalır. Detay: [clubs.md §7.8](clubs.md#78-devir-teslim--getpost-clubidhandover-records-t13).
+**Devir teslim (T1.3):** Kulüp tarafında `POST/GET /api/clubs/:clubId/handover-records` — genel kurul kararına (`generalMeetingId`) bağlı dönemsel görev devri; `transfer-presidency` hızlı yol olarak kalır. PDF tutanak: `club-handover-minutes` export (`handoverId`). Detay: [clubs.md §7.8](clubs.md#78-devir-teslim--getpost-clubidhandover-records-t13), [exports.md](exports.md).
 
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|

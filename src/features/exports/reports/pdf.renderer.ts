@@ -276,6 +276,94 @@ function renderGeneralMeetingMinutes(
   ]);
 }
 
+function renderListSection(
+  doc: PDFKit.PDFDocument,
+  fonts: { regular: string; bold: string },
+  title: string,
+  items: string[]
+) {
+  doc.font(fonts.bold).fontSize(10).text(title);
+  doc.font(fonts.regular).fontSize(9);
+  if (items.length === 0) {
+    doc.text("—");
+  } else {
+    for (const item of items) {
+      doc.text(`• ${item}`);
+    }
+  }
+  doc.moveDown(0.5);
+}
+
+function renderClubHandoverMinutes(
+  doc: PDFKit.PDFDocument,
+  definition: ReportDefinition,
+  rows: ReportRow[],
+  meta: ReportMeta,
+  fonts: { regular: string; bold: string }
+) {
+  const accent = parseRgb(meta.primaryColor);
+  drawDocumentHeader(doc, meta, accent);
+
+  const header = meta.clubHandoverMinutes;
+  if (header) {
+    doc.font(fonts.bold).fontSize(11).text("Topluluk bilgileri");
+    doc.font(fonts.regular).fontSize(10);
+    doc.text(`Topluluk adı: ${header.clubName}`);
+    doc.text(`Akademik dönem: ${header.academicTermName}`);
+    doc.text(`Akademik danışman: ${header.advisorName ?? "—"}`);
+    doc.moveDown(0.5);
+    doc.font(fonts.bold).fontSize(11).text("Devir teslim bilgileri");
+    doc.font(fonts.regular).fontSize(10);
+    doc.text(`Devir tarihi: ${header.handoverAtLabel}`);
+    doc.text(`Dayandığı genel kurul: ${header.meetingHeldAtLabel} — ${header.meetingLocation}`);
+    doc.moveDown(0.8);
+    doc.font(fonts.bold).fontSize(11).text("Devreden kurul");
+    doc.moveDown(0.3);
+    renderBoardMemberList(doc, fonts, "Yönetim Kurulu — Asil Üyeler", header.outgoingManagementPrincipal);
+    renderBoardMemberList(doc, fonts, "Yönetim Kurulu — Yedek Üyeler", header.outgoingManagementAlternate);
+    renderBoardMemberList(doc, fonts, "Denetleme Kurulu — Asil Üyeler", header.outgoingAuditPrincipal);
+    renderBoardMemberList(doc, fonts, "Denetleme Kurulu — Yedek Üyeler", header.outgoingAuditAlternate);
+    doc.moveDown(0.5);
+    doc.font(fonts.bold).fontSize(11).text("Devralan kurul");
+    doc.moveDown(0.3);
+    renderBoardMemberList(doc, fonts, "Yönetim Kurulu — Asil Üyeler", header.incomingManagementPrincipal);
+    renderBoardMemberList(doc, fonts, "Yönetim Kurulu — Yedek Üyeler", header.incomingManagementAlternate);
+    renderBoardMemberList(doc, fonts, "Denetleme Kurulu — Asil Üyeler", header.incomingAuditPrincipal);
+    renderBoardMemberList(doc, fonts, "Denetleme Kurulu — Yedek Üyeler", header.incomingAuditAlternate);
+    doc.moveDown(0.5);
+    doc.font(fonts.bold).fontSize(11).text("Devredilen kalemler");
+    doc.moveDown(0.3);
+    renderListSection(doc, fonts, "Bekleyen katılım istekleri", header.pendingJoinRequestLabels);
+    renderListSection(doc, fonts, "Devam eden etkinlikler", header.ongoingActivityLabels);
+    renderListSection(doc, fonts, "Danışman ilişkisi", header.advisorLabels);
+    doc.moveDown(0.5);
+  }
+
+  if (rows.length > 0) {
+    doc.font(fonts.bold).fontSize(11).text("Kurul üyeleri (özet tablo)");
+    doc.moveDown(0.3);
+    drawTableHeader(doc, definition.columns, fonts, accent);
+    doc.font(fonts.regular).fontSize(9);
+    drawTableRows(doc, definition, rows, fonts);
+  }
+
+  const advisorName = header?.advisorName;
+  drawSignatureBlocks(doc, [
+    {
+      title: "Devreden Başkan",
+      nameLine: header?.outgoingPresidentName ?? undefined,
+    },
+    {
+      title: "Devralan Başkan",
+      nameLine: header?.incomingPresidentName ?? undefined,
+    },
+    {
+      title: "Akademik Danışman",
+      nameLine: advisorName ? `Uygundur — ${advisorName}` : "Uygundur",
+    },
+  ]);
+}
+
 function renderApplicationMinutes(
   doc: PDFKit.PDFDocument,
   definition: ReportDefinition,
@@ -331,6 +419,9 @@ export const pdfReportRenderer: ReportRenderer = {
           break;
         case "general-meeting-minutes":
           renderGeneralMeetingMinutes(doc, definition, rows, meta, fonts);
+          break;
+        case "club-handover-minutes":
+          renderClubHandoverMinutes(doc, definition, rows, meta, fonts);
           break;
         default:
           throw new Error(`PDF renderer: desteklenmeyen rapor '${definition.id}'`);

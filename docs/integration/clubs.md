@@ -184,7 +184,7 @@ Başvuran self-service; admin `.../club-applications/:id/history` uçundan **far
 }
 ```
 
-`approvals`, genişletilebilir çok-adımlı onay zinciridir. `stepKind: "committee_majority"` kademelerinde `committeeTally` gömülüdür — öğrenci yalnızca özet sayım ve kurul adını görür (`committeeName`, `memberCount`, `threshold`, `approveCount`, `rejectCount`, `notVotedCount`); **bireysel oylar (`votes`, `myVote`) yok**. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
+`approvals`, genişletilebilir çok-adımlı onay zinciridir. `stepKind: "committee_majority"` kademelerinde `committeeTally` gömülüdür — öğrenci yalnızca özet sayım ve kurul adını görür (`committeeName`, `memberCount`, `requiredApprovals` — salt çoğunluk eşiği `floor(n/2)+1`, `approveCount`, `rejectCount`, `notVotedCount`); **bireysel oylar (`votes`, `myVote`) yok**. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
 
 `status: "rejected"` olduğunda `rejectionReason`, `appealDeadline`, `canAppeal` ve (itiraz varsa) tam `appeal` nesnesi döner:
 
@@ -342,6 +342,8 @@ Genel kurul seçimi sonrası **resmî görev devri** kaydı. `transfer-presidenc
 `POST` body: `{ "generalMeetingId": "uuid", "handoverAt?": "datetime" }` — akademik dönem genel kurul kaydından türetilir. Aynı `generalMeetingId` için yalnızca bir devir kaydı.
 
 Yanıt: `academicTerm`, `generalMeeting`, `handoverAt`, `outgoingBoard` / `incomingBoard` (kurul anlık görüntüsü), `transferredItems` — bekleyen katılım istekleri (`pendingJoinRequestUserIds`), devam eden etkinlikler (`ongoingActivityIds`: `draft`/`published`), aktif danışmanlar (`advisorUserIds`). **Envanter bu turda yok** (T4.7).
+
+**PDF tutanak:** `POST /api/universities/:universityId/exports/club-handover-minutes` — parametre `{ "handoverId": "uuid" }`; `university.export.generate` + PDF bayrağı. Tenant dışı `handoverId` → `404`. Detay: [exports.md](exports.md).
 
 İşlem: aktif kurul üyeliklerinin görev süresi kapanır (`ended_at`); genel kurulda seçilen kurul üyelikleri aktifleştirilir; yönetim kurulu seçimi `club_members.role` ve `club_membership_events` ile senkronlanır.
 
