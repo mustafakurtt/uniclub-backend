@@ -45,11 +45,13 @@ export async function setTenantSettingsCache(
 
 async function loadResolvedFromDb(universityId: string): Promise<ResolvedTenantSettings> {
   const rows = await tenantSettingsRepository.listOverrides(universityId);
-  const overrides: Partial<Record<TenantSettingKey, number | string[]>> = {};
+  const overrides: Partial<Record<TenantSettingKey, number | string[] | boolean>> = {};
   for (const row of rows) {
     if (!isTenantSettingKey(row.key)) continue;
     const def = TENANT_SETTING_CATALOG[row.key];
     if (def.kind === "integer" && typeof row.value === "number" && Number.isInteger(row.value)) {
+      overrides[row.key] = row.value;
+    } else if (def.kind === "boolean" && typeof row.value === "boolean") {
       overrides[row.key] = row.value;
     } else if (def.kind === "role_chain") {
       const chain = parseApprovalChain(row.value);

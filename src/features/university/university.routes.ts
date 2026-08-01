@@ -7,6 +7,7 @@ import { departmentsRoutes } from "./routes/departments.routes";
 import { universityAnnouncementsRoutes } from "../announcements/university-announcements.routes";
 import { tenantSettingsRoutes } from "../tenant-settings/tenant-settings.routes";
 import { universityPosterQrRoutes } from "../poster-qr/university-poster-qr.routes";
+import { exportsRoutes } from "../exports/exports.routes";
 
 /**
  * university feature'ının kök router'ı — `/api/universities` altına mount edilir
@@ -28,3 +29,4 @@ universityRoutes.route("/", departmentsRoutes);
 universityRoutes.route("/", universityAnnouncementsRoutes);
 universityRoutes.route("/", tenantSettingsRoutes);
 universityRoutes.route("/", universityPosterQrRoutes);
+universityRoutes.route("/", exportsRoutes);

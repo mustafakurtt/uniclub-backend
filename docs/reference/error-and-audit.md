@@ -60,7 +60,7 @@ guard(key) = [authMiddleware, attachAuthz, auditTrail(key), requirePermission(ke
 
 ```sh
 bun run db:migrate            # audit_logs tablosu
-bun run db:sync-permissions   # audit.view yetkisi + rol atamaları (veri sıfırlamadan)
+bun run db:bootstrap          # RBAC kataloğu + rank backfill (veri sıfırlamadan)
 ```
 
 ## 2. Hata Yönetimi (frontend sözleşmesi)

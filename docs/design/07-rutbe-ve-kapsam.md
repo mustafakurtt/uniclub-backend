@@ -33,8 +33,8 @@ Yüksek = daha yetkili. Aradaki 10'ar boşluk bilinçlidir (ileride ara kademe e
 | `advisor` | 20 | tenant (yetenek etiketi) |
 | `student` | 10 | tenant |
 
-Kaynak: `db/seed.ts` `roleDefs`. **Mevcut bir DB'de** `rank` kolonu `DEFAULT 0` ile
-eklenir; `db/sync-permissions.ts` içindeki `ROLE_RANKS` backfill'i bu değerleri geri
+Kaynak: `db/rbac-catalog.ts` `ROLE_DEFS`. **Mevcut bir DB'de** `rank` kolonu `DEFAULT 0` ile
+eklenir; `provisionRbacCatalog` (bootstrap/seed) global şablon rollerin rütbesini geri
 yazar. İkisi birbirinden saparsa hiyerarşi iki kaynak arasında kayar.
 
 > ⚠️ Rütbeler backfill edilmezse tüm roller `0` kalır ve `rank >= actor.maxRank`

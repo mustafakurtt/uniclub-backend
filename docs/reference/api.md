@@ -218,7 +218,7 @@ Tamamen self-service: her endpoint sadece giriş yapan kullanıcının kendi ver
 
 **GET /api/users/me/clubs** → `data`: `clubMembers` satırları, `club` objesi gömülü (`clubId`, `role`, `status`, `club.{name, slug, ...}`). `status: "pending"` satırlar da gelir — yetki kararında `status === "approved"` filtresi şart.
 
-**GET /api/users/me/applications** → `data`: kullanıcının `clubApplications` kayıtları (`status: pending/approved/rejected`, `createdAt` azalan).
+**GET /api/users/me/applications** → `data`: kullanıcının `clubApplications` kayıtları (`status: pending/approved/rejected/revision_requested`, `createdAt` azalan).
 
 **GET /api/users/me/advised-clubs** → `data`: `clubAdvisors` satırları, gömülü `club` objesiyle. Yalnızca `advisor` rolündeki personel için anlamlıdır (başkası için boş dizi).
 
@@ -323,9 +323,22 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 
 | Method | Path | Açıklama |
 |---|---|---|
-| POST | `/api/clubs/applications` | Yeni başvuru (aynı anda tek `pending` başvuru) |
-| GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (onay adımlarıyla) |
+| POST | `/api/clubs/applications` | Yeni başvuru (aynı anda tek aktif başvuru: `pending` veya `revision_requested`) |
+| GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (`revisionRequest` alanı revizyon beklerken) |
+| PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
+
+**Kuruluş önerisi / dijital destek (tenant eşik > 0):**
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/clubs/formation-proposals` | Açık öneriler (keşif) |
+| GET | `/api/clubs/formation-proposals/:id` | Öneri detayı |
+| POST | `/api/clubs/formation-proposals/:id/support` | Destek ver |
+| DELETE | `/api/clubs/formation-proposals/:id/support` | Desteği geri çek |
+| DELETE | `/api/clubs/formation-proposals/:id` | Öneriyi geri çek (sahip) |
+
+`POST /api/clubs/applications` tenant ayarına göre `kind: "application"` veya `kind: "formation_proposal"` döner.
 
 **Kulüp-içi yönetim (kulüp rolüne göre):**
 
@@ -342,7 +355,7 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | DELETE | `/api/clubs/:clubId/contact-links/:linkId` | officer/başkan |
 
 Body şemaları:
-- `POST /applications`: `{ proposedName (3-256), description? (max 2000) }`
+- `POST /applications`, `PATCH /applications/:id/resubmit`: `{ proposedName (3-256), description? (max 2000) }`
 - `POST /:clubId/join`, `DELETE .../leave`: body almaz.
 - `PATCH .../join-requests/:userId`: `{ "decision": "approved" | "rejected" }`
 - `PATCH .../members/:userId/role`: `{ "role": "member" | "officer" }` — `president` atanamaz (devir ayrı endpoint).
@@ -407,9 +420,13 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/users/:userId/department` | `user.manage` | Kullanıcının bölümünü güncelle |
 
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/integration/moderation.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
-| GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü) |
+| GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü; `revision_requested` ayrı kuyruk) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
+| GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
+| GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
+| GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
 
 Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Özet `application.status` adımlardan türetilir; bildirim yalnızca nihai `approved`/`rejected` kararında. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |
@@ -657,6 +674,15 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 | GET | `/api/universities/:universityId/poster-qr/analytics` | aynı | Kurum geneli kaynak karşılaştırması |
 | GET | `/api/universities/:universityId/poster-qr/:qrId/analytics` | aynı | Kod bazlı özet |
 
+**Kurumsal rapor dışa aktarma** (`university.export.generate`):
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/universities/:universityId/exports` | Rapor kataloğu |
+| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (dosya yanıtı; `clubs`, `club-members`, `activities`) |
+
+Detay: [integration/exports.md](../integration/exports.md).
+
 
 ---
 
@@ -689,7 +715,7 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 - **`/api/auth/me` minimal**: Sadece `{ userId, universityId }` döner; tam profil ve roller için `GET /api/users/me` kullanılmalı.
 - **`announcements`/`gallery` feature'ları `index.ts`'te ayrı mount edilmez** — `clubs.routes.ts` içinden `/:clubId/announcements` ve `/:clubId/gallery` olarak mount edilirler. `clubs.routes.ts` ayrıca kendi rotalarını `routes/` alt-dizinine böler (browse/applications/membership/management) — üniversite feature'ıyla aynı desen.
 - **Kulüp başkanlığı devri** artık `POST /api/clubs/:clubId/transfer-presidency` ile yapılır (yalnızca mevcut başkan; eski başkan officer'a düşer). Böylece başkan devrettikten sonra kulüpten ayrılabilir. (member↔officer geçişi hâlâ ayrı: `.../members/:userId/role`.)
-- **Kulüp kurma başvurularında** başvuran kendi başvurusunu görüntüleyebilir (`GET /api/clubs/applications/:id`) ve bekleyen başvuruyu geri çekebilir (`DELETE`). Değerlendirme (onay/red) admin'dedir. Onay zinciri (`clubApplicationApprovals`) çok-adımlı olacak şekilde genişletilebilir (şu an tek adım).
+- **Kulüp kurma başvurularında** başvuran kendi başvurusunu görüntüleyebilir (`GET /api/clubs/applications/:id`), revizyon sonrası yeniden gönderebilir (`PATCH .../resubmit`) ve bekleyen başvuruyu geri çekebilir (`DELETE`). Değerlendirme (onay/red/revizyon) admin'dedir. Onay zinciri (`clubApplicationApprovals`) çok-adımlı; geçmiş `club_application_events` append-only tablosunda.
 - **Etkin permission listesi:** `GET /api/users/me/permissions` → `{ roles, permissions, status }`.
   Yönetici görünümü: `GET /api/admin/.../users/:userId/effective-permissions`.
 - **Rol/izin değişiklikleri anında etkilidir** — RBAC cache'i (5 dk TTL) ilgili akışlarda otomatik invalidate edilir; frontend tarafında yalnızca açık oturumdaki state'in yenilenmesi (refresh/yeniden login) gerekir.

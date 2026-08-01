@@ -13,6 +13,7 @@ Hata zarfı ve i18n: [reference/error-and-audit.md](../reference/error-and-audit
 | [rank-and-platform.md](rank-and-platform.md) | 9 rol, rütbe, `universityId: null` platform hesapları |
 | [university.md](university.md) | Üniversite/fakülte/bölüm/domain CRUD |
 | [tenant-settings.md](tenant-settings.md) | Tenant yapılandırma ayarları (sabitleme kotası, yayın hızı) |
+| [exports.md](exports.md) | Kurumsal Excel/CSV rapor dışa aktarma (SKS) |
 | [clubs.md](clubs.md) | Kulüpler, üyelik, başvurular |
 | [activities.md](activities.md) | Etkinlikler, RSVP, co-host |
 | [public.md](public.md) | Kamuya açık kulüp/etkinlik okuma (QR, tanıtım günü) |

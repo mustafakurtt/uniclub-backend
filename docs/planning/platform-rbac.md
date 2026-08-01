@@ -177,7 +177,7 @@ Yeni **platform rolü** kodda dört yere işlenmeli:
 | Rol tanımı + demet | `src/db/rbac-catalog.ts` | `ROLE_DEFS`, `ROLE_BUNDLES` |
 | Platform rol seti | `src/features/auth/auth.service.ts` | `PLATFORM_ROLE_NAMES` — yalnızca `super_admin` atayabilir |
 | Tenant bypass | `src/index.ts` | `bypassRoles` — çapraz-tenant drill-down için |
-| Rank backfill | `src/db/sync-permissions.ts` | `ROLE_RANKS` |
+| Rank backfill | `src/db/rbac-catalog.ts` | `ROLE_DEFS` (`provisionRbacCatalog`) |
 
 `roles.universityId` platform rolleri için `NULL` (global şablon).
 

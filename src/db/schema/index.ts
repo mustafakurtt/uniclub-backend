@@ -6,6 +6,7 @@ export * from "./clubs";
 export * from "./announcements";
 export * from "./notifications";
 export * from "./applications";
+export * from "./club-formation";
 export * from "./audit";
 export * from "./activities";
 export * from "./media";

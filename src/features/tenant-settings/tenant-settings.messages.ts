@@ -5,6 +5,7 @@ export const tenantSettingsMessages = {
     "tenantSettings.invalidKey": "Geçersiz ayar anahtarı.",
     "tenantSettings.invalidValue": "Ayar değeri geçersiz veya sınır dışı.",
     "tenantSettings.platformKeyForbidden": "Bu ayar yalnızca platform operatörü tarafından değiştirilebilir.",
+    "tenantSettings.featureNotFound": "Bulunamadı.",
   },
   en: {
     "tenantSettings.listed": "Tenant settings listed.",
@@ -12,6 +13,7 @@ export const tenantSettingsMessages = {
     "tenantSettings.invalidKey": "Invalid setting key.",
     "tenantSettings.invalidValue": "Setting value is invalid or out of range.",
     "tenantSettings.platformKeyForbidden": "This setting can only be changed by a platform operator.",
+    "tenantSettings.featureNotFound": "Not found.",
   },
 };
 

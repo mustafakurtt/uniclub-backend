@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db } from "./index";
 import * as schema from "./schema";
 import { UniversityPermission, UNIVERSITY_PERMISSION_CATALOG } from "../features/university/university.permissions";
@@ -13,6 +13,7 @@ import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/aud
 import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
 import { TENANT_SETTINGS_PERMISSION_CATALOG, TenantSettingsPermission } from "../features/tenant-settings/tenant-settings.permissions";
 import { POSTER_QR_PERMISSION_CATALOG, PosterQrPermission } from "../features/poster-qr/poster-qr.permissions";
+import { EXPORT_PERMISSION_CATALOG, ExportPermission } from "../features/exports/exports.permissions";
 import type { DbExecutor } from "./executor";
 
 /**
@@ -37,6 +38,9 @@ export const ROLE_DEFS = [
   { name: "super_admin", description: "Sistem Yöneticisi — platform + tüm tenantlar", rank: 100 },
 ] as const;
 
+/** Artık hiçbir guard'ın referans vermediği eski anahtarlar — bootstrap'te temizlenir. */
+const LEGACY_PERMISSION_KEYS = ["club.manage", "university.manage"];
+
 /**
  * Tüm yetki kataloğu. `super_admin` bunların HEPSİNİ alır (aşağıda ayrıca ele
  * alınır); diğer roller `ROLE_BUNDLES`'taki alt kümeyi alır.
@@ -53,6 +57,7 @@ export const PERMISSION_CATALOG: { key: string; description: string }[] = [
   ...PLATFORM_PERMISSION_CATALOG,
   ...TENANT_SETTINGS_PERMISSION_CATALOG,
   ...POSTER_QR_PERMISSION_CATALOG,
+  ...EXPORT_PERMISSION_CATALOG,
   { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
   { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
 ];
@@ -79,6 +84,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     UniversityPermission.DEPARTMENT_CREATE, UniversityPermission.DEPARTMENT_UPDATE, UniversityPermission.DEPARTMENT_DELETE,
     UniversityPermission.DOMAIN_CREATE, UniversityPermission.DOMAIN_UPDATE, UniversityPermission.DOMAIN_DELETE,
     TenantSettingsPermission.MANAGE,
+    ExportPermission.GENERATE,
     AuthPermission.ROLE_MANAGE,
     AuditPermission.VIEW,
   ],
@@ -90,6 +96,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
     AnnouncementPermission.UNIVERSITY_MANAGE,
     PosterQrPermission.UNIVERSITY_MANAGE,
+    ExportPermission.GENERATE,
     DashboardPermission.VIEW,
   ],
   // Öğrenci İşleri / BİDB: akademik yapı + bölüm atama.
@@ -124,21 +131,25 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
  * döner (kullanıcı-rol ataması için).
  *
  * NOT: Runtime'da `role.manage` ile eklenmiş FAZLA atamalara dokunmaz; yalnızca
- * eksikleri ekler. Eski/kaldırılmış anahtarların temizliği `db:sync-permissions`
- * işidir, burası değil.
+ * eksikleri ekler. Eski/kaldırılmış anahtarlar `LEGACY_PERMISSION_KEYS` ile temizlenir.
  */
 export async function provisionRbacCatalog(tx: DbExecutor): Promise<Record<string, string>> {
-  // 1. Roller — roles.name UNIQUE değil, o yüzden "varsa seç, yoksa ekle".
+  // 1. Roller — roles.name UNIQUE değil; global şablon (universityId IS NULL) seç veya ekle.
   const roleIdByName: Record<string, string> = {};
   for (const def of ROLE_DEFS) {
     const existing = await tx
-      .select({ id: schema.roles.id })
+      .select({ id: schema.roles.id, rank: schema.roles.rank })
       .from(schema.roles)
-      .where(eq(schema.roles.name, def.name))
+      .where(and(eq(schema.roles.name, def.name), isNull(schema.roles.universityId)))
       .limit(1);
-    roleIdByName[def.name] = existing.length
-      ? existing[0].id
-      : (await tx.insert(schema.roles).values(def).returning())[0].id;
+    if (existing.length) {
+      roleIdByName[def.name] = existing[0].id;
+      if (existing[0].rank !== def.rank) {
+        await tx.update(schema.roles).set({ rank: def.rank }).where(eq(schema.roles.id, existing[0].id));
+      }
+    } else {
+      roleIdByName[def.name] = (await tx.insert(schema.roles).values(def).returning())[0].id;
+    }
   }
 
   // 2. Yetkiler — key UNIQUE, çakışanları atla.
@@ -146,6 +157,15 @@ export async function provisionRbacCatalog(tx: DbExecutor): Promise<Record<strin
   const allPermissions = await tx.select({ id: schema.permissions.id, key: schema.permissions.key }).from(schema.permissions);
   const permissionIdByKey: Record<string, string> = {};
   for (const p of allPermissions) permissionIdByKey[p.key] = p.id;
+
+  // 2b. Eski (legacy) anahtarları ve bağlarını temizle — idempotent.
+  const legacyPermissions = allPermissions.filter((p) => LEGACY_PERMISSION_KEYS.includes(p.key));
+  if (legacyPermissions.length > 0) {
+    const legacyIds = legacyPermissions.map((p) => p.id);
+    await tx.delete(schema.rolePermissions).where(inArray(schema.rolePermissions.permissionId, legacyIds));
+    await tx.delete(schema.userPermissions).where(inArray(schema.userPermissions.permissionId, legacyIds));
+    await tx.delete(schema.permissions).where(inArray(schema.permissions.id, legacyIds));
+  }
 
   // 3. Rol → yetki demetleri — (roleId, permissionId) bileşik PK, çakışanları atla.
   for (const [roleName, keys] of Object.entries(ROLE_BUNDLES)) {

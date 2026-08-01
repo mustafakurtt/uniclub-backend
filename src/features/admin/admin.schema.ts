@@ -12,9 +12,14 @@ export const listUsersQuerySchema = z.object({
 export type ListUsersQueryDTO = z.infer<typeof listUsersQuerySchema>;
 
 export const listClubApplicationsQuerySchema = z.object({
-  status: z.enum(["pending", "approved", "rejected"]).optional(),
+  status: z.enum(["pending", "approved", "rejected", "revision_requested"]).optional(),
 });
 export type ListClubApplicationsQueryDTO = z.infer<typeof listClubApplicationsQuerySchema>;
+
+export const listFormationProposalsQuerySchema = z.object({
+  status: z.enum(["collecting_support", "submitted", "withdrawn", "expired"]).optional(),
+});
+export type ListFormationProposalsQueryDTO = z.infer<typeof listFormationProposalsQuerySchema>;
 
 export const listClubsQuerySchema = z.object({
   status: z.enum(["pending", "approved", "rejected", "archived"]).optional(),
@@ -30,6 +35,12 @@ export const rejectApplicationSchema = z.object({
   note: z.string().trim().min(10, "Ret gerekçesi en az 10 karakter olmalıdır.").max(1000),
 });
 export type RejectApplicationDTO = z.infer<typeof rejectApplicationSchema>;
+
+/** Revizyon talebi — ret ile aynı gerekçe kuralı. */
+export const requestRevisionApplicationSchema = z.object({
+  note: z.string().trim().min(10, "Revizyon gerekçesi en az 10 karakter olmalıdır.").max(1000),
+});
+export type RequestRevisionApplicationDTO = z.infer<typeof requestRevisionApplicationSchema>;
 
 /** Onayda not opsiyoneldir (bilgi amaçlı). */
 export const approveApplicationSchema = z.object({

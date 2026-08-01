@@ -2,14 +2,17 @@ import { clubsRepository } from "./clubs.repository";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
+import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
 import {
   CreateApplicationDTO,
+  ResubmitApplicationDTO,
   UpdateMemberRoleDTO,
   CreateContactLinkDTO,
   UpdateOwnClubDTO,
 } from "./clubs.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
 import { clubsCache, clubEffects } from "./clubs.cache";
+import { findRevisionRequestedStep } from "./club-application-chain.core";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -54,14 +57,138 @@ export const clubsService = {
   },
 
   /**
-   * Bir kullanıcının aynı anda birden fazla bekleyen başvurusu olmasını engeller.
+   * Kulüp kurma başvurusu veya (tenant ayarı açıksa) kuruluş önerisi.
+   * Aynı anda tek aktif başvuru veya destek toplama önerisi.
    */
   async createApplication(universityId: string, applicantId: string, data: CreateApplicationDTO) {
-    const existingPending = await clubsRepository.findPendingApplicationByApplicant(universityId, applicantId);
-    if (existingPending) {
+    const existingPending = await clubsRepository.findActiveApplicationByApplicant(universityId, applicantId);
+    const existingProposal = await clubsRepository.findActiveFormationProposalByProposer(universityId, applicantId);
+    if (existingPending || existingProposal) {
       throw badRequest("club.pendingApplicationExists");
     }
-    return await clubsRepository.createApplication(universityId, applicantId, data);
+
+    const settings = await getTenantSettings(universityId);
+    if (settings.clubFormationSupportThreshold > 0) {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + settings.clubFormationProposalExpiryDays);
+      const proposal = await clubsRepository.createFormationProposal(
+        universityId,
+        applicantId,
+        data,
+        expiresAt
+      );
+      return {
+        ...proposal,
+        kind: "formation_proposal" as const,
+        supportThreshold: settings.clubFormationSupportThreshold,
+      };
+    }
+
+    const application = await clubsRepository.createApplication(universityId, applicantId, data);
+    return { ...application, kind: "application" as const };
+  },
+
+  async listFormationProposals(universityId: string, viewerId: string) {
+    const settings = await getTenantSettings(universityId);
+    const proposals = await clubsRepository.listCollectingFormationProposals(universityId, viewerId);
+    return proposals.map((p) => ({
+      id: p.id,
+      proposedName: p.proposedName,
+      description: p.description,
+      status: p.status,
+      supportCount: p.supportCount,
+      supportThreshold: settings.clubFormationSupportThreshold,
+      expiresAt: p.expiresAt,
+      createdAt: p.createdAt,
+      hasSupported: p.hasSupported,
+      proposer: p.proposer ? toSafeUser(p.proposer as unknown as Parameters<typeof toSafeUser>[0]) : null,
+    }));
+  },
+
+  async getFormationProposal(universityId: string, proposalId: string, viewerId: string) {
+    const proposal = await clubsRepository.findFormationProposalInUniversity(
+      universityId,
+      proposalId,
+      viewerId
+    );
+    if (!proposal) {
+      throw notFound("club.formationProposalNotFound");
+    }
+    const settings = await getTenantSettings(universityId);
+    const isProposer = proposal.proposerId === viewerId;
+    return {
+      id: proposal.id,
+      proposedName: proposal.proposedName,
+      description: proposal.description,
+      status: proposal.status,
+      supportCount: proposal.supportCount,
+      supportThreshold: settings.clubFormationSupportThreshold,
+      expiresAt: proposal.expiresAt,
+      submittedAt: proposal.submittedAt,
+      applicationId: proposal.applicationId,
+      createdAt: proposal.createdAt,
+      hasSupported: proposal.hasSupported,
+      proposer: proposal.proposer ? toSafeUser(proposal.proposer) : null,
+      isProposer,
+    };
+  },
+
+  async supportFormationProposal(universityId: string, proposalId: string, supporterId: string) {
+    const proposal = await clubsRepository.findFormationProposalById(proposalId);
+    if (!proposal || proposal.universityId !== universityId) {
+      throw notFound("club.formationProposalNotFound");
+    }
+
+    const settings = await getTenantSettings(universityId);
+    if (settings.clubFormationSupportThreshold <= 0) {
+      throw badRequest("club.formationSupportDisabled");
+    }
+
+    const result = await clubsRepository.addFormationSupport(
+      universityId,
+      proposalId,
+      supporterId,
+      settings.clubFormationSupportThreshold
+    );
+
+    if (result.status === "not_found") throw notFound("club.formationProposalNotFound");
+    if (result.status === "self_support") throw badRequest("club.cannotSupportOwnProposal");
+    if (result.status === "already_supported") throw badRequest("club.formationAlreadySupported");
+
+    if (result.thresholdReached && result.application) {
+      await notificationsService.notifySafe(result.proposal.proposerId, {
+        type: NotificationType.CLUB_FORMATION_THRESHOLD_REACHED,
+        title: "Kuruluş öneriniz onay sürecine girdi",
+        body: `'${result.proposal.proposedName}' öneriniz yeterli desteği topladı ve okul incelemesine gönderildi.`,
+        data: {
+          proposalId: result.proposal.id,
+          applicationId: result.application.id,
+        },
+      });
+    }
+
+    return {
+      proposal: result.proposal,
+      application: result.application,
+      thresholdReached: result.thresholdReached,
+      supportCount: result.proposal.supportCount,
+    };
+  },
+
+  async withdrawFormationSupport(proposalId: string, supporterId: string) {
+    const updated = await clubsRepository.removeFormationSupport(proposalId, supporterId);
+    if (!updated) {
+      throw badRequest("club.formationSupportNotFound");
+    }
+    return { proposalId, supportCount: updated.supportCount };
+  },
+
+  async withdrawFormationProposal(proposerId: string, proposalId: string) {
+    const updated = await clubsRepository.withdrawFormationProposal(proposerId, proposalId);
+    if (!updated) {
+      throw badRequest("club.formationProposalNotWithdrawable");
+    }
+    return { id: proposalId };
   },
 
   /** Başvuranın kendi başvurusunu onay adımlarıyla görüntülemesi. */
@@ -70,13 +197,41 @@ export const clubsService = {
     if (!application) {
       throw notFound("club.applicationNotFound");
     }
+
+    const revisionRow =
+      application.status === "revision_requested"
+        ? findRevisionRequestedStep(application.approvals)
+        : null;
+    const revisionApproval = revisionRow
+      ? application.approvals.find((a) => a.step === revisionRow.step)
+      : null;
+
     return {
       ...application,
       approvals: application.approvals.map((a) => ({
         ...a,
         approver: a.approver ? toSafeUser(a.approver) : null,
       })),
+      revisionRequest: revisionApproval
+        ? {
+            step: revisionApproval.step,
+            note: revisionApproval.note,
+            requestedAt: revisionApproval.reviewedAt,
+            requestedBy: revisionApproval.approver
+              ? toSafeUser(revisionApproval.approver)
+              : null,
+          }
+        : null,
     };
+  },
+
+  /** Revizyon talebi sonrası başvuruyu güncelle ve yeniden gönder — aynı kayıt devam eder. */
+  async resubmitApplication(applicantId: string, applicationId: string, data: ResubmitApplicationDTO) {
+    const updated = await clubsRepository.resubmitApplication(applicationId, applicantId, data);
+    if (!updated) {
+      throw badRequest("club.applicationNotResubmittable");
+    }
+    return updated;
   },
 
   /**

@@ -10,6 +10,10 @@ import {
   SELF_SERVICE_PASSWORD_MIN_LENGTH,
   PROVISION_PASSWORD_MIN_LENGTH,
 } from "../src/shared/schemas/password.schema";
+import {
+  findExpiredReleaseFlags,
+  findReleaseFlagsMissingSunset,
+} from "../src/features/tenant-settings/tenant-settings.release-check";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DOCS = join(ROOT, "docs");
@@ -297,6 +301,24 @@ if (passwordMinViolationCount === 0) {
   ok(
     `docs/ şifre minimum uzunlukları (${SELF_SERVICE_PASSWORD_MIN_LENGTH}/${PROVISION_PASSWORD_MIN_LENGTH}) ile uyumlu`
   );
+}
+
+// ── 6. Özellik bayrağı release sunset — geçmiş tarih CI'ı kırar ─────────────
+
+const missingSunset = findReleaseFlagsMissingSunset();
+for (const key of missingSunset) {
+  fail(`release bayrağı sunsetAfter eksik: ${key}`);
+}
+if (missingSunset.length === 0) {
+  ok("release bayrakları sunsetAfter tanımlı");
+}
+
+const expiredReleaseFlags = findExpiredReleaseFlags();
+for (const { key, sunsetAfter } of expiredReleaseFlags) {
+  fail(`release bayrağı sunsetAfter geçmiş: ${key} (${sunsetAfter})`);
+}
+if (expiredReleaseFlags.length === 0) {
+  ok("süresi dolmuş release bayrağı yok");
 }
 
 // ── Sonuç ───────────────────────────────────────────────────────────────────

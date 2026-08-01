@@ -27,6 +27,8 @@ Hangi tabloda kişisel veri var, hangisinde yok:
 | `push_subscriptions` | ✅ **cihaz** | endpoint + şifreleme anahtarları = cihaz tanımlayıcı |
 | `club_members`, `club_advisors` | ⚠️ dolaylı | kişinin bir kulüple ilişkisi (üyelik bilgisi) |
 | `club_applications` | ⚠️ dolaylı | başvuran kimliği + serbest metin açıklama |
+| `club_formation_proposals` | ⚠️ dolaylı | öneri sahibi kimliği + serbest metin (destek toplama aşaması) |
+| `club_formation_supports` | ⚠️ dolaylı | destekleyen öğrenci kimliği (kuruluş önerisine bağlı) |
 | `club_application_approvals` | ⚠️ dolaylı | onaylayan kimliği + karar gerekçesi (serbest metin) |
 | `announcements`, `club_gallery` | ⚠️ dolaylı | yazar/yükleyen kimliği; **içerikte** kişisel veri olabilir (fotoğraf!) |
 | `audit_logs` | ✅ **davranış + IP** | aktör, işlem, yol, IP, maskelenmiş gövde |
@@ -40,6 +42,18 @@ nitelikli veri **toplamıyor**. Toplanmaya başlarsa alan bazlı şifreleme gere
 **Sızıntı riski en yüksek üç yer:** `users` (kimlik), `audit_logs` (IP + davranış),
 `club_gallery` (yüz içeren fotoğraflar — bugün dosyanın kendisi harici URL'de,
 sahipliği ve silinmesi izlenmiyor; yol haritası 3.4).
+
+### Kuruluş önerisi destekçi görünürlüği (T1.1)
+
+| Aktör | Görebilir | Gerekçe |
+|---|---|---|
+| Öneri sahibi (öğrenci) | Yalnızca **destek sayısı** ve eşik | Destekçi listesi KVKK riskini artırır; sayı yeterli motivasyon |
+| Diğer öğrenciler (keşif) | Öneri adı/açıklama + **sayı** (kimlik yok) | Destek kararı için içerik gerekli; destekçi listesi gereksiz |
+| SKS (`application.view`) | **Destekçi listesi** (ad/soyad, destek zamanı) | Kurumsal doğrulama ve denetim — meşru menfaat; yalnızca yetkili personel |
+
+Destek **geri çekilebilir** (satır silinir, sayı düşer). Eşik henüz aşılmadıysa
+öneri onay zincirine düşmez; geri çekme sonrası eşik altına inmiş olsa bile
+zaten gönderilmemiş başvuru etkilenmez.
 
 ---
 

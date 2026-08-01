@@ -346,6 +346,19 @@ async function main() {
     await createUser({ universityId: antalya.id, firstName: "İçerik", lastName: "Moderatörü", email: "moderator@antalya.edu.tr", role: "content_moderator" }); // duyuru/galeri moderasyonu
     await createUser({ universityId: antalya.id, firstName: "Denetim", lastName: "Görevlisi", email: "denetci@antalya.edu.tr", role: "auditor" }); // salt-okunur izleme
 
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.UNIVERSITY_EXPORT_ENABLED,
+      value: true,
+      updatedBy: antalyaSks,
+    });
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED,
+      value: true,
+      updatedBy: antalyaSks,
+    });
+
     // --- Kulüpler ---
     console.log("   🏕️ Antalya kulüpleri ve üyelikleri...");
 
@@ -584,6 +597,13 @@ async function main() {
     const omerHoca = await createUser({ universityId: kartek.id, departmentId: kartekDept["Mekatronik Mühendisliği"], firstName: "Ömer", lastName: "Hoca", email: "omer.hoca@kartek.edu.tr", role: "advisor" });
     await createUser({ universityId: kartek.id, departmentId: kartekDept["Deniz Ulaştırma İşletme Mühendisliği"], firstName: "Sevgi", lastName: "Hoca", email: "sevgi.hoca@kartek.edu.tr", role: "advisor" }); // kulüpsüz danışman
     const hulyaAdmin = await createUser({ universityId: kartek.id, firstName: "Hülya", lastName: "Özkan", email: "hulya.ozkan@kartek.edu.tr", role: "university_admin" });
+
+    await tx.insert(schema.tenantSettings).values({
+      universityId: kartek.id,
+      key: TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD,
+      value: 3,
+      updatedBy: hulyaAdmin,
+    });
 
     console.log("   🏕️ Karadeniz kulüpleri ve üyelikleri...");
 

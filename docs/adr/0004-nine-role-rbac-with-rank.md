@@ -32,7 +32,7 @@ Ayrıntılı senaryolar: `docs/design/06-rol-mimarisi-yeniden-tasarim.md`,
   tek "admin" rolüne sığmıyor.
 - `resource.view` / `resource.manage` ayrımı panelde yanlış yetki göstermeyi önler.
 - Rütbe, self-demotion ve escalation (düşük rütbeli özel rol + güçlü yetki) deliklerini
-  kapatır — seed'de `rank` backfill (`sync-permissions.ts` `ROLE_RANKS`).
+  kapatır — `provisionRbacCatalog` rank backfill (`rbac-catalog.ts` `ROLE_DEFS`).
 
 ## Elenen alternatifler
 

@@ -176,8 +176,7 @@ Verification emails land in the Mailpit inbox at **http://localhost:8025**.
 | `bun run db:reset` | Drop, regenerate, migrate and seed in one shot |
 | `bun run db:push` | Push schema without a migration file |
 | `bun run db:seed` | Seed universities, roles and sample data |
-| `bun run db:bootstrap` | Provision the RBAC catalog + first `super_admin` (production) |
-| `bun run db:sync-permissions` | Backfill permission keys into an existing DB |
+| `bun run db:bootstrap` | Idempotent RBAC catalog (+ rank backfill) + first `super_admin` (production) |
 
 ## Testing
 

@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, gt, lt, desc, sql, getTableColumns } from "drizzle-orm";
 import { db } from "../../db";
 import {
   clubs,
@@ -6,10 +6,14 @@ import {
   clubContactLinks,
   clubApplications,
   clubApplicationApprovals,
+  clubApplicationEvents,
+  clubFormationProposals,
+  clubFormationSupports,
+  users,
 } from "../../db/schema";
-import { BaseRepository } from "../../core/db";
+import { BaseRepository, type Database } from "../../core/db";
 import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
-import { buildApprovalInsertRows, parseApprovalChain, DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN } from "./club-application-chain.core";
+import { buildApprovalInsertRows, parseApprovalChain, DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN, type ApprovalChainRoleToken } from "./club-application-chain.core";
 import {
   CreateClubApplicationPayload,
   CreateContactLinkPayload,
@@ -204,8 +208,19 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
   }
 
   // ── clubApplications ─────────────────────────────────────────────────────
+  findActiveApplicationByApplicant(universityId: string, applicantId: string) {
+    return db.query.clubApplications.findFirst({
+      where: {
+        universityId,
+        applicantId,
+        status: { in: ["pending", "revision_requested"] },
+      },
+    });
+  }
+
+  /** Geriye dönük alias — yalnızca pending arayan eski çağrılar. */
   findPendingApplicationByApplicant(universityId: string, applicantId: string) {
-    return applicationsRepo.findOne({ universityId, applicantId, status: "pending" });
+    return this.findActiveApplicationByApplicant(universityId, applicantId);
   }
 
   /** Başvuranın tek bir başvurusu, onay adımlarıyla (kendi başvurusunu görüntüleme). */
@@ -226,37 +241,121 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
   async createApplication(universityId: string, applicantId: string, data: CreateClubApplicationPayload) {
     const settings = await getTenantSettings(universityId);
     const chain = parseApprovalChain(settings.clubApplicationApprovalChain) ?? DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN;
-    const approvalRows = buildApprovalInsertRows(chain);
 
-    return this.transaction(async (_repo, tx) => {
-      const [application] = await tx.insert(clubApplications).values({
-        universityId,
-        applicantId,
-        proposedName: data.proposedName,
-        description: data.description,
-        status: "pending",
-      }).returning();
-
-      await tx.insert(clubApplicationApprovals).values(
-        approvalRows.map((row) => ({
-          applicationId: application.id,
-          step: row.step,
-          approverRole: row.approverRole,
-          status: row.status,
-        }))
-      );
-
-      return application;
-    });
+    return this.transaction(async (_repo, tx) =>
+      this.insertApplicationWithApprovals(tx, universityId, applicantId, data, chain)
+    );
   }
 
-  /** Bekleyen başvuruyu geri çekme — onay satırları FK olduğu için önce onlar silinir. */
+  /** Transaction içinde başvuru + onay adımları (kuruluş önerisi eşik geçişinde de kullanılır). */
+  async insertApplicationWithApprovals(
+    tx: Database,
+    universityId: string,
+    applicantId: string,
+    data: CreateClubApplicationPayload,
+    chain: ApprovalChainRoleToken[]
+  ) {
+    const approvalRows = buildApprovalInsertRows(chain);
+
+    const [application] = await tx.insert(clubApplications).values({
+      universityId,
+      applicantId,
+      proposedName: data.proposedName,
+      description: data.description,
+      status: "pending",
+    }).returning();
+
+    await tx.insert(clubApplicationApprovals).values(
+      approvalRows.map((row) => ({
+        applicationId: application.id,
+        step: row.step,
+        approverRole: row.approverRole,
+        status: row.status,
+      }))
+    );
+
+    return application;
+  }
+
+  /** Bekleyen başvuruyu geri çekme — onay satırları ve olay günlüğü FK ile silinir. */
   deleteApplication(applicationId: string) {
     return this.transaction(async (_repo, tx) => {
+      await tx.delete(clubApplicationEvents).where(eq(clubApplicationEvents.applicationId, applicationId));
       await tx.delete(clubApplicationApprovals)
         .where(eq(clubApplicationApprovals.applicationId, applicationId));
       await tx.delete(clubApplications)
         .where(eq(clubApplications.id, applicationId));
+    });
+  }
+
+  /**
+   * Revizyon talebi sonrası başvuru güncelleme — aynı kayıt, zincir kaldığı yerden devam eder.
+   */
+  async resubmitApplication(
+    applicationId: string,
+    applicantId: string,
+    data: CreateClubApplicationPayload
+  ) {
+    return this.transaction(async (_repo, tx) => {
+      const [application] = await tx
+        .select()
+        .from(clubApplications)
+        .where(
+          and(
+            eq(clubApplications.id, applicationId),
+            eq(clubApplications.applicantId, applicantId)
+          )
+        )
+        .limit(1);
+      if (!application || application.status !== "revision_requested") return null;
+
+      const approvals = await tx
+        .select()
+        .from(clubApplicationApprovals)
+        .where(eq(clubApplicationApprovals.applicationId, applicationId))
+        .orderBy(asc(clubApplicationApprovals.step));
+
+      const revisionStep = approvals.find((a) => a.status === "revision_requested");
+      if (!revisionStep) return null;
+
+      const [updatedApplication] = await tx
+        .update(clubApplications)
+        .set({
+          proposedName: data.proposedName,
+          description: data.description,
+          status: "pending",
+        })
+        .where(eq(clubApplications.id, applicationId))
+        .returning();
+
+      await tx
+        .update(clubApplicationApprovals)
+        .set({
+          status: "pending",
+          approverId: null,
+          reviewedAt: null,
+          note: null,
+        })
+        .where(eq(clubApplicationApprovals.id, revisionStep.id));
+
+      await tx.insert(clubApplicationEvents).values({
+        applicationId,
+        step: revisionStep.step,
+        eventType: "resubmitted",
+        actorId: applicantId,
+        proposedName: data.proposedName,
+        description: data.description ?? null,
+      });
+
+      return updatedApplication;
+    });
+  }
+
+  listApplicationEvents(applicationId: string) {
+    return db.query.clubApplicationEvents.findMany({
+      where: { applicationId },
+      orderBy: { createdAt: "asc" },
+      with: { actor: true },
     });
   }
 
@@ -284,6 +383,267 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
 
   deleteContactLink(clubId: string, linkId: string) {
     return contactLinksRepo.deleteWhere({ id: linkId, clubId });
+  }
+
+  // ── clubFormationProposals (T1.1) ────────────────────────────────────────
+
+  async expireFormationProposalsPastDeadline(universityId: string) {
+    await db
+      .update(clubFormationProposals)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(clubFormationProposals.universityId, universityId),
+          eq(clubFormationProposals.status, "collecting_support"),
+          lt(clubFormationProposals.expiresAt, new Date())
+        )
+      );
+  }
+
+  findActiveFormationProposalByProposer(universityId: string, proposerId: string) {
+    return db.query.clubFormationProposals.findFirst({
+      where: {
+        universityId,
+        proposerId,
+        status: "collecting_support",
+        expiresAt: { gt: new Date() },
+      },
+    });
+  }
+
+  async createFormationProposal(
+    universityId: string,
+    proposerId: string,
+    data: CreateClubApplicationPayload,
+    expiresAt: Date
+  ) {
+    const [proposal] = await db
+      .insert(clubFormationProposals)
+      .values({
+        universityId,
+        proposerId,
+        proposedName: data.proposedName,
+        description: data.description,
+        status: "collecting_support",
+        supportCount: 0,
+        expiresAt,
+      })
+      .returning();
+    return proposal;
+  }
+
+  async listCollectingFormationProposals(universityId: string, viewerId: string) {
+    await this.expireFormationProposalsPastDeadline(universityId);
+    const rows = await db
+      .select({
+        proposal: getTableColumns(clubFormationProposals),
+        hasSupported: sql<boolean>`exists(
+          select 1 from ${clubFormationSupports} s
+          where s.proposal_id = ${clubFormationProposals.id}
+          and s.supporter_id = ${viewerId}
+        )`,
+        proposer: {
+          id: users.id,
+          universityId: users.universityId,
+          departmentId: users.departmentId,
+          studentNumber: users.studentNumber,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          photoUrl: users.photoUrl,
+          preferredLanguage: users.preferredLanguage,
+          status: users.status,
+        },
+      })
+      .from(clubFormationProposals)
+      .innerJoin(users, eq(users.id, clubFormationProposals.proposerId))
+      .where(
+        and(
+          eq(clubFormationProposals.universityId, universityId),
+          eq(clubFormationProposals.status, "collecting_support"),
+          gt(clubFormationProposals.expiresAt, new Date())
+        )
+      )
+      .orderBy(desc(clubFormationProposals.createdAt));
+
+    return rows.map((row) => ({
+      ...row.proposal,
+      proposer: row.proposer,
+      hasSupported: row.hasSupported,
+    }));
+  }
+
+  findFormationProposalById(proposalId: string) {
+    return db.query.clubFormationProposals.findFirst({
+      where: { id: proposalId },
+    });
+  }
+
+  async findFormationProposalInUniversity(
+    universityId: string,
+    proposalId: string,
+    viewerId?: string
+  ) {
+    const proposal = await db.query.clubFormationProposals.findFirst({
+      where: { id: proposalId, universityId },
+      with: { proposer: true, application: true },
+    });
+    if (!proposal) return null;
+
+    let hasSupported = false;
+    if (viewerId) {
+      const support = await db.query.clubFormationSupports.findFirst({
+        where: { proposalId, supporterId: viewerId },
+        columns: { id: true },
+      });
+      hasSupported = !!support;
+    }
+
+    return { ...proposal, hasSupported };
+  }
+
+  findFormationProposalByProposer(proposerId: string, proposalId: string) {
+    return db.query.clubFormationProposals.findFirst({
+      where: { id: proposalId, proposerId },
+    });
+  }
+
+  listFormationSupports(proposalId: string) {
+    return db.query.clubFormationSupports.findMany({
+      where: { proposalId },
+      orderBy: { createdAt: "asc" },
+      with: { supporter: true },
+    });
+  }
+
+  async addFormationSupport(
+    universityId: string,
+    proposalId: string,
+    supporterId: string,
+    threshold: number
+  ): Promise<
+    | { status: "added"; proposal: typeof clubFormationProposals.$inferSelect; application: typeof clubApplications.$inferSelect | null; thresholdReached: boolean }
+    | { status: "not_found" }
+    | { status: "self_support" }
+    | { status: "already_supported" }
+  > {
+    return await db.transaction(async (tx) => {
+      const proposal = await tx.query.clubFormationProposals.findFirst({
+        where: {
+          id: proposalId,
+          universityId,
+          status: "collecting_support",
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (!proposal) return { status: "not_found" };
+      if (proposal.proposerId === supporterId) return { status: "self_support" };
+
+      const existing = await tx.query.clubFormationSupports.findFirst({
+        where: { proposalId, supporterId },
+      });
+      if (existing) return { status: "already_supported" };
+
+      await tx.insert(clubFormationSupports).values({
+        proposalId,
+        supporterId,
+        universityId,
+      });
+
+      const newCount = proposal.supportCount + 1;
+      const [updatedProposal] = await tx
+        .update(clubFormationProposals)
+        .set({ supportCount: newCount })
+        .where(eq(clubFormationProposals.id, proposalId))
+        .returning();
+
+      if (newCount < threshold) {
+        return { status: "added", proposal: updatedProposal, application: null, thresholdReached: false };
+      }
+
+      const settings = await getTenantSettings(universityId);
+      const chain =
+        parseApprovalChain(settings.clubApplicationApprovalChain) ??
+        DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN;
+
+      const application = await this.insertApplicationWithApprovals(
+        tx,
+        universityId,
+        proposal.proposerId,
+        { proposedName: proposal.proposedName, description: proposal.description ?? undefined },
+        chain
+      );
+
+      const [submittedProposal] = await tx
+        .update(clubFormationProposals)
+        .set({
+          status: "submitted",
+          applicationId: application.id,
+          submittedAt: new Date(),
+        })
+        .where(eq(clubFormationProposals.id, proposalId))
+        .returning();
+
+      return {
+        status: "added",
+        proposal: submittedProposal,
+        application,
+        thresholdReached: true,
+      };
+    });
+  }
+
+  async removeFormationSupport(proposalId: string, supporterId: string) {
+    return await db.transaction(async (tx) => {
+      const proposal = await tx.query.clubFormationProposals.findFirst({
+        where: { id: proposalId, status: "collecting_support", expiresAt: { gt: new Date() } },
+      });
+      if (!proposal) return null;
+
+      const support = await tx.query.clubFormationSupports.findFirst({
+        where: { proposalId, supporterId },
+      });
+      if (!support) return null;
+
+      await tx.delete(clubFormationSupports).where(eq(clubFormationSupports.id, support.id));
+
+      const [updated] = await tx
+        .update(clubFormationProposals)
+        .set({ supportCount: Math.max(0, proposal.supportCount - 1) })
+        .where(eq(clubFormationProposals.id, proposalId))
+        .returning();
+
+      return updated;
+    });
+  }
+
+  async withdrawFormationProposal(proposerId: string, proposalId: string) {
+    const proposal = await db.query.clubFormationProposals.findFirst({
+      where: { id: proposalId, proposerId, status: "collecting_support" },
+    });
+    if (!proposal) return null;
+
+    const [updated] = await db
+      .update(clubFormationProposals)
+      .set({ status: "withdrawn" })
+      .where(eq(clubFormationProposals.id, proposalId))
+      .returning();
+    return updated;
+  }
+
+  async listFormationProposalsByUniversity(
+    universityId: string,
+    status?: "collecting_support" | "submitted" | "withdrawn" | "expired"
+  ) {
+    await this.expireFormationProposalsPastDeadline(universityId);
+    return db.query.clubFormationProposals.findMany({
+      where: { universityId, ...(status ? { status } : {}) },
+      orderBy: { createdAt: "desc" },
+      with: {
+        proposer: true,
+        application: true,
+      },
+    });
   }
 }
 

@@ -14,6 +14,7 @@
 - [4. Kulüp Yaşam Döngüsü (durumlar)](#4-kulüp-yaşam-döngüsü-durumlar)
 - [5. Keşif ve Üyelik (her üye)](#5-keşif-ve-üyelik-her-üye)
 - [6. Kulüp Kurma Başvuruları (başvuran)](#6-kulüp-kurma-başvuruları-başvuran)
+- [6A. Kuruluş önerisi ve dijital destek (T1.1)](#6a-kuruluş-önerisi-ve-dijital-destek-t11)
 - [7. Kulüp-içi Üyelik Yönetimi (officer / başkan)](#7-kulüp-içi-üyelik-yönetimi-officer--başkan)
 - [8. Kulüp Profili ve İletişim Linkleri (başkan / officer)](#8-kulüp-profili-ve-i̇letişim-linkleri-başkan--officer)
 - [9. Duyurular ve Galeri (alt-kaynaklar)](#9-duyurular-ve-galeri-alt-kaynaklar)
@@ -141,10 +142,13 @@ Hepsi yalnızca `Bearer` ister; kendi üniversitenin `approved` kulüpleriyle s�
 
 Bir öğrenci yeni bir kulüp kurmak için **başvuru** açar; okul yöneticisi onaylarsa gerçek kulüp oluşur ve başvuran başkan olur.
 
+Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı endpoint önce **kuruluş önerisi** oluşturur (destek toplama); eşik aşıldığında otomatik olarak aşağıdaki onay zincirine düşer. `0` ise davranış eskisi gibi doğrudan `pending` başvuru (bkz. [§6A](#6a-kuruluş-önerisi-ve-dijital-destek-t11)).
+
 | Method | Path | Açıklama |
 |---|---|---|
 | POST | `/api/clubs/applications` | Yeni başvuru oluştur |
 | GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (onay adımlarıyla) |
+| PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 | GET | `/api/users/me/applications` | Tüm başvurularım (özet liste) |
 
@@ -154,29 +158,62 @@ Bir öğrenci yeni bir kulüp kurmak için **başvuru** açar; okul yöneticisi 
 // Body
 { "proposedName": "string (3-256)", "description": "string (max 2000, opsiyonel)" }
 ```
-`201` + oluşan başvuru (`status: "pending"`). İş kuralı: **aynı anda birden fazla `pending` başvuru olamaz** → `400 "Zaten bekleyen bir kulüp başvurunuz var."`. (Reddedilen/geri çekilen başvuru bunu bloklamaz — yeniden başvurulabilir.)
+`201` + oluşan başvuru (`status: "pending"`, `kind: "application"`) veya öneri (`kind: "formation_proposal"`, `status: "collecting_support"`). İş kuralı: **aynı anda birden fazla aktif başvuru veya açık öneri olamaz** (`pending`/`revision_requested` başvuru veya `collecting_support` öneri) → `400 "Zaten bekleyen bir kulüp başvurunuz var."`. (Reddedilen/geri çekilen başvuru bunu bloklamaz — yeniden başvurulabilir.)
 
 ### 6.2 Başvuru detayı — `GET /api/clubs/applications/:applicationId`
 
-Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulunamadı."`). Onay zinciri gömülüdür:
+Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulunamadı."`). Onay zinciri gömülüdür. `status: "revision_requested"` olduğunda `revisionRequest` alanı dolu:
 
 ```jsonc
 {
   "data": {
-    "id":"...", "proposedName":"Satranç Kulübü", "status":"pending", "description":"...",
-    "approvals": [
-      { "step":1, "approverRole":"advisor", "status":"pending", "approverId":null, "approver":null, "reviewedAt":null }
-    ]
+    "id":"...", "proposedName":"Satranç Kulübü", "status":"revision_requested", "description":"...",
+    "approvals": [ /* ... */ ],
+    "revisionRequest": {
+      "step": 2,
+      "note": "Evrak eksik — lütfen tüzük maddesini düzeltin.",
+      "requestedAt": "2026-...",
+      "requestedBy": { /* SafeUser — revizyon isteyen yetkili */ }
+    }
   }
 }
 ```
-`approvals`, genişletilebilir çok-adımlı onay zinciridir (şu an tek adım). İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
 
-### 6.3 Başvuruyu geri çek — `DELETE /api/clubs/applications/:applicationId`
+`approvals`, genişletilebilir çok-adımlı onay zinciridir. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
+
+### 6.3 Revizyon sonrası yeniden gönder — `PATCH /api/clubs/applications/:applicationId/resubmit`
+
+Yalnızca `status: "revision_requested"` başvurular. Body başvuru oluşturma ile aynı (`proposedName`, `description?`). Aynı `id` devam eder; zincir kaldığı yerden sürer (önceki kademe onayları korunur).
+
+`200` + güncellenen başvuru (`status: "pending"`). Hatalar: `404 "Başvuru bulunamadı."` (başkasının başvurusu), `400 "Yalnızca revizyon bekleyen başvuru yeniden gönderilebilir."`.
+
+### 6.4 Başvuruyu geri çek — `DELETE /api/clubs/applications/:applicationId`
 
 Yalnızca **`pending`** başvuru geri çekilebilir. Hatalar: `404 "Başvuru bulunamadı."`, `400 "Yalnızca bekleyen bir başvuru geri çekilebilir."`.
 
 > Değerlendirme (onay/red) başvuranın işi DEĞİLDİR — bkz. [§11 admin](#11-okul-yöneticisi-admin-kulüp-yönetimi).
+
+---
+
+## 6A. Kuruluş önerisi ve dijital destek (T1.1)
+
+Tenant `club.formation.support_threshold > 0` olduğunda `POST /api/clubs/applications` bir **öneri** oluşturur; eşik aşıldığında sistem otomatik `clubApplications` kaydı açar ve mevcut onay zinciri devam eder.
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/clubs/formation-proposals` | Destek toplanan açık öneriler (keşif; yalnızca sayı, destekçi kimliği yok) |
+| GET | `/api/clubs/formation-proposals/:id` | Öneri detayı (sahip: sayı + eşik; diğerleri: keşif görünümü) |
+| POST | `/api/clubs/formation-proposals/:id/support` | Destek ver (kendi önerisine destek verilemez) |
+| DELETE | `/api/clubs/formation-proposals/:id/support` | Desteği geri çek (eşik altına düşerse zincire düşmez) |
+| DELETE | `/api/clubs/formation-proposals/:id` | Öneriyi geri çek (yalnızca sahip, `collecting_support`) |
+
+**Eşik:** tam sayı (`club.formation.support_threshold`). **Süre:** `club.formation.proposal_expiry_days` (varsayılan 90); süresi dolan öneriler listelenmez ve desteklenemez.
+
+**Bildirim:** Eşik ilk kez aşıldığında öneri sahibine `club.formation.threshold_reached` (her destekte gitmez).
+
+**Liste/detay alanları:** her öğede `hasSupported: boolean` — isteği yapan kullanıcı bu öneriyi desteklemiş mi (`true` → arayüzde "Desteği geri çek"). Destekçi kimlikleri yalnızca admin detayında.
+
+**SKS görünürlüğü:** Destekçi listesi yalnızca admin detayında (`GET .../formation-proposals/:id`) — bkz. [admin-panel.md](admin-panel.md), [kvkk.md](../compliance/kvkk.md).
 
 ---
 

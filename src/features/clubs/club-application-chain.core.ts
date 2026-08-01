@@ -25,7 +25,7 @@ export const APPROVAL_CHAIN_MAX_STEPS = 3;
 export type ApplicationApprovalRow = {
   step: number;
   approverRole: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "revision_requested";
 };
 
 export function isApprovalChainRoleToken(value: string): value is ApprovalChainRoleToken {
@@ -46,9 +46,10 @@ export function parseApprovalChain(raw: unknown): ApprovalChainRoleToken[] | nul
 /** Özet durum — tek yerde türetilir. */
 export function deriveApplicationStatus(
   approvals: ApplicationApprovalRow[]
-): "pending" | "approved" | "rejected" {
+): "pending" | "approved" | "rejected" | "revision_requested" {
   if (approvals.some((a) => a.status === "rejected")) return "rejected";
   if (approvals.length > 0 && approvals.every((a) => a.status === "approved")) return "approved";
+  if (approvals.some((a) => a.status === "revision_requested")) return "revision_requested";
   return "pending";
 }
 
@@ -59,12 +60,20 @@ export function findCurrentApprovalStep(
   const sorted = [...approvals].sort((a, b) => a.step - b.step);
   for (const row of sorted) {
     if (row.status === "rejected") return null;
+    if (row.status === "revision_requested") return null;
     if (row.status === "pending") {
       const priorOk = sorted.filter((s) => s.step < row.step).every((s) => s.status === "approved");
       return priorOk ? row : null;
     }
   }
   return null;
+}
+
+/** Revizyon bekleyen kademe (öğrenci yeniden gönderecek). */
+export function findRevisionRequestedStep(
+  approvals: ApplicationApprovalRow[]
+): ApplicationApprovalRow | null {
+  return approvals.find((a) => a.status === "revision_requested") ?? null;
 }
 
 export function buildApprovalInsertRows(chain: ApprovalChainRoleToken[]) {

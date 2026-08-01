@@ -14,6 +14,8 @@ sürüm numaraları [Semantic Versioning](https://semver.org/) ile uyumludur.
 - **Bildirim tercihleri** (tip/kulüp bazlı susturma), toplu fan-out ve kuyruk eşiği (500+ alıcı).
 - **`tenant_settings`:** tenant başına yapılandırılabilir kurallar (sabitleme kotası, okul geneli duyuru hızı, kulüp başvuru onay zinciri) — `GET/PATCH /api/universities/:universityId/settings`.
 - **Çok kademeli kulüp başvuru onay zinciri (T4.2):** tenant ayarı `club.application.approval_chain`; özet durum adımlardan türetilir; bildirim yalnızca nihai kararda.
+- **Başvuru revizyon akışı (T4.1):** revizyon talebi (`revision_requested`), öğrenci yeniden gönderim (aynı kayıt), append-only olay geçmişi, `club.application.revision_requested` bildirimi.
+- **Kuruluş dijital destek toplama (T1.1):** tenant eşik ayarı (`club.formation.support_threshold`, 0=kapalı), öneri → destek → otomatik onay zinciri, `club.formation.threshold_reached` bildirimi.
 - **Tenant profili (C2):** `timezone`, `defaultLocale`, `logoUrl`, `primaryColor` — `PATCH /api/universities/:universityId`.
 - **Zamanlanmış yayın (T2.1):** duyuru ve etkinlik için `scheduledPublishAtLocal` (tenant yerel saat → UTC); BullMQ gecikmeli iş; iptal/değiştirme; geçmiş reddi.
 - **Zamanlanmış yayın mutabakatı:** açılış + 3 dk periyodik Postgres→BullMQ tarama; Redis iş kaybında yeniden kuyruk / gecikmiş yayın.

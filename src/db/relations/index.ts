@@ -7,6 +7,7 @@ import { clubsRelations } from "./clubs";
 import { announcementsRelations } from "./announcements";
 import { notificationsRelations } from "./notifications";
 import { applicationsRelations } from "./applications";
+import { clubFormationRelations } from "./club-formation";
 import { activitiesRelations } from "./activities";
 import { mediaRelations } from "./media";
 
@@ -18,6 +19,7 @@ export const relations = defineRelations(schema, (r) => ({
   ...announcementsRelations(r),
   ...notificationsRelations(r),
   ...applicationsRelations(r),
+  ...clubFormationRelations(r),
   ...activitiesRelations(r),
   ...mediaRelations(r),
 }));

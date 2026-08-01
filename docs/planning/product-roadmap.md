@@ -37,8 +37,8 @@ işlem tek kişinin tek tıkıyla gerçekleşmez.
 
 ## 1. İzler (alt dallar)
 
-Roadmap dokuz **iz** (track) ve bir **yüzey** izinden oluşur. İzler paralel yaşar;
-milestone'lar (§8) izlerden dilim alarak ilerler.
+Roadmap dokuz **alan izi** (T1–T9) ve iki **yüzey izinden** (T10, FE) oluşur. İzler
+paralel yaşar; milestone'lar (§8) izlerden dilim alarak ilerler.
 
 ```
 T1  Kulüp yaşam döngüsü          T6  Veri ve analitik
@@ -66,10 +66,20 @@ riski yüksek, denetlenemez. Yerine:
   otomatik olarak SKS kuyruğuna düşer.
 - SKS inceler; onaylarsa kulüp `pending` yerine gerçek kulüp olarak doğar.
 
-**Karar gerektiren:** Destek geri çekilebilir mi? Eşik sayı mı yüzde mi? Destekleyen
-kimliği kulüp yönetimine görünür mü (KVKK)? Süre sınırı var mı?
+**Karar gerektiren:** ~~Destek geri çekilebilir mi? Eşik sayı mı yüzde mi? Destekleyen
+kimliği kulüp yönetimine görünür mü (KVKK)? Süre sınırı var mı?~~ → **v1 kararları
+uygulandı** (bkz. `docs/compliance/kvkk.md`, `tenant-settings.md`).
 
-Bugünkü `clubApplications` bu akışın basitleştirilmiş hâli; genişletilecek.
+**Durum:** v1 dijital destek toplama + tenant eşik ayarı uygulandı; **arayüz bu dalgada
+geliyor** (öneri listesi, destek ver/geri çek, SKS destekçi görünümü). Danışman adayı ve
+taslak tüzük PDF henüz yok.
+
+`club.formation.support_threshold` fiilen bir **tenant bayrağıdır** — eşik `0` ise
+özellik kapalıdır. Bu, T8.5'in kâğıt üzerinde değil sahada çalıştığının kanıtı:
+bugün Karadeniz'de açık, Antalya'da kapalı.
+
+Bugünkü `clubApplications` bu akışın basitleştirilmiş hâli; destek toplama açık
+tenant'larda ön aşama olarak genişletildi.
 
 ### T1.2 Danışman ve onay zinciri
 
@@ -235,6 +245,8 @@ kullanılmamasına yol açar — kurum Excel'e geri döner.
 
 ### T4.1 Başvuru inceleme derinleşmesi ★
 
+**Durum:** v1 revizyon talebi + yeniden gönderim + olay geçmişi uygulandı; kontrol listesi ve itiraz bekliyor.
+
 Bugün başvuru onay/ret ikilisi. Gerçek süreç çok adımlı:
 
 - Kontrol listesi (evrak tam mı, tüzük uygun mu, danışman onayı var mı)
@@ -265,13 +277,27 @@ aktarım, toplu dönem geçişi.
 
 ### T4.5 Resmî çıktılar: Excel / PDF ★
 
-Kullanıcı isteği. Türkiye'de kurumsal iş akışının belkemiği.
+Kullanıcı isteği. Türkiye'de kurumsal iş akışının belkemiği. **İki dilime ayrıldı:**
 
-- Kulüp listesi, üye listesi, etkinlik takvimi, faaliyet raporu
+**v1 — veri çıktıları (xlsx)** 🔄
+- Kulüp listesi, üye listesi, etkinlik takvimi
+- `ReportRenderer` arayüzü — PDF sonraki dilimde aynı altyapıya takılır
+- Yetki `university.export.generate`; mutating uç olduğu için otomatik audit
+- Satır tavanı (50k) + "filtreyi daraltın"; v1'de kuyruk yok
+
+**v2 — resmî belgeler (PDF)** ⬜
 - **Yıllık faaliyet raporu** (kurumun üst yönetime sunduğu belge)
-- Devir teslim tutanağı, karar tutanağı
-- Çıktılar **yeniden üretilebilir** olmalı: aynı parametrelerle aynı belge
-- Şablonların tenant bazlı özelleştirilmesi (kurum logosu, imza blokları)
+- Devir teslim tutanağı (T1.3'e bağımlı — M3), karar tutanağı
+- Türkçe font gömme (ı, ş, ğ, İ), sayfa düzeni, imza blokları, kurum logosu
+
+**Yeniden üretilebilirlik her iki dilimde de gereksinimdir:** aynı parametrelerle
+üretilen iki dosya bayt bayt aynı olmalı. Gerekleri: her sorguda `id` tie-break'li
+deterministik sıralama; belge meta verisinde (`created`/`modified`) `new Date()`
+**yasak**, sabit değer; gövdede "üretim tarihi" yok, yerine istenen dönem. Testi
+SHA-256 karşılaştırmasıyla yapılır.
+
+**Neden gereksinim:** Denetim bağlamında SKS uzmanı "geçen ay çektiğim raporu tekrar
+çekeyim" der. Farklı bir dosya alırsa belgenin kanıt değeri düşer.
 
 ### T4.6 Bütçe ve harcama
 
@@ -458,6 +484,47 @@ Kurumun kendi kendine deneme başlatması; bugün operatör açıyor.
 
 Sağlık, kuyruk durumu, hata oranları, tenant bazlı ayrıştırma.
 
+### T8.5 Özellik yetkilendirmesi ve yayın bayrakları ★
+
+Bir özelliği **önce tek kurumda** denemek (pilot), sonra yaymak gerekiyor. Bunun için
+ayrı sunucu **kurulmaz** — çok kiracılı mimarinin tüm ekonomisi tek kurulumda. Ayrı
+kurulum sürüm sapması üretir (pilot kurum v1.9, diğerleri v1.7) ve tek kişilik ekipte
+deploy/migration/yedek/izleme yükünü kurum sayısıyla çarpar.
+
+`tenant_settings` bu işin altyapısıdır ve zaten çalışmaktadır: `editor` alanı
+(`tenant` | `platform`) "kurum kendi seçer" ile "yalnızca platform açar" ayrımını
+kurar. `club.formation.support_threshold` bugün fiilen bir bayraktır — Karadeniz'de
+açık, Antalya'da kapalı.
+
+**Üç kavram ayrı tutulur** — aynı tabloda yaşarlar, aynı kafayla yönetilmezler:
+
+| Tür | Kim değiştirir | Ömür | Örnek |
+| --- | --- | --- | --- |
+| Konfigürasyon | Kurum (`editor: tenant`) | Kalıcı | Onay zinciri, sabitleme limiti |
+| Yetkilendirme (entitlement) | Platform (`editor: platform`) | Kalıcı; plana bağlanır (T8.1) | "Analitik modülü bu tenant'ta var" |
+| Yayın bayrağı (release flag) | Platform | **Geçici — ölmek üzere doğar** | Pilot sırasında yarım özelliği gizleme |
+
+Yapılacaklar:
+
+- Katalog kaydına `sunsetAfter` alanı: yayın bayrağının son kullanma tarihi. Tarihi
+  geçmiş bayrak varsa `docs:check` **kırılır**. Zorlanmayan kural kural değildir
+  (bkz. `optOutable` dersi, §11).
+- Bayrağı kapalı tenant'ta rota **404** döner, 403 değil. 403 "böyle bir özellik var
+  ama sende yok" der; 404 hiçbir şey söylemez. Varlık sızdırma kuralıyla aynı çizgi.
+- **Şema dallandırılmaz.** Migration herkese uygulanır; tablo herkeste vardır, yalnızca
+  yol kapalıdır. Aksi hâlde bayrak açıldığında geriye dönük veri üretmek gerekir.
+- **Kapalı yol da test edilir.** Test suite'i seed'e dayanıyor; bir özellik seed'de açık
+  olan tenant'ta test edilip kapalı tenant'ta test edilmezse, hata pilot dışındaki
+  kurumlarda ortaya çıkar. Her bayrak için iki yol da test edilir.
+- Bayrak sayısı **az** tutulur; açık yol varsayılan, kapalı yol istisnadır. On bayrak
+  bin olası kurulum demektir ve hiçbiri test edilemez.
+- Pilot bittiğinde: varsayılan açığa çevrilir → bir sürüm beklenir → **bayrak ve
+  dallanma silinir.** Silinmeyen yayın bayrağı kalıcı kod dallanmasına dönüşür.
+
+**Veri ikameti istisnası:** bir kurum "veri kendi sunucumda duracak" derse (devlet
+üniversitelerinde bu talep çıkar) ayrı kurulum yapılır. O durumda bile **kod aynı
+kalır**, yalnızca deploy hedefi değişir. Bu bir dağıtım kararıdır, mimari kararı değil.
+
 ---
 
 ## T9 — Teknik temel
@@ -624,6 +691,49 @@ backend'i de sürdürüyor. Bu, milestone büyüklüklerinin küçük tutulması
 zorunlu kılar. Her milestone **gösterilebilir bir hikâye** üretmeli; "önce tüm
 API'ler, sonra tüm ekranlar" yaklaşımı bu kapasitede tıkanır.
 
+### FE-5 Bilgi mimarisi ve derinleşme ★ — **sıradaki iş**
+
+**Teşhis (2026-08-01, koda karşı ölçüldü):** Arayüz *geniş ama sığ*. Kullanıcının
+tarifi: "karmaşık pathler her yerde ama içlerinde ayrıntı yok; yönetim kısmında her
+şey alt alta geçmiş ama detaylara ulaşamıyoruz."
+
+Ölçüm bunu doğruluyor:
+
+| Bulgu | Kanıt |
+| --- | --- |
+| **11 admin rotası, tek detay rotası** | Yalnızca `/admin/universities/:universityId` parametrik. Kulüp, kullanıcı, başvuru için detay rotası **yok** |
+| **Detaylar modal içinde** | `AdminFormationProposalDetailModal`, `ClubApplicationHistoryModal`, `ClubAdvisorsModal`, `RoleFormModal` |
+| **Menü düz ve gruplanmamış** | 9 öğe yan yana; günlük iş (kulüpler, moderasyon, raporlar) ile nadir kurulum işi (roller, yetkiler, akademik yapı) aynı düzeyde |
+
+**Modal'ın bedeli kozmetik değil, işlevsel.** Kurumsal iş akışında SKS uzmanı
+meslektaşına "şu başvuruya bak" der. Modal'a **link verilemez**, yer imi yapılamaz,
+geri tuşu çalışmaz, sekmede açılamaz, e-postayla paylaşılamaz. Denetim bağlamında
+"hangi kayda baktık" sorusunun cevabı bir URL olmalı.
+
+Yapılacaklar:
+
+1. **Modal → rota.** Her varlık için derin bağlanabilir detay sayfası:
+   `/admin/clubs/:clubId`, `/admin/users/:userId`, `/admin/applications/:applicationId`,
+   `/admin/proposals/:proposalId`. Modal yalnızca gerçekten geçici olan iş için
+   (onay kutusu, tek alanlık düzenleme) kalır.
+2. **Detay sayfaları sekmelensin.** Kulüp detayı: üyeler · etkinlikler · duyurular ·
+   danışmanlar · galeri · denetim izi. Bugün bu bilgiler farklı üst menü öğelerine
+   dağılmış durumda; varlık merkezli toplanmalı.
+3. **Menü gruplansın.** *Günlük iş* (başvurular, kulüpler, moderasyon, raporlar) /
+   *Kurum yapısı* (akademik yapı, ayarlar) / *Sistem* (roller, yetkiler, denetim izi).
+   Nadir kullanılan kurulum işleri günlük işin önünü kapatmamalı.
+4. **Rol bazlı iniş.** `student_affairs` ile `university_admin` aynı ekrana düşmemeli.
+   SKS'nin işi başvuru kuyruğu; tenant yöneticisinin işi yapılandırma. `advisor` ve
+   `content_moderator` için de kendi yüzeyleri var ama bugün hiç yok.
+5. **Öğrenci tarafı da derinleşsin.** Başvuru ve kuruluş önerisi ekranları bugün tek
+   sayfa. Süreç görünürlüğü (hangi kademede, ne bekleniyor, ne zaman), geçmiş,
+   belge ekleri eksik.
+
+**Sıralama gerekçesi:** M3'e (akademik dönem, devir teslim) geçmeden önce yapılmalı.
+M3 daha çok varlık ve daha çok ilişki getiriyor; bilgi mimarisi düzeltilmeden
+eklenirse aynı düz listeye bir öğe daha binecek ve sorun büyüyerek katılaşacak.
+Bu bir "temizlik" turu değil, **ürünün yönetilebilirliğini** belirleyen yapısal iş.
+
 ---
 
 ## 8. Rota: milestone'lar
@@ -631,7 +741,7 @@ API'ler, sonra tüm ekranlar" yaklaşımı bu kapasitede tıkanır.
 Milestone'lar izlerden dilim alır. Her biri **çalışır ve gösterilebilir** bir
 bütün üretir.
 
-### M1 — Pilot demosu ★ (öncelik)
+### M1 — Pilot demosu ★ — **tamamlandı** (v1.7.0)
 
 **Amaç:** Antalya Bilim Üniversitesi'ne gösterilebilecek, ikna edici bir dilim.
 Genel bir "frontend başlangıcı" değil — **belirli bir hikâyeyi** uçtan uca
@@ -659,14 +769,45 @@ gördüğü acıyı (dağınık takip) tek ekranda çözer.
 **Kapsam dışı bırakılanlar** (M1'i şişirmemek için): onay hiyerarşisi, resmî
 çıktılar, turnuva, transkript, analitik derinliği.
 
-### M2 — Kurumsal süreç
+### M2 — Kurumsal süreç — **tamamlandı**
 
 **Amaç:** Kurumun ürünü gerçekten benimsemesi.
 
-- T4.1 başvuru inceleme derinleşmesi, T4.2 onay hiyerarşisi
-- T1.1 **kuruluş anketi/destek toplama**
-- T4.5 **Excel/PDF resmî çıktılar**
-- **FE-3** kurum paneli ilk dilimi
+| Dilim | Durum |
+| --- | --- |
+| T4.1 başvuru inceleme derinleşmesi | ✅ v1 (revizyon talebi + yeniden gönderim + olay geçmişi); kontrol listesi ve itiraz bekliyor |
+| T4.2 onay hiyerarşisi | ✅ v1 (çok kademeli zincir, tenant ayarı); vekâlet ve süre aşımı bekliyor |
+| T1.1 kuruluş önerisi / destek toplama | ✅ backend v1 + tenant eşiği · arayüz bu dalgada |
+| T4.5 Excel/PDF resmî çıktılar | ✅ v1 xlsx (üç rapor) + v2 PDF (yıllık faaliyet raporu, karar tutanağı). Devir teslim tutanağı T1.3'e bağlı → M3 |
+| **FE-3** kurum paneli ilk dilimi | ✅ tenant ayarları, başvuru/zincir görünümleri, raporlar ekranı |
+| T8.5 özellik yetkilendirmesi ve yayın bayrakları | ✅ boolean kind, `flagType`, `sunsetAfter` CI kapısı, `requireFeature` → 404. Canlı doğrulandı |
+
+**M2 kapandı.** Sırada M3 değil, **M2.5** — bkz. aşağısı.
+
+**T4.5 neden ikiye bölündü:** Veri çıktısı (liste/tablo) ile resmî belge (imza bloklu,
+sayfa düzenli tutanak) farklı işler. PDF motoru Türkçe karakterler için font gömme,
+sayfa düzeni ve imza bloğu tasarımı gerektiriyor. Asıl mimari iş **renderer arayüzü**;
+o kurulduğunda PDF ikinci bir implementasyon olarak takılır ve altyapı yeniden
+yazılmaz. Belge dilimi (yıllık faaliyet raporu, devir teslim tutanağı, karar tutanağı)
+M2'nin ikinci yarısına kalıyor — devir teslim tutanağı zaten T1.3'e (M3) bağımlı.
+
+**T8.5 neden M2'de:** Pilot kuruma yeni bir özelliği önce tek başına açmak isteniyor.
+Bayrak altyapısı olmadan bunun tek yolu ayrı kurulum — ki bu yanlış cevap (bkz. T8.5).
+İş küçük: katalog kaydı + rota kontrolü + `sunsetAfter` doküman kapısı.
+
+### M2.5 — Arayüz derinleşmesi ve bilgi mimarisi ★ — **sıradaki**
+
+**Amaç:** Ürünü yönetilebilir kılmak. M2 kurumun *süreçlerini* kurdu; bu milestone
+o süreçlere **ulaşılabilir** hâle getiriyor.
+
+- **FE-5** bilgi mimarisi: modal → rota, sekmeli detay sayfaları, gruplanmış menü,
+  rol bazlı iniş sayfaları (ayrıntı yukarıda)
+- Öğrenci tarafında süreç görünürlüğü: başvuru/öneri hangi kademede, ne bekleniyor
+- Backend'den gereken: detay uçlarının varlık merkezli toplanması (bugün bilgi
+  birden çok uca dağılmış), gerekirse tek çağrıda sekme verisi
+
+**Neden M3'ten önce:** M3 daha çok varlık ve ilişki getiriyor (dönem, devir teslim,
+tarihçe). Düz liste + modal mimarisi üzerine eklenirse sorun büyüyerek katılaşır.
 
 ### M3 — Dönem ve tarihçe
 
@@ -718,6 +859,7 @@ milestone değildir.
 | **Pilot kurum?** | Henüz yok. Muhtemel: **Antalya Bilim Üniversitesi** (staj bağlantısı, projeyi beğenirlerse). | M1 bu kuruma gösterilecek demo olarak şekillendi |
 | **Frontend kim yazacak?** | **Tek kişi** — hem backend hem frontend, takım yok. Frontend'in bir kısmı mevcut. | Milestone'lar küçük tutulacak; her biri gösterilebilir bir hikâye üretecek |
 | **Transkript dayanağı?** | Bilinmiyor. | T3.3'e girmeden önce bakanlık/kurum dokümanları araştırılacak (aşağıda) |
+| **Bir özelliği tek kurumda pilot etmek için ayrı sunucu gerekir mi?** | **Hayır.** Tek kurulum, tenant bazlı bayrak. Ayrı kurulum yalnızca **veri ikameti** zorunluluğunda; o durumda bile kod aynı kalır. | T8.5 açıldı; `tenant_settings.editor` alanı yetkilendirme dikişi olarak kullanılacak |
 
 ### Açık kalanlar
 
@@ -728,7 +870,10 @@ milestone değildir.
 3. **Etkinlik/sosyal transkript** hangi formatta, hangi dayanakla veriliyor?
 4. **Sponsorluk süreci** nasıl işliyor? İzin kimden alınıyor, gelir kime
    yazılıyor, kulüp doğrudan sponsor bulabiliyor mu? (T4.8)
-5. **Barındırma yeri** — yurt içi zorunluluğu var mı?
+5. **Barındırma yeri** — yurt içi zorunluluğu var mı? Kurum "veri kendi sunucumda
+   duracak" derse tek kurulum modeli o kurum için delinir (bkz. T8.5 veri ikameti
+   istisnası). Pilot görüşmesinde erken sorulmalı; geç öğrenilirse mimariyi değil
+   **satış modelini** etkiler.
 6. **Bütçe/harcama** takip mi, muhasebe entegrasyonu mu?
 
 ### Araştırma görevi (T5/T3.3/T4.8'e girmeden önce)

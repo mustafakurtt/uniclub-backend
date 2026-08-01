@@ -9,6 +9,7 @@ import { clubPosterQrRoutes } from "../poster-qr/club-poster-qr.routes";
 import { clubActivitiesRoutes } from "../activities/routes/club-activities.routes";
 import { browseRoutes } from "./routes/browse.routes";
 import { applicationsRoutes } from "./routes/applications.routes";
+import { formationProposalsRoutes } from "./routes/formation-proposals.routes";
 import { membershipRoutes } from "./routes/membership.routes";
 import { managementRoutes } from "./routes/management.routes";
 
@@ -45,6 +46,7 @@ clubsRoutes.route("/:clubId/activities", clubActivitiesRoutes);
 clubsRoutes.route("/:clubId/poster-qr", clubPosterQrRoutes);
 
 clubsRoutes.route("/", applicationsRoutes);
+clubsRoutes.route("/", formationProposalsRoutes);
 clubsRoutes.route("/", membershipRoutes);
 clubsRoutes.route("/", managementRoutes);
 clubsRoutes.route("/", browseRoutes);

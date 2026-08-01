@@ -12,6 +12,7 @@ export default defineConfig({
     "./src/db/schema/announcements.ts",
     "./src/db/schema/notifications.ts",
     "./src/db/schema/applications.ts",
+    "./src/db/schema/club-formation.ts",
     "./src/db/schema/audit.ts",
     "./src/db/schema/activities.ts",
     "./src/db/schema/media.ts",
