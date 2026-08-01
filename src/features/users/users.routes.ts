@@ -6,6 +6,10 @@ import { ok, done } from "../../shared/utils/respond";
 import { updateProfileSchema, changePasswordSchema, updateNotificationPreferenceSchema } from "./users.schema";
 import { usersService } from "./users.service";
 import { notificationPreferencesService } from "../notifications/notification-preferences.service";
+import {
+  declineAdvisorInvitationSchema,
+  withdrawAdvisorSchema,
+} from "../club-advisors/club-advisors.schema";
 
 // Bu feature tamamen self-service'tir: her rota, giriş yapmış kullanıcının
 // SADECE kendi hesabı üzerinde işlem yapar (başka kullanıcıları görüntüleme/
@@ -68,6 +72,43 @@ usersRoutes.get("/me/advised-clubs", async (c) => {
   const clubs = await usersService.listMyAdvisedClubs(actor.userId);
   return ok(c, clubs, "user.advisedClubsListed");
 });
+
+usersRoutes.get("/me/advisor-invitations", async (c) => {
+  const actor = c.get("user");
+  const invitations = await usersService.listMyAdvisorInvitations(actor.userId);
+  return ok(c, invitations, "clubAdvisor.invitationsListed");
+});
+
+usersRoutes.patch("/me/advisor-invitations/:invitationId/accept", async (c) => {
+  const actor = c.get("user");
+  const { invitationId } = c.req.param();
+  const result = await usersService.acceptAdvisorInvitation(actor.userId, invitationId);
+  return ok(c, result, "clubAdvisor.invitationAccepted");
+});
+
+usersRoutes.patch(
+  "/me/advisor-invitations/:invitationId/decline",
+  validate("json", declineAdvisorInvitationSchema),
+  async (c) => {
+    const actor = c.get("user");
+    const { invitationId } = c.req.param();
+    const body = c.req.valid("json");
+    const result = await usersService.declineAdvisorInvitation(actor.userId, invitationId, body);
+    return ok(c, result, "clubAdvisor.invitationDeclined");
+  }
+);
+
+usersRoutes.post(
+  "/me/advised-clubs/:clubId/withdraw",
+  validate("json", withdrawAdvisorSchema),
+  async (c) => {
+    const actor = c.get("user");
+    const { clubId } = c.req.param();
+    const body = c.req.valid("json");
+    const result = await usersService.withdrawAsAdvisor(actor.userId, clubId, body);
+    return ok(c, result, "clubAdvisor.withdrawn");
+  }
+);
 
 // 7. KATILDIĞIM ETKİNLİKLER (takvimim / RSVP'lerim)
 usersRoutes.get("/me/activities", async (c) => {

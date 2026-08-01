@@ -40,13 +40,36 @@ async function clearActiveForStudent(email: string) {
 }
 
 describe("kuruluş dijital destek toplama", () => {
-  describe("kapalı tenant (Antalya — eşik 0)", () => {
-    it("POST /applications doğrudan pending başvuru oluşturur", async () => {
+  describe("açık tenant (Antalya — eşik 8)", () => {
+    let antalyaUni: string;
+    let admin: string;
+
+    beforeAll(async () => {
+      admin = await login("elif.demir@antalya.edu.tr");
+      antalyaUni = (await me(admin)).universityId as string;
+    });
+
+    it("POST /applications kuruluş önerisi oluşturur", async () => {
       const burak = await clearActiveForStudent("burak.demirci@std.antalya.edu.tr");
-      const uni = burak.uniId;
 
       const createRes = await reqAuth("POST", "/api/clubs/applications", burak.token, {
-        proposedName: `Antalya Doğrudan ${Date.now()}`,
+        proposedName: `Antalya Destek ${Date.now()}`,
+        description: "Destek toplama testi (eşik 8).",
+      });
+      expect(createRes.status).toBe(201);
+      const body = await createRes.json();
+      expect(body.data.kind).toBe("formation_proposal");
+      expect(body.data.status).toBe("collecting_support");
+    });
+  });
+
+  describe("kapalı tenant (Ege — eşik 0)", () => {
+    it("POST /applications doğrudan pending başvuru oluşturur", async () => {
+      const cem = await clearActiveForStudent("cem.arslan@std.egebilim.edu.tr");
+      const uni = cem.uniId;
+
+      const createRes = await reqAuth("POST", "/api/clubs/applications", cem.token, {
+        proposedName: `Ege Doğrudan ${Date.now()}`,
         description: "Destek kapalı tenant testi.",
       });
       expect(createRes.status).toBe(201);

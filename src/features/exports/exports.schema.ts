@@ -31,15 +31,21 @@ export const applicationDecisionMinutesParamsSchema = z.object({
   applicationId: z.string().uuid(),
 });
 
+export const generalMeetingMinutesParamsSchema = z.object({
+  meetingId: z.string().uuid(),
+});
+
 export type ClubsExportParams = z.infer<typeof clubsExportParamsSchema>;
 export type ClubMembersExportParams = z.infer<typeof clubMembersExportParamsSchema>;
 export type ActivitiesExportParams = z.infer<typeof activitiesExportParamsSchema>;
 export type AnnualActivityReportParams = z.infer<typeof annualActivityReportParamsSchema>;
 export type ApplicationDecisionMinutesParams = z.infer<typeof applicationDecisionMinutesParamsSchema>;
+export type GeneralMeetingMinutesParams = z.infer<typeof generalMeetingMinutesParamsSchema>;
 
 export type ExportParams =
   | ClubsExportParams
   | ClubMembersExportParams
   | ActivitiesExportParams
   | AnnualActivityReportParams
-  | ApplicationDecisionMinutesParams;
+  | ApplicationDecisionMinutesParams
+  | GeneralMeetingMinutesParams;

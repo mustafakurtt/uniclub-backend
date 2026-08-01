@@ -27,12 +27,16 @@ import {
   updateClubSchema,
   updateUserDepartmentSchema,
   adminClubPaginatedListQuerySchema,
+  committeeVoteSchema,
 } from "./admin.schema";
 import { adminService } from "./admin.service";
 import { clubApplicationReviewService } from "../clubs/club-application-review.service";
 import { dashboardService } from "../dashboard/dashboard.service";
+import { approvalCommitteesRoutes } from "../approval-committees/approval-committees.routes";
 
 export const adminRoutes = new Hono<{ Variables: RbacVariables }>();
+
+adminRoutes.route("/", approvalCommitteesRoutes);
 
 // Not: rotalar bilinçli olarak try/catch İÇERMEZ — servis katmanı HttpError
 // fırlatır, `app.onError` (core/http/error-handler) tek noktadan çevirir.
@@ -134,7 +138,12 @@ adminRoutes.get(
   ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
-    const application = await adminService.getClubApplication(universityId, applicationId);
+    const actor = c.get("user");
+    const application = await adminService.getClubApplication(
+      universityId,
+      applicationId,
+      actor.userId
+    );
     return ok(c, application, "admin.applicationFound");
   }
 );
@@ -183,6 +192,25 @@ adminRoutes.patch(
       note
     );
     return ok(c, result, "admin.applicationRevisionRequested");
+  }
+);
+
+// 6b2. KURUL OY (committee_majority kademesi)
+adminRoutes.patch(
+  "/universities/:universityId/club-applications/:applicationId/committee-vote",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  validate("json", committeeVoteSchema),
+  async (c) => {
+    const { universityId, applicationId } = c.req.param();
+    const actor = c.get("user");
+    const body = c.req.valid("json");
+    const result = await adminService.castCommitteeVote(
+      universityId,
+      applicationId,
+      actor.userId,
+      body
+    );
+    return ok(c, result, "admin.committeeVoteRecorded");
   }
 );
 
@@ -332,26 +360,49 @@ adminRoutes.get(
   }
 );
 
-// 10. KULÜBE DANIŞMAN ATAMA
+// 10. KULÜBE DANIŞMAN DAVETİ (kabul edilene kadar danışman sayılmaz)
 adminRoutes.post(
   "/universities/:universityId/clubs/:clubId/advisors",
   ...guard(ClubPermission.ADVISOR_MANAGE, { tenantScoped: true }),
   validate("json", addAdvisorSchema),
   async (c) => {
+    const user = c.get("user");
     const { universityId, clubId } = c.req.param();
-    const { userId } = c.req.valid("json");
-    const advisor = await adminService.addAdvisor(universityId, clubId, userId);
-    return created(c, advisor, "admin.advisorAssigned");
+    const body = c.req.valid("json");
+    const invitation = await adminService.inviteAdvisor(universityId, clubId, user.userId, body);
+    return created(c, invitation, "admin.advisorInvited");
   }
 );
 
-// 11. KULÜPTEN DANIŞMAN KALDIRMA
+adminRoutes.get(
+  "/universities/:universityId/clubs/:clubId/advisor-invitations",
+  ...guard(ClubPermission.ADVISOR_MANAGE, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, clubId } = c.req.param();
+    const invitations = await adminService.listAdvisorInvitations(universityId, clubId);
+    return ok(c, invitations, "admin.advisorInvitationsListed");
+  }
+);
+
+adminRoutes.delete(
+  "/universities/:universityId/clubs/:clubId/advisor-invitations/:invitationId",
+  ...guard(ClubPermission.ADVISOR_MANAGE, { tenantScoped: true }),
+  async (c) => {
+    const user = c.get("user");
+    const { universityId, clubId, invitationId } = c.req.param();
+    await adminService.cancelAdvisorInvitation(universityId, clubId, invitationId, user.userId);
+    return done(c, "admin.advisorInvitationCancelled");
+  }
+);
+
+// 11. KULÜPTEN DANIŞMAN KALDIRMA (yönetici zorla)
 adminRoutes.delete(
   "/universities/:universityId/clubs/:clubId/advisors/:userId",
   ...guard(ClubPermission.ADVISOR_MANAGE, { tenantScoped: true }),
   async (c) => {
+    const user = c.get("user");
     const { universityId, clubId, userId } = c.req.param();
-    await adminService.removeAdvisor(universityId, clubId, userId);
+    await adminService.removeAdvisor(universityId, clubId, userId, user.userId);
     return done(c, "admin.advisorRemoved");
   }
 );

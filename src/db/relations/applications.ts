@@ -21,6 +21,25 @@ export const applicationsRelations = (r: RelationHelpers) => ({
       from: r.clubApplicationApprovals.approverId,
       to: r.users.id,
     }),
+    committee: r.one.approvalCommittees({
+      from: r.clubApplicationApprovals.committeeId,
+      to: r.approvalCommittees.id,
+    }),
+  },
+  clubApplicationCommitteeVotes: {
+    application: r.one.clubApplications({
+      from: r.clubApplicationCommitteeVotes.applicationId,
+      to: r.clubApplications.id,
+    }),
+    committee: r.one.approvalCommittees({
+      from: r.clubApplicationCommitteeVotes.committeeId,
+      to: r.approvalCommittees.id,
+    }),
+    voter: r.one.users({
+      from: r.clubApplicationCommitteeVotes.voterUserId,
+      to: r.users.id,
+      alias: "committee_vote_voter",
+    }),
   },
   clubApplicationEvents: {
     application: r.one.clubApplications({

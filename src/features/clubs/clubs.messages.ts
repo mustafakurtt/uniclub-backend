@@ -37,11 +37,13 @@ export const clubsMessages = defineCatalog({
     "club.formationProposalNotWithdrawable": "Yalnızca destek toplama aşamasındaki öneri geri çekilebilir.",
     // hata — club.middleware (kulüp-içi yetki reddi, 403)
     "club.notStaff": "Bu işlem için kulüp yöneticisi (başkan/officer) veya danışmanı olmalısınız.",
+    "club.notMember": "Bu içerik yalnızca kulüp üyelerine açıktır.",
     "club.notOfficer": "Bu işlem için kulüp yöneticisi (başkan/officer) olmalısınız.",
     "club.notPresident": "Bu işlem için kulüp başkanı olmalısınız.",
     // başarı
     "club.applicationSubmitted": "Kulüp başvurunuz alındı.",
     "club.applicationFound": "Başvuru bulundu.",
+    "club.applicationHistoryListed": "Başvuru süreç geçmişi listelendi.",
     "club.applicationWithdrawn": "Başvurunuz geri çekildi.",
     "club.applicationResubmitted": "Başvurunuz yeniden gönderildi.",
     "club.applicationAppealSubmitted": "İtirazınız alındı.",
@@ -95,11 +97,13 @@ export const clubsMessages = defineCatalog({
     "club.formationProposalNotWithdrawable": "Only a proposal in the support collection phase can be withdrawn.",
     // error — club.middleware (in-club authorization denial, 403)
     "club.notStaff": "You must be a club officer/president or advisor for this action.",
+    "club.notMember": "This content is only available to club members.",
     "club.notOfficer": "You must be a club officer/president for this action.",
     "club.notPresident": "You must be the club president for this action.",
     // success
     "club.applicationSubmitted": "Your club application has been received.",
     "club.applicationFound": "Application found.",
+    "club.applicationHistoryListed": "Application process history listed.",
     "club.applicationWithdrawn": "Your application has been withdrawn.",
     "club.applicationResubmitted": "Your application has been resubmitted.",
     "club.applicationAppealSubmitted": "Your appeal has been submitted.",

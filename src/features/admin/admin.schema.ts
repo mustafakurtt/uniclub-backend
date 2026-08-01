@@ -48,6 +48,13 @@ export const approveApplicationSchema = z.object({
 });
 export type ApproveApplicationDTO = z.infer<typeof approveApplicationSchema>;
 
+/** Kurul kademesi oy — ret için gerekçe zorunlu; onayda opsiyonel. */
+export const committeeVoteSchema = z.object({
+  vote: z.enum(["approve", "reject"]),
+  reason: z.string().trim().max(1000).optional(),
+});
+export type CommitteeVoteDTO = z.infer<typeof committeeVoteSchema>;
+
 export const patchChecklistItemSchema = z.object({
   checked: z.boolean(),
   note: z.string().trim().max(500).optional(),
@@ -62,6 +69,7 @@ export type ReviewAppealDTO = z.infer<typeof reviewAppealSchema>;
 
 export const addAdvisorSchema = z.object({
   userId: z.string().uuid(),
+  message: z.string().max(2000).optional(),
 });
 export type AddAdvisorDTO = z.infer<typeof addAdvisorSchema>;
 

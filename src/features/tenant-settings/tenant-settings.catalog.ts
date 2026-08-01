@@ -9,6 +9,9 @@ import {
   APPROVAL_CHAIN_MAX_STEPS,
   APPROVAL_CHAIN_ROLE_TOKENS,
   parseApprovalChain,
+  parseApprovalChainSteps,
+  approvalChainStepsEqual,
+  type ApprovalChainStep,
 } from "../clubs/club-application-chain.core";
 import {
   DEFAULT_APPLICATION_REVIEW_CHECKLIST,
@@ -45,6 +48,12 @@ export const TenantSettingKey = {
   /** 0 = destek toplama kapalı (doğrudan başvuru). >0 = minimum destek sayısı. */
   CLUB_FORMATION_SUPPORT_THRESHOLD: "club.formation.support_threshold",
   CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS: "club.formation.proposal_expiry_days",
+  /** Danışman davetinin geçerlilik süresi (gün). */
+  CLUB_ADVISOR_INVITATION_EXPIRY_DAYS: "club.advisor.invitation_expiry_days",
+  /** Genel kurul yeter sayısı (onaylı üye yüzdesi). */
+  CLUB_GENERAL_MEETING_QUORUM_PERCENT: "club.general_meeting.quorum_percent",
+  /** Genel kurul karar çoğunluğu (katılan üye yüzdesi). */
+  CLUB_GENERAL_MEETING_MAJORITY_PERCENT: "club.general_meeting.majority_percent",
   /** Kurumsal rapor dışa aktarma (T4.5) — entitlement bayrağı; varsayılan kapalı. */
   UNIVERSITY_EXPORT_ENABLED: "university.export.enabled",
   /** PDF resmî belgeler (T4.5 v2) — release bayrağı; pilot sonrası kaldırılacak. */
@@ -171,6 +180,33 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Kuruluş önerisi destek süresi (gün)",
     labelEn: "Formation proposal support window (days)",
   },
+  [TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS]: {
+    kind: "integer",
+    defaultValue: 14,
+    min: 3,
+    max: 60,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Danışman davet geçerlilik süresi (gün)",
+    labelEn: "Advisor invitation validity (days)",
+  },
+  [TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT]: {
+    kind: "integer",
+    defaultValue: 50,
+    min: 1,
+    max: 100,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Genel kurul yeter sayısı (onaylı üye %)",
+    labelEn: "General meeting quorum (approved member %)",
+  },
+  [TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT]: {
+    kind: "integer",
+    defaultValue: 50,
+    min: 1,
+    max: 100,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Genel kurul karar çoğunluğu (katılan üye %)",
+    labelEn: "General meeting decision majority (attendee %)",
+  },
   [TenantSettingKey.UNIVERSITY_EXPORT_ENABLED]: {
     kind: "boolean",
     defaultValue: false,
@@ -196,13 +232,20 @@ export function isTenantSettingKey(key: string): key is TenantSettingKey {
   return key in TENANT_SETTING_CATALOG;
 }
 
+export type TenantSettingStoredValue =
+  | number
+  | string[]
+  | boolean
+  | ApplicationReviewChecklistItemDef[]
+  | ApprovalChainStep[];
+
 export function parseTenantSettingValue(
   key: TenantSettingKey,
   raw: unknown
-): number | string[] | boolean | ApplicationReviewChecklistItemDef[] | null {
+): TenantSettingStoredValue | null {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
-    return parseApprovalChain(raw);
+    return parseApprovalChainSteps(raw);
   }
   if (def.kind === "checklist") {
     return parseReviewChecklist(raw);
@@ -218,13 +261,14 @@ export function parseTenantSettingValue(
 
 export function tenantSettingDefaultEquals(
   key: TenantSettingKey,
-  value: number | string[] | boolean | ApplicationReviewChecklistItemDef[]
+  value: TenantSettingStoredValue
 ): boolean {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
-    const defaults = def.defaultValue;
-    const candidate = value as string[];
-    return defaults.length === candidate.length && defaults.every((v, i) => v === candidate[i]);
+    const defaults = parseApprovalChainSteps(def.defaultValue);
+    const candidate = value as ApprovalChainStep[];
+    if (!defaults) return false;
+    return approvalChainStepsEqual(defaults, candidate);
   }
   if (def.kind === "checklist") {
     return reviewChecklistEquals(def.defaultValue, value as ApplicationReviewChecklistItemDef[]);
@@ -237,12 +281,15 @@ export interface ResolvedTenantSettings {
   clubPinnedAnnouncementsMax: number;
   universityPinnedAnnouncementsMax: number;
   universityAnnouncementPublishPerHour: number;
-  clubApplicationApprovalChain: string[];
+  clubApplicationApprovalChain: ApprovalChainStep[];
   clubApplicationReviewChecklist: ApplicationReviewChecklistItemDef[];
   clubApplicationRequireChecklistForApproval: boolean;
   clubApplicationAppealPeriodDays: number;
   clubFormationSupportThreshold: number;
   clubFormationProposalExpiryDays: number;
+  clubAdvisorInvitationExpiryDays: number;
+  clubGeneralMeetingQuorumPercent: number;
+  clubGeneralMeetingMajorityPercent: number;
   universityExportEnabled: boolean;
   universityExportPdfEnabled: boolean;
 }
@@ -255,7 +302,7 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX].defaultValue as number,
     universityAnnouncementPublishPerHour:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR].defaultValue as number,
-    clubApplicationApprovalChain: [...DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN],
+    clubApplicationApprovalChain: parseApprovalChainSteps(DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN)!,
     clubApplicationReviewChecklist: [...DEFAULT_APPLICATION_REVIEW_CHECKLIST],
     clubApplicationRequireChecklistForApproval:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL]
@@ -266,6 +313,12 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD].defaultValue as number,
     clubFormationProposalExpiryDays:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS].defaultValue as number,
+    clubAdvisorInvitationExpiryDays:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS].defaultValue as number,
+    clubGeneralMeetingQuorumPercent:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT].defaultValue as number,
+    clubGeneralMeetingMajorityPercent:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT].defaultValue as number,
     universityExportEnabled:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED].defaultValue as boolean,
     universityExportPdfEnabled:
@@ -274,9 +327,7 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
 }
 
 export function mergeOverridesIntoResolved(
-  overrides: Partial<
-    Record<TenantSettingKey, number | string[] | boolean | ApplicationReviewChecklistItemDef[]>
-  >
+  overrides: Partial<Record<TenantSettingKey, TenantSettingStoredValue>>
 ): ResolvedTenantSettings {
   const defaults = buildDefaultResolvedSettings();
   return {
@@ -290,7 +341,7 @@ export function mergeOverridesIntoResolved(
       (overrides[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR] as number | undefined) ??
       defaults.universityAnnouncementPublishPerHour,
     clubApplicationApprovalChain:
-      (overrides[TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN] as string[] | undefined) ??
+      (overrides[TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN] as ApprovalChainStep[] | undefined) ??
       defaults.clubApplicationApprovalChain,
     clubApplicationReviewChecklist:
       (overrides[TenantSettingKey.CLUB_APPLICATION_REVIEW_CHECKLIST] as
@@ -308,6 +359,15 @@ export function mergeOverridesIntoResolved(
     clubFormationProposalExpiryDays:
       (overrides[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS] as number | undefined) ??
       defaults.clubFormationProposalExpiryDays,
+    clubAdvisorInvitationExpiryDays:
+      (overrides[TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS] as number | undefined) ??
+      defaults.clubAdvisorInvitationExpiryDays,
+    clubGeneralMeetingQuorumPercent:
+      (overrides[TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT] as number | undefined) ??
+      defaults.clubGeneralMeetingQuorumPercent,
+    clubGeneralMeetingMajorityPercent:
+      (overrides[TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT] as number | undefined) ??
+      defaults.clubGeneralMeetingMajorityPercent,
     universityExportEnabled:
       (overrides[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED] as boolean | undefined) ??
       defaults.universityExportEnabled,
@@ -320,7 +380,7 @@ export function mergeOverridesIntoResolved(
 export function getResolvedSettingValue(
   resolved: ResolvedTenantSettings,
   key: TenantSettingKey
-): number | string[] | boolean | ApplicationReviewChecklistItemDef[] {
+): TenantSettingStoredValue {
   switch (key) {
     case TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX:
       return resolved.clubPinnedAnnouncementsMax;
@@ -340,6 +400,12 @@ export function getResolvedSettingValue(
       return resolved.clubFormationSupportThreshold;
     case TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS:
       return resolved.clubFormationProposalExpiryDays;
+    case TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS:
+      return resolved.clubAdvisorInvitationExpiryDays;
+    case TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT:
+      return resolved.clubGeneralMeetingQuorumPercent;
+    case TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT:
+      return resolved.clubGeneralMeetingMajorityPercent;
     case TenantSettingKey.UNIVERSITY_EXPORT_ENABLED:
       return resolved.universityExportEnabled;
     case TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED:

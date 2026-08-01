@@ -13,7 +13,7 @@ import {
 } from "../../db/schema";
 import { BaseRepository, type Database } from "../../core/db";
 import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
-import { buildApprovalInsertRows, parseApprovalChain, DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN, type ApprovalChainRoleToken } from "./club-application-chain.core";
+import { buildApprovalInsertRows, parseApprovalChainSteps, DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN, type ApprovalChainStep } from "./club-application-chain.core";
 import {
   CreateClubApplicationPayload,
   CreateContactLinkPayload,
@@ -53,9 +53,12 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     return this.query!.findFirst({
       where: { id: clubId, universityId },
       with: {
-        advisors: true,
+        clubAdvisors: {
+          where: { leftAt: { isNull: true } },
+          with: { user: true },
+        },
         clubMembers: {
-          where: { status: "approved" },
+          where: { status: "approved", leftAt: { isNull: true } },
           with: { user: true },
         },
         contactLinks: true,
@@ -73,9 +76,12 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     return this.query!.findFirst({
       where: { id: clubId },
       with: {
-        advisors: true,
+        clubAdvisors: {
+          where: { leftAt: { isNull: true } },
+          with: { user: true },
+        },
         clubMembers: {
-          where: { status: "approved" },
+          where: { status: "approved", leftAt: { isNull: true } },
           with: { user: true },
         },
         contactLinks: true,
@@ -241,7 +247,9 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
    */
   async createApplication(universityId: string, applicantId: string, data: CreateClubApplicationPayload) {
     const settings = await getTenantSettings(universityId);
-    const chain = parseApprovalChain(settings.clubApplicationApprovalChain) ?? DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN;
+    const chain =
+      parseApprovalChainSteps(settings.clubApplicationApprovalChain) ??
+      parseApprovalChainSteps(DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN)!;
 
     return this.transaction(async (_repo, tx) =>
       this.insertApplicationWithApprovals(tx, universityId, applicantId, data, chain)
@@ -254,7 +262,7 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     universityId: string,
     applicantId: string,
     data: CreateClubApplicationPayload,
-    chain: ApprovalChainRoleToken[]
+    chain: ApprovalChainStep[]
   ) {
     const approvalRows = buildApprovalInsertRows(chain);
 
@@ -270,6 +278,8 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
       approvalRows.map((row) => ({
         applicationId: application.id,
         step: row.step,
+        stepKind: row.stepKind,
+        committeeId: row.committeeId,
         approverRole: row.approverRole,
         status: row.status,
       }))
@@ -564,8 +574,8 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
 
       const settings = await getTenantSettings(universityId);
       const chain =
-        parseApprovalChain(settings.clubApplicationApprovalChain) ??
-        DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN;
+        parseApprovalChainSteps(settings.clubApplicationApprovalChain) ??
+        parseApprovalChainSteps(DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN)!;
 
       const application = await this.insertApplicationWithApprovals(
         tx,

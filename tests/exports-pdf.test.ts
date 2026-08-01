@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { login, me, reqAuth, data, get } from "./helpers";
 import { db } from "../src/db";
 import { TenantSettingKey } from "../src/features/tenant-settings/tenant-settings.catalog";
+import { antalyaTechClubId } from "./tenant-test-helpers";
 
 function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -58,6 +59,7 @@ describe("PDF resmî belgeler (/api/universities/:id/exports)", () => {
     const ids = catalog.map((r) => r.id);
     expect(ids).toContain("annual-activity-report");
     expect(ids).toContain("application-decision-minutes");
+    expect(ids).toContain("general-meeting-minutes");
     expect(catalog.find((r) => r.id === "clubs")?.format).toBe("xlsx");
     expect(catalog.find((r) => r.id === "annual-activity-report")?.format).toBe("pdf");
   });
@@ -91,6 +93,44 @@ describe("PDF resmî belgeler (/api/universities/:id/exports)", () => {
     const raw = Buffer.from(bytes).toString("latin1");
     expect(raw).toContain("DejaVuSans");
     expect(bytes.length).toBeGreaterThan(2000);
+  });
+
+  it("genel kurul tutanağı → %PDF- ve gömülü font", async () => {
+    const clubId = await antalyaTechClubId();
+    const meeting = await db.query.clubGeneralMeetings.findFirst({
+      where: { universityId: antalyaUni, clubId },
+      columns: { id: true },
+    });
+    expect(meeting?.id).toBeTruthy();
+
+    const res = await exportPost(antalyaUni, "general-meeting-minutes", sks, {
+      meetingId: meeting!.id,
+    });
+    expect(res.status).toBe(200);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe("%PDF-");
+    const raw = Buffer.from(bytes).toString("latin1");
+    expect(raw).toContain("DejaVuSans");
+    expect(bytes.length).toBeGreaterThan(2000);
+  });
+
+  it("genel kurul tutanağı → aynı meetingId ile iki üretim aynı SHA-256", async () => {
+    const clubId = await antalyaTechClubId();
+    const meeting = await db.query.clubGeneralMeetings.findFirst({
+      where: { universityId: antalyaUni, clubId },
+      columns: { id: true },
+    });
+    expect(meeting?.id).toBeTruthy();
+
+    const body = { meetingId: meeting!.id };
+    const res1 = await exportPost(antalyaUni, "general-meeting-minutes", sks, body);
+    const res2 = await exportPost(antalyaUni, "general-meeting-minutes", sks, body);
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+
+    const hash1 = sha256(new Uint8Array(await res1.arrayBuffer()));
+    const hash2 = sha256(new Uint8Array(await res2.arrayBuffer()));
+    expect(hash1).toBe(hash2);
   });
 
   it("aynı parametrelerle iki PDF üretimi → aynı SHA-256", async () => {
@@ -173,6 +213,20 @@ describe("PDF resmî belgeler (/api/universities/:id/exports)", () => {
 
     const res = await exportPost(antalyaUni, "application-decision-minutes", sks, {
       applicationId: egeApp!.id,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("başka tenant genel kurul kimliği → 404", async () => {
+    const clubId = await antalyaTechClubId();
+    const meeting = await db.query.clubGeneralMeetings.findFirst({
+      where: { universityId: antalyaUni, clubId },
+      columns: { id: true },
+    });
+    expect(meeting?.id).toBeTruthy();
+
+    const res = await exportPost(egeUni, "general-meeting-minutes", egeSks, {
+      meetingId: meeting!.id,
     });
     expect(res.status).toBe(404);
   });

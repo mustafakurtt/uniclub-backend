@@ -6,6 +6,14 @@ import type { ApplicationReviewChecklistItemDef } from "./application-review-che
 import { clubApplicationReviewRepository } from "./club-application-review.repository";
 import { canActorDecideApprovalStep } from "./club-application-chain";
 
+/** Öğrenciye gösterilebilir olay türleri — SKS iç iş akışı ve itiraz denetimi hariç. */
+const STUDENT_VISIBLE_APPLICATION_EVENT_TYPES = new Set([
+  "revision_requested",
+  "resubmitted",
+  "approved",
+  "rejected",
+]);
+
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
@@ -325,6 +333,45 @@ export const clubApplicationReviewService = {
       appealDeadline: appealState.appealDeadline,
       canAppeal: appealState.canAppeal,
       appeal: appealState.appeal,
+    };
+  },
+
+  /**
+   * Başvuranın kendi başvuru süreç geçmişi — admin geçmişinden farklı, sınırlı DTO.
+   */
+  async getApplicantApplicationHistory(applicantId: string, applicationId: string) {
+    const application = await clubApplicationReviewRepository.findApplicationByApplicant(
+      applicantId,
+      applicationId
+    );
+    if (!application) {
+      throw notFound("club.applicationNotFound");
+    }
+
+    const events = await clubApplicationReviewRepository.findApplicationEvents(applicationId);
+    const visible = events.filter((e) => STUDENT_VISIBLE_APPLICATION_EVENT_TYPES.has(e.eventType));
+
+    return {
+      applicationId,
+      events: visible.map((event) => {
+        const base = {
+          id: event.id,
+          eventType: event.eventType,
+          step: event.step,
+          createdAt: event.createdAt,
+        };
+        if (event.eventType === "revision_requested" || event.eventType === "rejected") {
+          return { ...base, note: event.note };
+        }
+        if (event.eventType === "resubmitted") {
+          return {
+            ...base,
+            proposedName: event.proposedName,
+            description: event.description,
+          };
+        }
+        return base;
+      }),
     };
   },
 };

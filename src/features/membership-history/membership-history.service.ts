@@ -43,7 +43,8 @@ export const membershipHistoryService = {
     universityId: string,
     previousRole: "member" | "officer" | "president",
     role: "member" | "officer" | "president",
-    actorId: string
+    actorId: string,
+    academicTermId?: string | null
   ) {
     return this.record({
       clubId,
@@ -53,6 +54,7 @@ export const membershipHistoryService = {
       previousRole,
       role,
       actorId,
+      academicTermId,
     });
   },
 

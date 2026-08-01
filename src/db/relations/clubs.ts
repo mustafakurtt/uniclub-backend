@@ -27,6 +27,9 @@ export const clubsRelations = (r: RelationHelpers) => ({
     // Diğer bağlı veriler
     clubMembers: r.many.clubMembers(),
     clubAdvisors: r.many.clubAdvisors(),
+    advisorInvitations: r.many.clubAdvisorInvitations(),
+    generalMeetings: r.many.clubGeneralMeetings(),
+    boardMemberships: r.many.clubBoardMemberships(),
     contactLinks: r.many.clubContactLinks(),
     gallery: r.many.clubGallery(),
     announcements: r.many.announcements(),

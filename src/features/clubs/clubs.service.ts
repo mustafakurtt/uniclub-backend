@@ -15,6 +15,7 @@ import { clubsCache, clubEffects } from "./clubs.cache";
 import { findRevisionRequestedStep } from "./club-application-chain.core";
 import { clubApplicationReviewService } from "./club-application-review.service";
 import { membershipHistoryService } from "../membership-history/membership-history.service";
+import { clubApplicationCommitteeService } from "./club-application-committee.service";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -34,9 +35,13 @@ export const clubsService = {
     if (!club || club.universityId !== universityId) {
       throw notFound("club.notFound");
     }
+    const { clubAdvisors, ...rest } = club;
     return {
-      ...club,
-      advisors: club.advisors.map(toSafeUser),
+      ...rest,
+      advisors: clubAdvisors
+        .filter((a) => a.user)
+        .map((a) => toSafeUser(a.user!)),
+      advisorVacant: clubAdvisors.length === 0,
       clubMembers: club.clubMembers
         .filter((m) => m.user)
         .map((m) => ({ ...m, user: toSafeUser(m.user!) })),
@@ -87,6 +92,7 @@ export const clubsService = {
     }
 
     const application = await clubsRepository.createApplication(universityId, applicantId, data);
+    await clubApplicationCommitteeService.notifyIfCurrentStepIsCommittee(universityId, application.id);
     return { ...application, kind: "application" as const };
   },
 
@@ -167,6 +173,10 @@ export const clubsService = {
           applicationId: result.application.id,
         },
       });
+      await clubApplicationCommitteeService.notifyIfCurrentStepIsCommittee(
+        universityId,
+        result.application.id
+      );
     }
 
     return {
@@ -215,12 +225,27 @@ export const clubsService = {
       application.appeal
     );
 
+    const mappedApprovals = application.approvals.map((a) => ({
+      step: a.step,
+      stepKind: a.stepKind,
+      committeeId: a.committeeId,
+      approverRole: a.approverRole,
+      status: a.status,
+      note: a.note,
+      reviewedAt: a.reviewedAt,
+      approver: a.approver ? toSafeUser(a.approver) : null,
+    }));
+    const approvalsWithTally = await clubApplicationCommitteeService.enrichApprovalsWithCommitteeTally(
+      application.universityId,
+      applicationId,
+      mappedApprovals,
+      applicantId,
+      true
+    );
+
     return {
       ...application,
-      approvals: application.approvals.map((a) => ({
-        ...a,
-        approver: a.approver ? toSafeUser(a.approver) : null,
-      })),
+      approvals: approvalsWithTally,
       revisionRequest: revisionApproval
         ? {
             step: revisionApproval.step,

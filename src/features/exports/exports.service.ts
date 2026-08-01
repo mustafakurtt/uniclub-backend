@@ -10,12 +10,14 @@ import {
   applicationDecisionMinutesParamsSchema,
   clubMembersExportParamsSchema,
   clubsExportParamsSchema,
+  generalMeetingMinutesParamsSchema,
   type ActivitiesExportParams,
   type AnnualActivityReportParams,
   type ApplicationDecisionMinutesParams,
   type ClubMembersExportParams,
   type ClubsExportParams,
   type ExportParams,
+  type GeneralMeetingMinutesParams,
 } from "./exports.schema";
 import { findReportDefinition, REPORT_CATALOG } from "./reports/report-catalog";
 import { formatApproverRoleLabel, formatDecisionLabel } from "./reports/pdf.renderer";
@@ -50,6 +52,9 @@ function summarizeParamsTr(reportId: string, params: ExportParams): string {
   } else if (reportId === "application-decision-minutes") {
     const p = params as ApplicationDecisionMinutesParams;
     parts.push(`başvuru=${p.applicationId}`);
+  } else if (reportId === "general-meeting-minutes") {
+    const p = params as GeneralMeetingMinutesParams;
+    parts.push(`toplantı=${p.meetingId}`);
   }
   return parts.length > 0 ? parts.join(", ") : "tüm kayıtlar";
 }
@@ -78,6 +83,9 @@ function summarizeParamsEn(reportId: string, params: ExportParams): string {
   } else if (reportId === "application-decision-minutes") {
     const p = params as ApplicationDecisionMinutesParams;
     parts.push(`application=${p.applicationId}`);
+  } else if (reportId === "general-meeting-minutes") {
+    const p = params as GeneralMeetingMinutesParams;
+    parts.push(`meeting=${p.meetingId}`);
   }
   return parts.length > 0 ? parts.join(", ") : "all records";
 }
@@ -108,6 +116,8 @@ function parseReportParams(reportId: string, body: unknown): ExportParams {
       return annualActivityReportParamsSchema.parse(body ?? {});
     case "application-decision-minutes":
       return applicationDecisionMinutesParamsSchema.parse(body ?? {});
+    case "general-meeting-minutes":
+      return generalMeetingMinutesParamsSchema.parse(body ?? {});
     default:
       throw notFound("exports.reportNotFound");
   }
@@ -159,6 +169,15 @@ async function fetchRows(
           note: row.note ?? null,
         })),
         metaExtras: { applicationMinutes: data.header },
+      };
+    }
+    case "general-meeting-minutes": {
+      const p = params as GeneralMeetingMinutesParams;
+      const data = await exportsRepository.fetchGeneralMeetingMinutes(universityId, p.meetingId);
+      if (!data) throw notFound("exports.meetingNotFound");
+      return {
+        rows: data.rows,
+        metaExtras: { generalMeetingMinutes: data.header },
       };
     }
     default:

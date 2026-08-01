@@ -88,6 +88,11 @@ küçük tenant'ta `notifyManySafe` istek içinde senkron kalır.
 - `academic_terms` — tenant kapsamlı (`university_id`); `name`, `startsAt`, `endsAt`, `status` (`open`/`closed`). Aktif dönem: `open` + bugün aralıkta. Çakışan aralıklar Postgres `EXCLUDE` (gist + `tstzrange`) ile reddedilir.
 - `club_membership_events` — append-only olaylar (`joined`, `role_changed`, `removed`, `left`, `join_rejected`); `club_members` güncel durumu tutmaya devam eder. `academic_term_id` → `onDelete: restrict` (dönem silme geçmiş veriye bağlıysa engellenir).
 - Migration backfill: onaylı ve `left_at IS NULL` üyelikler için `joined` olayı (`joined_at` damgasıyla).
+- `club_general_meetings` — genel kurul kaydı (`academic_term_id`, `held_at`, `location`, `meeting_type`, `decisions`); tenant kilidi `club_id` + `university_id`.
+- `club_general_meeting_attendees` — katılımcı üyeler (`meeting_id`, `user_id`).
+- `club_board_memberships` — yönetim/denetleme kurulu (`board_type`, `seat_type` asil/yedek, `title` unvan); `ended_at` NULL = aktif görev; seçim `general_meeting_id` ile bağlı.
+- `approval_committees` / `approval_committee_members` — tenant kapsamlı **kalıcı onay kurulları** (başvuruya özel değil); `club_application_approvals.step_kind = committee_majority` kademesi `committee_id` ile buraya bağlanır.
+- `club_application_committee_votes` — kurul oyları (upsert; karar kesinleşene kadar değiştirilebilir); salt çoğunluk üye tam sayısı üzerinden hesaplanır.
 
 ### 3.4 Medya varlıkları
 

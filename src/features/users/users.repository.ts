@@ -62,7 +62,7 @@ class UsersRepository extends BaseRepository<typeof users, typeof db.query.users
   /** Danışmanı olduğum kulüpler (advisor rolündeki personel için). */
   findAdvisedClubsByUser(userId: string) {
     return db.query.clubAdvisors.findMany({
-      where: { userId },
+      where: { userId, leftAt: { isNull: true } },
       with: { club: true },
     });
   }

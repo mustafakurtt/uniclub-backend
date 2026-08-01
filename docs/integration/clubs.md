@@ -148,6 +148,7 @@ Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı end
 |---|---|---|
 | POST | `/api/clubs/applications` | Yeni başvuru oluştur |
 | GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (onay adımlarıyla) |
+| GET | `/api/clubs/applications/:applicationId/history` | Kendi başvurumun süreç geçmişi (sınırlı DTO) |
 | PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 | GET | `/api/users/me/applications` | Tüm başvurularım (özet liste) |
@@ -164,6 +165,10 @@ Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı end
 
 Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulunamadı."`). Onay zinciri gömülüdür. `status: "revision_requested"` olduğunda `revisionRequest` alanı dolu:
 
+### 6.2b Süreç geçmişi — `GET /api/clubs/applications/:applicationId/history`
+
+Başvuran self-service; admin `.../club-applications/:id/history` uçundan **farklı DTO**. Öğrenciye yalnızca `revision_requested`, `resubmitted`, `approved`, `rejected` olayları; `checklist_updated` ve itiraz denetim olayları **yok**. İnceleyen kimliği (`actor`) ve iç kontrol listesi notları sızmasın.
+
 ```jsonc
 {
   "data": {
@@ -179,7 +184,7 @@ Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulun
 }
 ```
 
-`approvals`, genişletilebilir çok-adımlı onay zinciridir. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
+`approvals`, genişletilebilir çok-adımlı onay zinciridir. `stepKind: "committee_majority"` kademelerinde `committeeTally` gömülüdür — öğrenci yalnızca özet sayım ve kurul adını görür (`committeeName`, `memberCount`, `threshold`, `approveCount`, `rejectCount`, `notVotedCount`); **bireysel oylar (`votes`, `myVote`) yok**. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
 
 `status: "rejected"` olduğunda `rejectionReason`, `appealDeadline`, `canAppeal` ve (itiraz varsa) tam `appeal` nesnesi döner:
 
@@ -249,6 +254,10 @@ Yetki **global RBAC'tan değil kulüpteki rolden** gelir (`club.middleware`). Mi
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** |
 | GET | `/api/clubs/:clubId/membership-history` | **staff** (sayfalama + `academicTermId` filtresi) |
+| GET | `/api/clubs/:clubId/current-board` | **onaylı üye**: güncel yönetim/denetleme kurulu (unvan, asil/yedek) |
+| GET | `/api/clubs/:clubId/general-meetings` | **staff** (liste; `attendeeCount` dahil) |
+| GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff** |
+| POST | `/api/clubs/:clubId/general-meetings` | officer / başkan |
 
 ### 7.1 Bekleyen istekler — `GET /:clubId/join-requests`
 
@@ -288,6 +297,37 @@ Append-only `club_membership_events` tablosundan okur; `club_members` güncel du
 Query: `limit` (varsayılan 50), `cursor` (ISO `occurredAt`), `academicTermId` (opsiyonel filtre).
 
 `data.items[]`: `eventType` (`joined` | `role_changed` | `removed` | `left` | `join_rejected`), `role`, `previousRole`, `occurredAt`, `academicTerm`, `user`, `actor`.
+
+### 7.7 Genel kurul — `GET/POST /:clubId/general-meetings` (T1.6 temel)
+
+**Görünürlük ayrımı:** Güncel kurul künyesi (`GET /:clubId/current-board`) onaylı **kulüp üyelerine** açık; toplantı listesi, detay (alınan kararlar, katılımcı listesi) yalnızca **staff** (danışman / officer / başkan).
+
+`GET /:clubId/current-board` → `data.management` / `data.audit` altında `principal` ve `alternate` dizileri; her öğe `userId`, `boardType`, `seatType`, `title`, `user`.
+
+`GET /:clubId/general-meetings` liste öğelerinde `attendeeCount` (tek sorguda toplanır; detay çağrısı gerekmez).
+
+Karar organı kaydı: akademik dönem, tarih/saat, yer, tür (`ordinary` | `extraordinary`), alınan kararlar (serbest metin), katılımcı üyeler ve isteğe bağlı kurul seçimi.
+
+`POST` body:
+
+```jsonc
+{
+  "academicTermId": "uuid",
+  "meetingType": "ordinary",
+  "heldAt": "2026-03-15T14:00:00+03:00",
+  "location": "Salon A",
+  "decisions": "Yönetim ve denetleme kurulu seçildi.",
+  "attendeeUserIds": ["uuid", "..."],
+  "boardMembers": [
+    { "userId": "uuid", "boardType": "management", "seatType": "principal", "title": "president" },
+    { "userId": "uuid", "boardType": "audit", "seatType": "alternate", "title": "member" }
+  ]
+}
+```
+
+Kurul unvanları (`title`): `president`, `vice_president`, `secretary`, `treasurer`, `member` (denetim kurulu). `club_members.role` (`member`/`officer`/`president`) ayrı katman; yönetim kurulu başkanı seçimi kulüp başkan rolünü senkronlar ve `club_membership_events`'e `role_changed` düşer. `transfer-presidency` ayrı akış olarak kalır.
+
+Yeter sayı tenant ayarı `club.general_meeting.quorum_percent` (onaylı üye yüzdesi); katılımcı sayısı altında `400`.
 
 ---
 
@@ -355,12 +395,29 @@ Ayrıntılı yaşam döngüsü, görünürlük ve bildirim kuralları: [announce
 
 ## 10. Danışman (advisor) Akışı
 
-Danışman = global `advisor` rolü + bir kulübe `clubAdvisors` ile atanmış kişi. Danışmanı olduğu kulüpte "staff" sayılır:
+Danışman = global `advisor` rolü + bir kulübe **kabul edilmiş** `clubAdvisors` kaydı. Atama doğrudan yapılmaz — **davet → kabul/ret** (muvafakatname ilkesi).
 
-- **`GET /api/users/me/advised-clubs`** — danışmanı olduğum kulüpler (gömülü `club`).
-- Danışmanı olduğu kulübe **duyuru/galeri girebilir**, **üyelik isteklerini ve üyeleri görüntüleyebilir**.
-- Danışman **karar mercii değildir**: üyelik isteğini onaylamak, üye çıkarmak, rol atamak, profili düzenlemek officer/başkanın işidir.
-- Danışman ataması `clubAdvisors` üzerindendir; danışman kulübün "üyesi" (`clubMembers`) DEĞİLDİR — bu yüzden `GET /users/me/clubs` içinde görünmez, `advised-clubs`'ta görünür.
+**Davet (admin/SKS — `club.advisor.manage`):**
+- `POST .../clubs/:clubId/advisors` → davet oluşturur (`{ userId, message? }`); kabul edilene kadar kulüpte danışman **yok**.
+- `GET .../clubs/:clubId/advisor-invitations` → bekleyen davetler.
+- `DELETE .../advisor-invitations/:invitationId` → bekleyen daveti iptal.
+
+**Yanıt (danışman — self-service):**
+- `GET /api/users/me/advisor-invitations` → bekleyen davetlerim.
+- `PATCH /api/users/me/advisor-invitations/:id/accept` → kabul → `clubAdvisors` satırı oluşur.
+- `PATCH /api/users/me/advisor-invitations/:id/decline` → ret (`{ reason }` zorunlu).
+- `POST /api/users/me/advised-clubs/:clubId/withdraw` → danışmanlıktan çekilme (`{ reason }`).
+
+Süre: tenant `club.advisor.invitation_expiry_days` (varsayılan **14 gün** — başvuru itiraz süresiyle aynı ölçek; akademik personelin yoğun dönemde yanıt vermesi için). Süre dolan davet `expired` olur ve yanıtlanamaz.
+
+Kulüp detayında `advisorVacant: true` — aktif danışman yoksa görünür (sessiz boşluk yok).
+
+Danışmanı olduğu kulüpte "staff" sayılır:
+- **`GET /api/users/me/advised-clubs`** — aktif danışmanlıklarım.
+- Duyuru/galeri, üyelik istekleri/üyeler görüntüleme — evet.
+- Üyelik onayı, rol, profil düzenleme — **hayır** (officer/başkan).
+
+**Uygunluk:** hedef `advisor` global rolü (staff e-posta domaini); akademik **ve idari** personel kapsanır — rol adı "hoca" olsa da kısıtlama domain düzeyinde `staff`/`student` ayrımıdır.
 
 ---
 
@@ -376,14 +433,16 @@ Danışman = global `advisor` rolü + bir kulübe `clubAdvisors` ile atanmış k
 | GET | `.../clubs?status=` | `club.update` | Kulüpleri listele (tüm durumlar) |
 | PATCH | `.../clubs/:clubId/status` | `club.update` | Durum güncelle (`pending/approved/rejected/archived`) |
 | PATCH | `.../clubs/:clubId` | `club.update` | Profili güncelle (ad/açıklama/logo/kapak/joinPolicy) |
-| GET | `.../clubs/:clubId/advisors` | `club.advisor.manage` | Danışmanları listele |
-| POST | `.../clubs/:clubId/advisors` | `club.advisor.manage` | Danışman ata (`{ userId }`) |
-| DELETE | `.../clubs/:clubId/advisors/:userId` | `club.advisor.manage` | Danışman kaldır |
+| GET | `.../clubs/:clubId/advisors` | `club.view` | Aktif danışmanları listele |
+| POST | `.../clubs/:clubId/advisors` | `club.advisor.manage` | Danışman **davet** (`{ userId, message? }`) |
+| GET | `.../clubs/:clubId/advisor-invitations` | `club.advisor.manage` | Bekleyen davetler |
+| DELETE | `.../advisor-invitations/:invitationId` | `club.advisor.manage` | Daveti iptal |
+| DELETE | `.../clubs/:clubId/advisors/:userId` | `club.advisor.manage` | Danışmanı zorla kaldır |
 | DELETE | `.../clubs/:clubId` | `club.delete` | Kulübü **kalıcı sil** (önce archived/rejected olmalı) |
 
 Notlar:
 - **Başvuru onayı** benzersiz slug üretir; başvuran `president` + `approved` üye olur (bkz. `admin.repository.decideClubApplication`). Zaten değerlendirilmiş başvuru → `400 "Bu başvuru zaten değerlendirilmiş."`.
-- **Danışman atama** hedefin `advisor` rolü olmasını şart koşar → yoksa `400 "Danışman olarak yalnızca 'advisor' rolündeki personel atanabilir."`. Ayrıca hedef aynı üniversiteden olmalı.
+- **Danışman daveti** hedefin `advisor` rolü olmasını şart koşar; kabul edilene kadar danışman sayılmaz. Bildirimler opt-out edilemez (kurumsal tebligat).
 - **Kulüp silme** yıkıcıdır: bağlı üyeler/danışmanlar/linkler/duyurular/galeri tek transaction'da temizlenir. Aktif kulüp silinmez → `400 "Yalnızca arşivlenmiş veya reddedilmiş kulüpler silinebilir. Önce kulübü arşivleyin."`.
 
 ---

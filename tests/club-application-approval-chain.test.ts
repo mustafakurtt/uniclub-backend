@@ -1,20 +1,25 @@
 /**
  * Kulüp başvuru onay zinciri (T4.2) — tek/çok kademe, sıra, yetki, bildirim, tenant izolasyonu.
  */
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { app, login, me, reqAuth } from "./helpers";
+import { login, me, reqAuth } from "./helpers";
 import { db } from "../src/db";
 import {
   clubApplicationApprovals,
   notifications,
 } from "../src/db/schema";
+import {
+  restoreAntalyaSeedFormationThreshold,
+  restoreKartekSeedFormationThreshold,
+  setTenantFormationThreshold,
+} from "./tenant-test-helpers";
 
 const patch = (path: string, token: string, body?: unknown) =>
   reqAuth("PATCH", path, token, body);
 
 describe("kulüp başvuru onay zinciri", () => {
-  describe("tek kademe (Antalya — varsayılan club_approver)", () => {
+  describe("committee_majority (Antalya — seed zinciri)", () => {
     let admin: string;
     let uni: string;
     let applicantId: string;
@@ -23,12 +28,13 @@ describe("kulüp başvuru onay zinciri", () => {
     beforeAll(async () => {
       admin = await login("elif.demir@antalya.edu.tr");
       uni = (await me(admin)).universityId as string;
+      await setTenantFormationThreshold(uni, 0, (await me(admin)).userId as string);
       const burak = await login("burak.demirci@std.antalya.edu.tr");
       applicantId = (await me(burak)).userId;
 
       const createRes = await reqAuth("POST", "/api/clubs/applications", burak, {
         proposedName: `Zincir Test ${Date.now()}`,
-        description: "Tek kademe onay testi.",
+        description: "Kurul kademesi onay testi.",
       });
       expect(createRes.status).toBe(201);
       applicationId = (await createRes.json()).data.id as string;
@@ -38,53 +44,21 @@ describe("kulüp başvuru onay zinciri", () => {
         .from(clubApplicationApprovals)
         .where(eq(clubApplicationApprovals.applicationId, applicationId));
       expect(approvals.length).toBe(1);
-      expect(approvals[0].approverRole).toBe("club_approver");
+      expect(approvals[0].stepKind).toBe("committee_majority");
+      expect(approvals[0].committeeId).toBeTruthy();
     });
 
-    it("onay → approved; ret → rejected + gerekçe zorunlu", async () => {
+    it("kurul kademesinde doğrudan ret → committee-vote gerekir", async () => {
       const rejectRes = await patch(
         `/api/admin/universities/${uni}/club-applications/${applicationId}/reject`,
         admin,
-        { note: "Tek kademe ret test gerekçesi yeterli uzunlukta." }
+        { note: "Kurul kademesi ret test gerekçesi yeterli uzunlukta." }
       );
-      expect(rejectRes.status).toBe(200);
-      const appRow = await db.query.clubApplications.findFirst({
-        where: { id: applicationId },
-      });
-      expect(appRow?.status).toBe("rejected");
+      expect(rejectRes.status).toBe(400);
     });
 
-    it("eski tek adım advisor approverRole — university_admin karar verebilir", async () => {
-      const pending = await db.query.clubApplications.findFirst({
-        where: { universityId: uni, status: "pending" },
-      });
-      if (!pending) throw new Error("seed: bekleyen başvuru yok");
-
-      await db
-        .update(clubApplicationApprovals)
-        .set({ approverRole: "advisor" })
-        .where(eq(clubApplicationApprovals.applicationId, pending.id));
-
-      expect(
-        (await patch(
-          `/api/admin/universities/${uni}/club-applications/${pending.id}/approve`,
-          admin
-        )).status
-      ).toBe(200);
-    });
-
-    it("yanlış roldeki öğrenci karar veremez", async () => {
-      const selin = await login("selin.koc@std.antalya.edu.tr");
-      const uniId = (await me(selin)).universityId as string;
-      const createRes = await reqAuth("POST", "/api/clubs/applications", selin, {
-        proposedName: `Öğrenci Ret ${Date.now()}`,
-        description: "Yetki testi.",
-      });
-      expect(createRes.status).toBe(201);
-      const id = (await createRes.json()).data.id as string;
-      expect(
-        (await patch(`/api/admin/universities/${uniId}/club-applications/${id}/approve`, selin)).status
-      ).toBe(403);
+    afterAll(async () => {
+      await restoreAntalyaSeedFormationThreshold(uni, (await me(admin)).userId as string);
     });
   });
 
@@ -203,13 +177,11 @@ describe("kulüp başvuru onay zinciri", () => {
     it("Antalya zinciri Ege başvurusunu etkilemez", async () => {
       const elif = await login("elif.demir@antalya.edu.tr");
       const antalyaUni = (await me(elif)).universityId as string;
-      const ayse = await login("ayse.yilmaz@std.antalya.edu.tr");
-      const createRes = await reqAuth("POST", "/api/clubs/applications", ayse, {
-        proposedName: `Tenant A ${Date.now()}`,
-        description: "Tenant izolasyonu.",
+      const pendingApp = await db.query.clubApplications.findFirst({
+        where: { proposedName: "Doğa Yürüyüşü Kulübü", universityId: antalyaUni, status: "pending" },
       });
-      expect(createRes.status).toBe(201);
-      const antalyaAppId = (await createRes.json()).data.id as string;
+      if (!pendingApp) throw new Error("seed: Doğa Yürüyüşü başvurusu yok");
+      const antalyaAppId = pendingApp.id;
 
       const egeAdmin = await login("okan.yildiz@egebilim.edu.tr");
       const egeUni = (await me(egeAdmin)).universityId as string;
@@ -228,15 +200,63 @@ describe("kulüp başvuru onay zinciri", () => {
         .from(clubApplicationApprovals)
         .where(eq(clubApplicationApprovals.applicationId, antalyaAppId));
       expect(approvals[0].status).toBe("pending");
+    });
+  });
 
+  describe("tek kademe (Karadeniz — varsayılan club_approver)", () => {
+    let admin: string;
+    let uni: string;
+    let applicationId: string;
+
+    beforeAll(async () => {
+      admin = await login("hulya.ozkan@kartek.edu.tr");
+      uni = (await me(admin)).universityId as string;
+      await setTenantFormationThreshold(uni, 0, (await me(admin)).userId as string);
+      const hakan = await login("hakan.turan@std.kartek.edu.tr");
+
+      const createRes = await reqAuth("POST", "/api/clubs/applications", hakan, {
+        proposedName: `Tek Kademe ${Date.now()}`,
+        description: "Tek kademe onay testi.",
+      });
+      expect(createRes.status).toBe(201);
+      applicationId = (await createRes.json()).data.id as string;
+
+      const approvals = await db
+        .select()
+        .from(clubApplicationApprovals)
+        .where(eq(clubApplicationApprovals.applicationId, applicationId));
+      expect(approvals.length).toBe(1);
+      expect(approvals[0].approverRole).toBe("club_approver");
+    });
+
+    afterAll(async () => {
+      await restoreKartekSeedFormationThreshold(uni, (await me(admin)).userId as string);
+    });
+
+    it("onay → approved; ret → rejected + gerekçe zorunlu", async () => {
+      const rejectRes = await patch(
+        `/api/admin/universities/${uni}/club-applications/${applicationId}/reject`,
+        admin,
+        { note: "Tek kademe ret test gerekçesi yeterli uzunlukta." }
+      );
+      expect(rejectRes.status).toBe(200);
+      const appRow = await db.query.clubApplications.findFirst({
+        where: { id: applicationId },
+      });
+      expect(appRow?.status).toBe("rejected");
+    });
+
+    it("yanlış roldeki öğrenci karar veremez", async () => {
+      const hakan = await login("hakan.turan@std.kartek.edu.tr");
+      const createRes = await reqAuth("POST", "/api/clubs/applications", hakan, {
+        proposedName: `Öğrenci Ret ${Date.now()}`,
+        description: "Yetki testi.",
+      });
+      expect(createRes.status).toBe(201);
+      const id = (await createRes.json()).data.id as string;
       expect(
-        (
-          await patch(
-            `/api/admin/universities/${antalyaUni}/club-applications/${antalyaAppId}/approve`,
-            elif
-          )
-        ).status
-      ).toBe(200);
+        (await patch(`/api/admin/universities/${uni}/club-applications/${id}/approve`, hakan)).status
+      ).toBe(403);
     });
   });
 });

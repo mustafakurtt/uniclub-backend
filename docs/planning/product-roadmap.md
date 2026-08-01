@@ -103,9 +103,47 @@ Akademik dönem yapısına bağlı (T9 → D1). Kulüp yönetimi her dönem/yıl
 
 ### T1.5 Üyelik derinleşmesi
 
-- Aidat takibi (opsiyonel, kuruma göre)
+- Aidat takibi (opsiyonel, kuruma göre — **Antalya Bilim'de var, Akdeniz'de yok**;
+  devlet üniversitesinde masrafı kurum karşıladığı için aidat kavramı yok)
 - Üyelik türleri (aktif/pasif/onursal)
-- Üyelikten çıkarma ve itiraz
+- Üyelikten çıkarma ve itiraz (**Konya'da çıkarma kararına Koordinatörlüğe itiraz
+  hakkı var**)
+- **Üyelikten ayrılma resmî kayıt üretmeli.** Bugün `leaveClub` sessizce siliyor;
+  Akdeniz'de ayrılma bir forma bağlı (Form 5). Küçük ama iz bırakmayan bir çıkış
+  denetlenemez.
+- **Üyelik dönemsel olabilir:** Antalya Bilim'de üyelik her akademik yıl yenileniyor.
+  Akademik dönem altyapısı (T9 → D1) hazır olduğu için artık modellenebilir.
+
+### T1.6 Topluluk organları ve genel kurul ★ — **araştırmadan doğdu**
+
+**Boşluk:** Modelimizde kulübün üyeleri ve başkanı var; **karar organı yok.**
+Oysa incelenen üç yönergenin **üçünde de** topluluğun karar organı **Genel Kurul**:
+yönetim ve denetleme kurulunu seçer, tüzüğü değiştirir, topluluğu feshedebilir.
+Akdeniz'de kuruluş bile *"kurulların oluşturulması ve bildirilmesiyle"* tamamlanıyor
+— genel kurul yapılmadan topluluk kurulmuş sayılmıyor.
+
+Bugün başkanlık devri bizde **bir buton**; gerçekte bir **seçim** ve iki tutanak
+(oy kullananlar listesi + seçim tutanağı).
+
+Kapsam:
+- **Genel kurul kaydı** bir varlık: tarih, saat, yer, katılanlar, alınan kararlar
+- **Seçim sonucu** → yönetim kurulu ve denetleme kurulu
+- **Asil / yedek üye ayrımı.** Üç bağımsız kaynakta çıktı (Akdeniz yönergesi
+  "5 asil + 5 yedek", Konya yönergesi "yedek üyeler dâhil", Akdeniz Form 6).
+  Bizde yok.
+- Kurul unvanları: **Başkan, Başkan Yardımcısı, Sekreter, Sayman** (Antalya
+  formlarından). Bugünkü `president/officer/member` yetersiz.
+- **Toplantı yeter sayısı ve karar çoğunluğu** kuruma göre değişiyor → tenant ayarı.
+  Akdeniz: salt çoğunlukla toplanır, ilk toplantıda yeter sayı yoksa iki gün sonra
+  çoğunluk aranmaz, oy eşitliğinde başkanın tarafı çoğunluk sayılır.
+- **Çıktı:** genel kurul ve yönetim kurulu **toplantı tutanağı** PDF'i.
+  Şablon elimizde (Akdeniz Form 6 ve 7) → T4.5'in doğal devamı.
+- Danışmanın "Uygundur" onayı bir **imza adımı** — T1.2 ile aynı yere bakıyor.
+
+**Bağımlılık:** T1.3 (devir teslim) buna dayanır — devir teslim zaten genel kurul
+seçimiyle oluyor. **T1.3'ten önce yapılmalı.**
+
+Kaynak: [research/yonergeler/](../research/yonergeler/karsilastirma.md)
 
 ---
 
@@ -145,6 +183,15 @@ Etkinlikte çok-üniversiteli co-host **bugün çalışıyor** (deliberate desig
 
 Gerçek üniversite operasyonunda etkinliğin en sık tıkandığı yer. Ürün buna
 girmezse kurum yine Excel'e döner.
+
+> ⚠️ **Araştırma bulgusu — bu bir "rezervasyon sistemi" değil.** Akdeniz'de
+> salonları **kurum tahsis ediyor**: adlandırılmış salonlar (Atatürk Konferans
+> Salonu, Olbia A/B, Sanat Galerisi…) ve rezervasyonu Kültür Hizmetleri Şube
+> Müdürlüğü **personeli** yapıyor; fakülte salonları için okul yönetimiyle
+> görüşüyor. Kulüp kendi rezerve etmiyor.
+> Doğru şekil: **talep → kurum tarafından tahsis**, takvim çakışması kurumun
+> görünürlüğünde. Kulübe doğrudan rezervasyon yetkisi vermek gerçek süreçle
+> çelişir. Kaynak: [research/yonergeler/akdeniz/](../research/yonergeler/akdeniz/bulgular.md)
 
 - Mekân envanteri (kapasite, donanım, sorumlu birim)
 - Rezervasyon talebi → onay → çakışma kontrolü
@@ -236,6 +283,27 @@ Kuruluş anketinden (T1.1) ayrı, genel amaçlı:
 - Etkinlik sonrası otomatik katılım belgesi
 - Rozet/başarım sistemi (oyunlaştırma — dozunda)
 
+### T3.6 Risk kabul beyanı ve katılım koşulları ★ — **araştırmadan doğdu**
+
+Akdeniz **Form 11**: katılımcı başına, **etkinlik başına** alınan sorumluluk
+feragatnamesi. Katılımcı; sakatlık, kayıp veya hasar durumunda organizatörlerin,
+topluluğun, yöneticilerin, görevlilerin, **sponsorların** ve temsilcilerin
+sorumlu tutulmayacağını, faaliyete **yeterli olduğunu** beyan ediyor.
+
+Kapsam (küçük ve izole):
+- Etkinlikte bayrak: *"risk beyanı gerekli"* (spor, gezi, atölye)
+- **RSVP akışında kapı** — beyan kabul edilmeden katılım kesinleşmez.
+  RSVP ve QR yoklama zaten var; beyan onların önüne bir adım ekliyor.
+- Kayıt: kim, ne zaman, **hangi metin sürümünü** kabul etti. **Sürüm izi şart** —
+  metin değişirse eski kabuller eski metni göstermeli; hukuki değer buradan gelir.
+  Kâğıt formda bu iz zaten yok, dijitalde bedavaya geliyor.
+- Beyan metni tenant'a göre değişir → tenant ayarı/şablonu
+
+**Açık soru:** Islak imza yerine dijital kabul hukuken geçer mi? Hukukçuya
+sorulmalı. Geçmese bile sistem "kim ne zaman neyi kabul etti"yi kanıtlayabilir.
+
+Kaynak: [research/yonergeler/akdeniz/formlar/](../research/yonergeler/akdeniz/formlar/bulgular.md)
+
 ---
 
 ## T4 — Kurumsal yönetim (SKS)
@@ -258,6 +326,19 @@ Bugün başvuru onay/ret ikilisi. Gerçek süreç çok adımlı:
 ### T4.2 Onay hiyerarşisi ve delegasyon
 
 **Durum:** v1 çok kademeli zincir uygulandı (tenant ayarı + sıra + yetki); vekâlet ve süre aşımı bekliyor.
+
+> ⚠️ **Araştırma bulgusu — onay şekli ikiye ayrılıyor.** İncelenen üç yönergede
+> iki farklı yapı çıktı:
+> - **Kurul oylaması:** Antalya Bilim (Koordinasyon Kurulu, 5 üye, salt çoğunluk) ·
+>   Akdeniz (Değerlendirme Kurulu, 3 üye)
+> - **Sıralı zincir:** Konya Teknik (SKS → Koordinatörlük, her kademe
+>   onay/düzeltme/ret)
+>
+> Bugünkü `club.application.approval_chain` yalnızca **zinciri** modelliyor —
+> yani üçte birini. Kurul modeli çoğunlukta. Gerekli olan: kademe **tipi**
+> (`role_sequential` | `committee_majority`) ve kurul için üye listesi, yeter
+> sayı, oy kaydı. **n=3 ile karar verilmedi; n=6-8'de netleşecek.**
+> Kaynak: [research/yonergeler/](../research/yonergeler/karsilastirma.md)
 
 - Çok kademeli onay (danışman → SKS uzmanı → SKS müdürü → dekanlık)
 - Kademe sayısı ve sırası **tenant ayarı** (`club.application.approval_chain`) — varsayılan tek kademe `club_approver`
@@ -304,7 +385,22 @@ SHA-256 karşılaştırmasıyla yapılır.
 - Kulübün bütçe talebi, SKS'nin tahsisi
 - Harcama belgesi yükleme ve onay
 - Dönem sonu mahsuplaşma
-- **Karar:** Muhasebe entegrasyonu mu, yalnızca takip mi? (§9)
+- ~~**Karar:** Muhasebe entegrasyonu mu, yalnızca takip mi?~~ → **cevaplandı:
+  takip yeterli.** Antalya Bilim kasa hesabı tutup yıl sonunda belge teslim ediyor;
+  Akdeniz 5018 sayılı kanuna tabi kurumsal bütçeden harcıyor. İkisinde de bizden
+  beklenen muhasebe değil, **belge ve onay izi**.
+
+> ⚠️ **Araştırma bulgusu — tek bütçe modeli yetmiyor.**
+> - **Vakıf (Antalya Bilim):** para **kulüpte**. Topluluk kendi kasa hesabını tutar,
+>   gelir/giderini belgeleyip yıl sonu raporuyla teslim eder. Aidat var.
+> - **Devlet (Akdeniz):** para **kurumda**. Harcamalar 5018 sayılı Kamu Mali
+>   Yönetimi Kanunu uyarınca yapılır; kırtasiye, kostüm, enstrüman, demirbaş,
+>   harcırah kurum bütçesinden karşılanır. **Aidat yok** — masrafı kurum karşılıyor.
+>   Tasarruf genelgeleriyle bazı alımlar yasaklanabiliyor.
+>
+> Bu bir sayı farkı değil, **iki ayrı akış**: birinde kulüp harcıyor ve belgeliyor,
+> diğerinde kulüp **talep ediyor** ve kurum harcıyor. Devlet/vakıf ayrımı başka
+> yerlerde de çıkacaktır. Kaynak: [research/yonergeler/](../research/yonergeler/karsilastirma.md)
 
 ### T4.7 Envanter/demirbaş
 
@@ -360,7 +456,15 @@ Her kurum farklı OBS kullanıyor → **adaptör mimarisi** şart:
 - KEP (Kayıtlı Elektronik Posta) ile resmî bildirim
 - EBYS (Elektronik Belge Yönetim Sistemi) entegrasyonu
 
-**Araştırılmalı:** Hangisi zorunlu, hangisi tercihe bağlı; kurumdan kuruma
+> ✅ **Araştırma bulgusu — EBYS en az bir kurumda ZORUNLU.** Akdeniz yönergesi
+> MADDE 10: kuruluş başvurusu *"akademik danışman tarafından **elektronik belge
+> yönetim sistemi üzerinden** Daire Başkanlığına sunulur."* Yani bu iz "belki
+> gerekir" değil, pilot bölgedeki büyük devlet üniversitesinde **süreç şartı**.
+>
+> Aynı yerde ikinci bulgu: kurucular başvuru formunu **ıslak imzalıyor**. Kurum
+> EBYS kullanıyor ama imza hâlâ kâğıtta — T1.1'in hedeflediği acı tam olarak bu.
+
+**Araştırılmalı:** e-imza ve KEP hangisinde zorunlu; kurumdan kuruma
 değişiyor olabilir (§9).
 
 ### T5.4 KVKK ve veri yönetişimi
@@ -860,6 +964,35 @@ milestone değildir.
 | **Frontend kim yazacak?** | **Tek kişi** — hem backend hem frontend, takım yok. Frontend'in bir kısmı mevcut. | Milestone'lar küçük tutulacak; her biri gösterilebilir bir hikâye üretecek |
 | **Transkript dayanağı?** | Bilinmiyor. | T3.3'e girmeden önce bakanlık/kurum dokümanları araştırılacak (aşağıda) |
 | **Bir özelliği tek kurumda pilot etmek için ayrı sunucu gerekir mi?** | **Hayır.** Tek kurulum, tenant bazlı bayrak. Ayrı kurulum yalnızca **veri ikameti** zorunluluğunda; o durumda bile kod aynı kalır. | T8.5 açıldı; `tenant_settings.editor` alanı yetkilendirme dikişi olarak kullanılacak |
+
+### Yönerge araştırması — cevaplananlar (2026-08-01, n=3)
+
+Üç yönerge incelendi: **Antalya Bilim** (vakıf, pilot ana okul), **Konya Teknik**
+(devlet, teknik), **Akdeniz** (devlet, büyük — pilot bölge). Tam tablo ve metinler:
+[research/yonergeler/](../research/yonergeler/karsilastirma.md).
+
+| Açık soru | Cevap |
+| --- | --- |
+| Bütçe: takip mi, muhasebe entegrasyonu mu? | **Takip yeterli** — ama iki ayrı akış var (T4.6) |
+| Sponsorluk nasıl işliyor? | Kulüp bulabiliyor; **sözleşme önceden kurum onayına** tabi (Antalya 1 hafta, Akdeniz bilgi) |
+| Mekân bizde mi, entegrasyon mu? | **Kurum tahsis ediyor** → talep/tahsis akışı (T2.4) |
+| Resmî belge zorunluluğu ne düzeyde? | **EBYS Akdeniz'de zorunlu**; ıslak imza hâlâ var (T5.3) |
+| Faaliyetsizlik nasıl tanımlanır? | **Sayısal** — Antalya: Genel Kurul yılda 1×; Konya: yılda 3 faaliyet |
+
+**Doğrulanan tasarımlar:** kurucu eşiği ayarı (8/15/50 — altı kat fark) ·
+"düzeltme isteme" adımı (Konya yönergesi birebir aynı üçlüyü yazıyor) ·
+danışman rızası (üç kurumda da belgeye bağlı) · üyeliğin akademik yıl bazlı olması.
+
+**Model boşlukları:** onay kurul oylaması olabiliyor (T4.2) · başvuran öğrenci
+olmayabilir, Akdeniz'de danışman başvuruyor · Genel Kurul kavramı yok (T1.6) ·
+yedek üye yok · risk kabul beyanı yok (T3.6) · deneme/geçici kuruluş yok ·
+afiş onayı ve marka kuralı yok · türe bağlı ek belge yok (film→telif,
+yurtdışı→davet yazısı).
+
+**Pazar sinyali:** İncelenen iki devlet üniversitesinin de **çalışan topluluk
+yazılımı var** (Konya "topluluk otomasyonu", Akdeniz `topluluk.akdeniz.edu.tr` —
+üye kaydı zorunlu olarak sistemden). Pazar teorik değil; rakip mevcut ve
+incelenmeli.
 
 ### Açık kalanlar
 

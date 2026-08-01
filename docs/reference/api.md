@@ -336,6 +336,7 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 |---|---|---|
 | POST | `/api/clubs/applications` | Yeni başvuru (aynı anda tek aktif başvuru: `pending` veya `revision_requested`) |
 | GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (`revisionRequest` alanı revizyon beklerken) |
+| GET | `/api/clubs/applications/:applicationId/history` | Kendi başvurumun süreç geçmişi (sınırlı DTO — SKS iç notları yok) |
 | PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 
@@ -361,6 +362,10 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** (member↔officer) |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** (eski başkan officer olur) |
 | GET | `/api/clubs/:clubId/membership-history` | **staff**: danışman/officer/başkan; sayfalanabilir, `?academicTermId=` |
+| GET | `/api/clubs/:clubId/current-board` | **onaylı üye**: güncel yönetim/denetleme kurulu (asil/yedek, unvan) |
+| GET | `/api/clubs/:clubId/general-meetings` | **staff**: genel kurul kayıtları (`attendeeCount` liste yanıtında) |
+| GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff**: genel kurul detayı |
+| POST | `/api/clubs/:clubId/general-meetings` | officer/başkan: genel kurul + kurul seçimi kaydı |
 | PATCH | `/api/clubs/:clubId` | **yalnızca başkan** (profil düzenle; durum HARİÇ) |
 | POST | `/api/clubs/:clubId/contact-links` | officer/başkan |
 | PATCH | `/api/clubs/:clubId/contact-links/:linkId` | officer/başkan (yalnızca url) |
@@ -438,29 +443,36 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/committee-vote` | `application.view` | Kurul kademesi oy (`vote`, ops. `reason`) |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist` | `application.view` | İnceleme kontrol listesi |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/appeal/review` | `application.view` | İtiraz incele (`decision`: upheld/dismissed) |
 | GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
 | GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
+| GET | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Onay kurullarını listele |
+| GET | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `application.view` | Kurul detayı (oylama arayüzü için) |
+| POST | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Kurul oluştur (`name`, `memberUserIds`) |
+| PATCH | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.settings.manage` | Kurul güncelle |
 
-Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Özet `application.status` adımlardan türetilir; bildirim yalnızca nihai `approved`/`rejected` kararında. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
+Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Eski format: rol dizisi (`["advisor","student_affairs"]`). Yeni format: adım nesneleri — `role_sequential` veya `committee_majority` (+ `committeeId`). Kurul kademesinde `committee-vote`; salt çoğunluk üye sayısı üzerinden. Özet `application.status` adımlardan türetilir; nihai karar bildirimi yalnızca `approved`/`rejected`. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |
 | GET | `/api/admin/universities/:universityId/clubs/:clubId` | `club.view` | Kulüp detayı + `counts` özeti |
 | PATCH | `/api/admin/universities/:universityId/clubs/:clubId/status` | `club.update` | Kulüp durumunu güncelle |
 | PATCH | `/api/admin/universities/:universityId/clubs/:clubId` | `club.update` | Kulüp bilgilerini güncelle (ad, açıklama, logo, kapak, joinPolicy) |
 | DELETE | `/api/admin/universities/:universityId/clubs/:clubId` | `club.delete` | Kulübü **kalıcı sil** (önce archived/rejected olmalı) |
-| GET | `/api/admin/universities/:universityId/clubs/:clubId/advisors` | `club.advisor.manage` | Danışmanları listele |
-| POST | `/api/admin/universities/:universityId/clubs/:clubId/advisors` | `club.advisor.manage` | Danışman ata (hedef `advisor` rolünde olmalı) |
-| DELETE | `/api/admin/universities/:universityId/clubs/:clubId/advisors/:userId` | `club.advisor.manage` | Danışman kaldır |
+| GET | `/api/admin/universities/:universityId/clubs/:clubId/advisors` | `club.advisor.manage` | Aktif danışmanları listele |
+| POST | `/api/admin/universities/:universityId/clubs/:clubId/advisors` | `club.advisor.manage` | Danışman **daveti** (`userId`, ops. `message`) |
+| GET | `/api/admin/universities/:universityId/clubs/:clubId/advisor-invitations` | `club.advisor.manage` | Bekleyen danışman davetleri |
+| DELETE | `/api/admin/universities/:universityId/clubs/:clubId/advisor-invitations/:invitationId` | `club.advisor.manage` | Bekleyen daveti iptal |
+| DELETE | `/api/admin/universities/:universityId/clubs/:clubId/advisors/:userId` | `club.advisor.manage` | Danışmanı zorla kaldır |
 
 Body şemaları:
 - `PATCH .../users/:userId/department`: `{ "departmentId": "uuid" | null }`
 - `PATCH .../clubs/:clubId/status`: `{ "status": "pending" | "approved" | "rejected" | "archived" }`
 - `PATCH .../clubs/:clubId`: en az bir alan → `{ name? (3-256), description? (max 2000), logoUrl?, coverUrl?, joinPolicy? }`
 - `DELETE .../clubs/:clubId`: body almaz — yalnızca `archived`/`rejected` kulüp silinir, bağlı içerik (üye/danışman/link/duyuru/galeri) cascade temizlenir.
-- `POST .../advisors`: `{ "userId": "uuid" }` — hedef aynı üniversiteden ve `advisor` rolünde olmalı.
+- `POST .../advisors`: `{ "userId": "uuid", "message?": "string" }` — hedef aynı üniversiteden ve `advisor` rolünde olmalı; kabul edilene kadar aktif danışman sayılmaz.
 - Query filtreleri (`?status=`) hepsi opsiyonel; enum değerleri ilgili tablonunkilerle aynı.
 
 ---
@@ -697,7 +709,7 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 | Method | Path | Açıklama |
 |---|---|---|
 | GET | `/api/universities/:universityId/exports` | Rapor kataloğu |
-| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (dosya yanıtı; `clubs`, `club-members`, `activities`) |
+| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (`clubs`, `club-members`, `activities`, PDF: `annual-activity-report`, `application-decision-minutes`, `general-meeting-minutes`) |
 
 Detay: [integration/exports.md](../integration/exports.md).
 

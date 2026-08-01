@@ -6,7 +6,9 @@ import { revokeUserSessions } from "../../shared/rbac/session-revocation";
 import { resolveAuthz } from "../../shared/rbac/rbac.cache";
 import { activitiesService } from "../activities/activities.service";
 import { dashboardService } from "../dashboard/dashboard.service";
+import { clubAdvisorsService } from "../club-advisors/club-advisors.service";
 import { UpdateProfileDTO, ChangePasswordDTO } from "./users.schema";
+import type { DeclineAdvisorInvitationDTO, WithdrawAdvisorDTO } from "../club-advisors/club-advisors.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
 
 export const usersService = {
@@ -58,6 +60,22 @@ export const usersService = {
 
   async listMyAdvisedClubs(userId: string) {
     return await usersRepository.findAdvisedClubsByUser(userId);
+  },
+
+  async listMyAdvisorInvitations(userId: string) {
+    return await clubAdvisorsService.listMyInvitations(userId);
+  },
+
+  async acceptAdvisorInvitation(userId: string, invitationId: string) {
+    return await clubAdvisorsService.acceptInvitation(userId, invitationId);
+  },
+
+  async declineAdvisorInvitation(userId: string, invitationId: string, body: DeclineAdvisorInvitationDTO) {
+    return await clubAdvisorsService.declineInvitation(userId, invitationId, body);
+  },
+
+  async withdrawAsAdvisor(userId: string, clubId: string, body: WithdrawAdvisorDTO) {
+    return await clubAdvisorsService.withdrawFromClub(userId, clubId, body);
   },
 
   /** Katılım bildirdiğim etkinlikler (takvimim) — activities feature'ına delege. */

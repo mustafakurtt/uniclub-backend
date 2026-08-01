@@ -42,6 +42,17 @@ applicationsRoutes.get("/applications/:applicationId", authMiddleware, async (c)
   return ok(c, application, "club.applicationFound");
 });
 
+// 2b. KENDİ BAŞVURUMUN SÜREÇ GEÇMİŞİ (öğrenciye özel, sınırlı DTO)
+applicationsRoutes.get("/applications/:applicationId/history", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const { applicationId } = c.req.param();
+  const history = await clubApplicationReviewService.getApplicantApplicationHistory(
+    user.userId,
+    applicationId
+  );
+  return ok(c, history, "club.applicationHistoryListed");
+});
+
 // 3. BEKLEYEN BAŞVURUYU GERİ ÇEKME
 applicationsRoutes.delete("/applications/:applicationId", authMiddleware, async (c) => {
   const user = c.get("user");

@@ -1,7 +1,7 @@
 /**
  * Kulüp başvuru revizyon akışı (T4.1) — revizyon talebi, yeniden gönderim, geçmiş, bildirim, tenant izolasyonu.
  */
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { login, me, reqAuth, data, get } from "./helpers";
 import { db } from "../src/db";
@@ -10,6 +10,12 @@ import {
   notifications,
 } from "../src/db/schema";
 import { NotificationType } from "../src/features/notifications/notifications.types";
+import {
+  restoreAntalyaSeedApprovalChain,
+  restoreAntalyaSeedFormationThreshold,
+  setTenantFormationThreshold,
+  useClubApproverChainForTests,
+} from "./tenant-test-helpers";
 
 const patch = (path: string, token: string, body?: unknown) =>
   reqAuth("PATCH", path, token, body);
@@ -300,11 +306,13 @@ describe("kulüp başvuru revizyon akışı", () => {
     it("başka tenant admin revizyon isteyemez", async () => {
       const antalyaAdmin = await login("elif.demir@antalya.edu.tr");
       const antalyaUni = (await me(antalyaAdmin)).universityId as string;
-      const emre = await login("emre.aksoy@std.antalya.edu.tr");
-      const emreId = (await me(emre)).userId;
-      await clearActiveApplicationsFor(emre, emreId);
+      await setTenantFormationThreshold(antalyaUni, 0, (await me(antalyaAdmin)).userId as string);
+      await useClubApproverChainForTests(antalyaUni, (await me(antalyaAdmin)).userId as string);
+      const demo = await login("demo.yk2@std.antalya.edu.tr");
+      const demoId = (await me(demo)).userId;
+      await clearActiveApplicationsFor(demo, demoId);
 
-      const createRes = await reqAuth("POST", "/api/clubs/applications", emre, {
+      const createRes = await reqAuth("POST", "/api/clubs/applications", demo, {
         proposedName: `Tenant Rev ${Date.now()}`,
         description: "Tenant test.",
       });
@@ -330,7 +338,8 @@ describe("kulüp başvuru revizyon akışı", () => {
         )).status
       ).toBe(200);
 
-      await clearActiveApplicationsFor(emre, emreId);
+      await clearActiveApplicationsFor(demo, demoId);
+      await restoreAntalyaSeedApprovalChain(antalyaUni, (await me(antalyaAdmin)).userId as string);
     });
   });
 });
