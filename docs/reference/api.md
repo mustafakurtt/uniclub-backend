@@ -443,11 +443,12 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/integration/moderation.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
 | GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü; `revision_requested` ayrı kuyruk) |
-| GET | `/api/admin/universities/:universityId/club-applications/:applicationId` | `application.view` | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
+| GET | `/api/admin/universities/:universityId/club-applications/my-committee-pending` | kurul üyeliği | Oy bekleyen kurul başvuruları (`application.view` gerekmez) |
+| GET | `/api/admin/universities/:universityId/club-applications/:applicationId` | `application.view` veya kurul kademesi üyeliği | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
-| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/committee-vote` | `application.view` | Kurul kademesi oy (`vote`, ops. `reason`) |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/committee-vote` | `application.view` veya kurul kademesi üyeliği | Kurul kademesi oy (`vote`, ops. `reason`) |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist` | `application.view` | İnceleme kontrol listesi |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle |

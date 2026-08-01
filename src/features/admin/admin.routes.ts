@@ -33,6 +33,10 @@ import { adminService } from "./admin.service";
 import { clubApplicationReviewService } from "../clubs/club-application-review.service";
 import { dashboardService } from "../dashboard/dashboard.service";
 import { approvalCommitteesRoutes } from "../approval-committees/approval-committees.routes";
+import {
+  committeeApplicationGuard,
+  committeeTenantGuard,
+} from "../../middlewares/committee-application.middleware";
 
 export const adminRoutes = new Hono<{ Variables: RbacVariables }>();
 
@@ -132,10 +136,25 @@ adminRoutes.get(
   }
 );
 
+// 4A. OYUMU BEKLEYEN KURUL BAŞVURULARI (kurul üyeliği tabanlı — application.view gerekmez)
+adminRoutes.get(
+  "/universities/:universityId/club-applications/my-committee-pending",
+  ...committeeTenantGuard("club.application.committee_pending_list"),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const actor = c.get("user");
+    const applications = await adminService.listMyCommitteePendingApplications(
+      universityId,
+      actor.userId
+    );
+    return ok(c, applications, "admin.myCommitteePendingApplicationsListed");
+  }
+);
+
 // 4B. TEK BİR KULÜP BAŞVURUSU (detay — applicant + onay zinciri + revizyon sayacı)
 adminRoutes.get(
   "/universities/:universityId/club-applications/:applicationId",
-  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  ...committeeApplicationGuard(ClubPermission.APPLICATION_VIEW),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
     const actor = c.get("user");
@@ -198,7 +217,7 @@ adminRoutes.patch(
 // 6b2. KURUL OY (committee_majority kademesi)
 adminRoutes.patch(
   "/universities/:universityId/club-applications/:applicationId/committee-vote",
-  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  ...committeeApplicationGuard(ClubPermission.APPLICATION_VIEW),
   validate("json", committeeVoteSchema),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
