@@ -43,6 +43,15 @@ export async function setTenantSettingsCache(
   }
 }
 
+/** DB'ye doğrudan yazıldığında (seed vb.) stale cache'i temizler. */
+export async function invalidateTenantSettingsCache(universityId: string): Promise<void> {
+  try {
+    await tenantSettingsCache.delete(universityId);
+  } catch (err) {
+    log.warn({ err, universityId }, "tenant ayarları cache temizlenemedi");
+  }
+}
+
 async function loadResolvedFromDb(universityId: string): Promise<ResolvedTenantSettings> {
   const rows = await tenantSettingsRepository.listOverrides(universityId);
   const overrides: Partial<Record<TenantSettingKey, number | string[] | boolean>> = {};

@@ -10,6 +10,8 @@ import {
   type ApprovalChainRoleToken,
 } from "../features/clubs/club-application-chain.core";
 import { TenantSettingKey } from "../features/tenant-settings/tenant-settings.catalog";
+import { invalidateTenantSettingsCache } from "../features/tenant-settings/tenant-settings.cache";
+import { redis } from "../shared/redis/redis.client";
 
 /**
  * ÇOK ÜNİVERSİTELİ (multi-tenant) TEST SEED'İ
@@ -712,6 +714,13 @@ async function main() {
     });
   });
 
+  // tenant_settings transaction içinde yazıldı; öncesinde getTenantSettings çağrılmışsa
+  // stale varsayılanlar cache'de kalabilir — tüm tenant'ları temizle.
+  const universityRows = await db.select({ id: schema.universities.id }).from(schema.universities);
+  for (const row of universityRows) {
+    await invalidateTenantSettingsCache(row.id);
+  }
+
   console.log("✅ Seeding başarıyla tamamlandı!");
   console.log("\n📋 Test hesapları (hepsi \"Password123!\" şifresiyle giriş yapar):");
   console.log("\n── PLATFORM (universityId: NULL — hiçbir okula bağlı değil) ─");
@@ -774,12 +783,22 @@ async function main() {
 // Bağlantı havuzu kapatılmadan süreç sonlanmaz: postgres-js açık soketleri
 // event loop'ta tutar. Yerelde fark edilmez (terminali kaparsın), ama CI'da
 // adım sonsuza kadar asılı kalır.
+//
+// AYNISI REDIS İÇİN DE GEÇERLİ: seed, tenant ayar cache'ini geçersizleştirmek
+// için `invalidateTenantSettingsCache` import ediyor; bu da redis.client'ı
+// modül yüklemesinde açıyor. Yalnızca Postgres kapatılırsa `test:setup`
+// sonsuza kadar asılır — bu hata bir kez yaşandı, tekrarlanmasın.
+async function closeConnections(): Promise<void> {
+  await db.$client.end().catch(() => {});
+  await redis.quit().catch(() => {});
+}
+
 main()
   .then(async () => {
-    await db.$client.end();
+    await closeConnections();
   })
   .catch(async (err) => {
     console.error("❌ Seeding sırasında hata oluştu:", err);
-    await db.$client.end().catch(() => {});
+    await closeConnections();
     process.exit(1);
   });
