@@ -1,6 +1,16 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt, desc, sql, getTableColumns, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "../../db/schema";
+import {
+  clubs,
+  clubMembers,
+  clubAdvisors,
+  announcements,
+  clubGallery,
+  activities,
+  activityClubs,
+  users,
+} from "../../db/schema";
 import { BaseRepository } from "../../core/db";
 import { slugify } from "../../shared/utils/slug.util";
 import {
@@ -256,6 +266,27 @@ export const adminRepository = {
     return await applicationsRepo.findOne({ id: applicationId, universityId });
   },
 
+  async findClubApplicationDetail(universityId: string, applicationId: string) {
+    return await db.query.clubApplications.findFirst({
+      where: { id: applicationId, universityId },
+      with: {
+        applicant: true,
+        approvals: {
+          orderBy: { step: "asc" },
+          with: { approver: true },
+        },
+      },
+    });
+  },
+
+  async countClubApplicationRevisionRequests(applicationId: string): Promise<number> {
+    const events = await db.query.clubApplicationEvents.findMany({
+      where: { applicationId },
+      columns: { eventType: true },
+    });
+    return events.filter((e) => e.eventType === "revision_requested").length;
+  },
+
   /**
    * Başvuruyu onaylar/reddeder — yalnızca sıradaki kademe; özet durum adımlardan türetilir.
    * Onay tamamlandığında gerçek `clubs` satırı oluşturulur.
@@ -300,6 +331,94 @@ export const adminRepository = {
 
   async findClubInUniversity(universityId: string, clubId: string) {
     return await clubsRepo.findOne({ id: clubId, universityId });
+  },
+
+  /** Kulüp + özet sayaçlar — tek sorgu, N+1 yok. */
+  async findClubDetailWithCounts(universityId: string, clubId: string) {
+    const [row] = await db
+      .select({
+        club: getTableColumns(clubs),
+        memberCount: sql<number>`(
+          select cast(count(*) as int) from ${clubMembers}
+          where ${clubMembers.clubId} = ${clubId} and ${clubMembers.status} = 'approved'
+        )`,
+        pendingJoinRequests: sql<number>`(
+          select cast(count(*) as int) from ${clubMembers}
+          where ${clubMembers.clubId} = ${clubId} and ${clubMembers.status} = 'pending'
+        )`,
+        advisorCount: sql<number>`(
+          select cast(count(*) as int) from ${clubAdvisors}
+          where ${clubAdvisors.clubId} = ${clubId}
+        )`,
+        upcomingActivities: sql<number>`(
+          select cast(count(distinct a.id) as int)
+          from activities a
+          inner join activity_clubs ac on ac.activity_id = a.id
+          where ac.club_id = ${clubId}
+            and ac.status = 'accepted'
+            and a.status = 'published'
+            and a.starts_at >= now()
+        )`,
+      })
+      .from(clubs)
+      .where(and(eq(clubs.id, clubId), eq(clubs.universityId, universityId)))
+      .limit(1);
+    if (!row) return null;
+    const { club, memberCount, pendingJoinRequests, advisorCount, upcomingActivities } = row;
+    return {
+      club,
+      memberCount,
+      pendingJoinRequests,
+      advisorCount,
+      upcomingActivities,
+    };
+  },
+
+  async listClubAnnouncementsForAdmin(clubId: string, limit: number, cursor?: Date) {
+    const filters: SQL[] = [eq(announcements.clubId, clubId)];
+    if (cursor) filters.push(lt(announcements.createdAt, cursor));
+    const rows = await db
+      .select({
+        announcement: getTableColumns(announcements),
+        author: getTableColumns(users),
+      })
+      .from(announcements)
+      .innerJoin(users, eq(announcements.authorId, users.id))
+      .where(and(...filters))
+      .orderBy(desc(announcements.createdAt))
+      .limit(limit + 1);
+    return rows.map((row) => ({ ...row.announcement, author: row.author }));
+  },
+
+  async listClubGalleryForAdmin(clubId: string, limit: number, cursor?: Date) {
+    const filters: SQL[] = [eq(clubGallery.clubId, clubId)];
+    if (cursor) filters.push(lt(clubGallery.createdAt, cursor));
+    const rows = await db
+      .select({
+        image: getTableColumns(clubGallery),
+        uploader: getTableColumns(users),
+      })
+      .from(clubGallery)
+      .innerJoin(users, eq(clubGallery.uploadedBy, users.id))
+      .where(and(...filters))
+      .orderBy(desc(clubGallery.createdAt))
+      .limit(limit + 1);
+    return rows.map((row) => ({ ...row.image, uploader: row.uploader }));
+  },
+
+  listClubActivitiesForAdmin(clubId: string, limit: number, cursor?: Date) {
+    const filters: SQL[] = [
+      eq(activityClubs.clubId, clubId),
+      eq(activityClubs.status, "accepted"),
+    ];
+    if (cursor) filters.push(lt(activities.startsAt, cursor));
+    return db
+      .select(getTableColumns(activities))
+      .from(activities)
+      .innerJoin(activityClubs, eq(activityClubs.activityId, activities.id))
+      .where(and(...filters))
+      .orderBy(desc(activities.startsAt))
+      .limit(limit + 1);
   },
 
   async updateClubStatus(universityId: string, clubId: string, status: Club["status"]): Promise<Club | undefined> {

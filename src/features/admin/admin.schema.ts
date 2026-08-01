@@ -68,3 +68,10 @@ export const updateUserDepartmentSchema = z.object({
   departmentId: z.string().uuid().nullable(),
 });
 export type UpdateUserDepartmentDTO = z.infer<typeof updateUserDepartmentSchema>;
+
+/** Kulüp alt-kaynak admin listeleri — keyset sayfalama (`createdAt` ISO cursor). */
+export const adminClubPaginatedListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().datetime().optional(),
+});
+export type AdminClubPaginatedListQueryDTO = z.infer<typeof adminClubPaginatedListQuerySchema>;

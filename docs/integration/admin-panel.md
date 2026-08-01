@@ -235,6 +235,7 @@ verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılı
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
 | GET | `/universities/:uid/club-applications?status=` | `application.view` | Başvuru listesi (`applicant` + `approvals` gömülü); `status=revision_requested` revizyon kuyruğu |
+| GET | `/universities/:uid/club-applications/:id` | `application.view` | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
 | PATCH | `/universities/:uid/club-applications/:id/approve` | `application.view` | Sıradaki kademeyi onayla — **tüm kademeler** onaylandığında gerçek kulüp oluşur |
 | PATCH | `/universities/:uid/club-applications/:id/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/universities/:uid/club-applications/:id/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) — öğrenci düzeltip yeniden gönderir |
@@ -322,6 +323,7 @@ Onay tamamlandığında `data`: `{ application, club }`. Zaten değerlendirilmi�
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
 | GET | `/universities/:uid/clubs?status=` | `club.view` | Tüm durumlar (pending/approved/rejected/archived) |
+| GET | `/universities/:uid/clubs/:clubId` | `club.view` | Kulüp detayı + `counts` (üye, bekleyen istek, yaklaşan etkinlik, danışman) |
 | PATCH | `/universities/:uid/clubs/:clubId/status` | `club.update` | `{ status }` |
 | PATCH | `/universities/:uid/clubs/:clubId` | `club.update` | `{ name?, description?, logoUrl?, coverUrl?, joinPolicy? }` |
 | DELETE | `/universities/:uid/clubs/:clubId` | `club.delete` | Kalıcı silme — **önce archived/rejected olmalı** |
@@ -350,13 +352,37 @@ Kulüp-içi katman (officer/president/advisor) korunur; bunlar tenant yöneticis
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
 | GET | `/universities/:uid/clubs/:clubId/members` | `club.view` | Üye listesi (bekleyenler dahil, `user` gömülü) |
+| GET | `/universities/:uid/clubs/:clubId/announcements?limit=&cursor=` | `club.view` | Duyuru listesi (taslaklar dahil, keyset) |
+| GET | `/universities/:uid/clubs/:clubId/gallery?limit=&cursor=` | `club.view` | Galeri listesi (keyset) |
+| GET | `/universities/:uid/clubs/:clubId/activities?limit=&cursor=` | `club.view` | Etkinlik listesi (taslaklar dahil, keyset) |
 | DELETE | `/universities/:uid/clubs/:clubId/members/:userId` | `club.member.manage` | Üyeyi çıkar |
 | DELETE | `/universities/:uid/clubs/:clubId/announcements/:announcementId` | `announcement.moderate` | Duyuruyu kaldır |
 | DELETE | `/universities/:uid/clubs/:clubId/gallery/:imageId` | `gallery.moderate` | Görseli kaldır |
 
 Çapraz-kulüp koruması: içerik gerçekten o kulübe ait değilse `404`.
-(Duyuru/galeri **listesini** okumak için kulüp public alt-kaynak endpoint'leri
-kullanılır: `GET /api/clubs/:clubId/announcements|gallery`.)
+
+### 5.6. M2.5 — Kulüp detay sekmeleri (sekme → uç eşlemesi)
+
+Derin bağlanabilir rotalar (`/admin/clubs/:clubId` vb.) için sekme veri kaynakları:
+
+| Sekme | Uç | Yetki |
+|---|---|---|
+| Başlık / özet sayaçlar | `GET .../clubs/:clubId` → `counts` | `club.view` |
+| Üyeler | `GET .../clubs/:clubId/members` | `club.view` |
+| Etkinlikler | `GET .../clubs/:clubId/activities?limit=&cursor=` | `club.view` |
+| Duyurular | `GET .../clubs/:clubId/announcements?limit=&cursor=` | `club.view` |
+| Danışmanlar | `GET .../clubs/:clubId/advisors` | `club.view` |
+| Galeri | `GET .../clubs/:clubId/gallery?limit=&cursor=` | `club.view` |
+| Denetim izi | `GET /api/audit/universities/:uid?targetId=:clubId&limit=&cursor=` | `audit.view` |
+
+Başvuru detay sayfası (`/admin/applications/:applicationId`):
+
+| Alan | Uç |
+|---|---|
+| Başvuru + onay zinciri | `GET .../club-applications/:applicationId` |
+| Olay geçmişi | `GET .../club-applications/:applicationId/history` |
+
+Liste uçları keyset sayfalar: `cursor` = son öğenin `createdAt` (duyuru/galeri) veya `startsAt` (etkinlik) ISO 8601; yanıt `{ items, nextCursor }`.
 
 ---
 
