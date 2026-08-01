@@ -110,6 +110,7 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `club.formation.support_threshold` | `0` | 0–500 (0 = destek toplama kapalı, doğrudan başvuru) | tenant |
 | `club.formation.proposal_expiry_days` | `90` | 7–180 | tenant |
 | `university.export.enabled` | `false` | boolean, `flagType: entitlement` | platform |
+| `university.export.pdf.enabled` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-01` | platform |
 
 `club.application.approval_chain` — JSON dizi: her eleman bir kademenin karar verici rolü.
 `club_approver` özel token: `club.approve` yetkisini taşıyanlar. Örnek iki kademe:

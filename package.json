@@ -48,14 +48,17 @@
     "db:reset": "drizzle-kit drop && bun run db:generate && bun run db:migrate && bun run db:seed"
   },
   "dependencies": {
+    "@fontsource/dejavu-sans": "^5.3.0",
     "@hono/zod-validator": "^0.8.0",
     "@types/node": "^26.1.0",
     "bullmq": "^5.79.2",
+    "dejavu-fonts-ttf": "^2.37.3",
     "drizzle-orm": "^1.0.0-rc.4",
     "exceljs": "^4.4.0",
     "hono": "^4.12.27",
     "ioredis": "^5.11.1",
     "nodemailer": "^9.0.3",
+    "pdfkit": "^0.19.1",
     "pg": "^8.22.0",
     "pino": "^9.6.0",
     "postgres": "^3.4.9",
@@ -66,6 +69,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/nodemailer": "^8.0.1",
+    "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.20.0",
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^1.0.0-rc.4",

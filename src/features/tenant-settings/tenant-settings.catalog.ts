@@ -35,6 +35,8 @@ export const TenantSettingKey = {
   CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS: "club.formation.proposal_expiry_days",
   /** Kurumsal rapor dışa aktarma (T4.5) — entitlement bayrağı; varsayılan kapalı. */
   UNIVERSITY_EXPORT_ENABLED: "university.export.enabled",
+  /** PDF resmî belgeler (T4.5 v2) — release bayrağı; pilot sonrası kaldırılacak. */
+  UNIVERSITY_EXPORT_PDF_ENABLED: "university.export.pdf.enabled",
 } as const;
 
 export type TenantSettingKey = (typeof TenantSettingKey)[keyof typeof TenantSettingKey];
@@ -137,6 +139,15 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Kurumsal rapor dışa aktarma",
     labelEn: "Institutional report export",
   },
+  [TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED]: {
+    kind: "boolean",
+    defaultValue: false,
+    flagType: "release",
+    sunsetAfter: "2026-11-01",
+    editor: TenantSettingEditor.PLATFORM,
+    labelTr: "PDF resmî belge dışa aktarma",
+    labelEn: "PDF official document export",
+  },
 };
 
 export const TENANT_SETTING_KEYS = Object.keys(TENANT_SETTING_CATALOG) as TenantSettingKey[];
@@ -184,6 +195,7 @@ export interface ResolvedTenantSettings {
   clubFormationSupportThreshold: number;
   clubFormationProposalExpiryDays: number;
   universityExportEnabled: boolean;
+  universityExportPdfEnabled: boolean;
 }
 
 export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
@@ -201,6 +213,8 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS].defaultValue as number,
     universityExportEnabled:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED].defaultValue as boolean,
+    universityExportPdfEnabled:
+      TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED].defaultValue as boolean,
   };
 }
 
@@ -230,6 +244,9 @@ export function mergeOverridesIntoResolved(
     universityExportEnabled:
       (overrides[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED] as boolean | undefined) ??
       defaults.universityExportEnabled,
+    universityExportPdfEnabled:
+      (overrides[TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED] as boolean | undefined) ??
+      defaults.universityExportPdfEnabled,
   };
 }
 
@@ -252,6 +269,8 @@ export function getResolvedSettingValue(
       return resolved.clubFormationProposalExpiryDays;
     case TenantSettingKey.UNIVERSITY_EXPORT_ENABLED:
       return resolved.universityExportEnabled;
+    case TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED:
+      return resolved.universityExportPdfEnabled;
   }
 }
 

@@ -1,7 +1,8 @@
-import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, lte, lt, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import {
   activities,
+  activityAttendees,
   activityClubs,
   clubs,
   clubMembers,
@@ -152,5 +153,130 @@ export const exportsRepository = {
       location: r.location ?? null,
       status: r.status,
     }));
+  },
+
+  async fetchAnnualActivityReport(universityId: string, year: number) {
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
+
+    const clubCountRow = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(clubs)
+      .where(and(eq(clubs.universityId, universityId), eq(clubs.status, "approved")));
+
+    const activityStats = await db
+      .select({
+        activityCount: sql<number>`count(distinct ${activities.id})::int`,
+        participationCount: sql<number>`count(${activityAttendees.userId})::int`,
+      })
+      .from(activities)
+      .innerJoin(activityClubs, eq(activityClubs.activityId, activities.id))
+      .innerJoin(clubs, eq(clubs.id, activityClubs.clubId))
+      .leftJoin(activityAttendees, eq(activityAttendees.activityId, activities.id))
+      .where(
+        and(
+          eq(clubs.universityId, universityId),
+          eq(activityClubs.role, "host"),
+          eq(activityClubs.status, "accepted"),
+          eq(activities.status, "published"),
+          gte(activities.startsAt, yearStart),
+          lt(activities.startsAt, yearEnd)
+        )
+      );
+
+    const clubRows = await db
+      .select({
+        clubId: clubs.id,
+        clubName: clubs.name,
+        activityCount: sql<number>`count(distinct ${activities.id})::int`,
+        participationCount: sql<number>`count(${activityAttendees.userId})::int`,
+      })
+      .from(clubs)
+      .leftJoin(
+        activityClubs,
+        and(eq(activityClubs.clubId, clubs.id), eq(activityClubs.role, "host"), eq(activityClubs.status, "accepted"))
+      )
+      .leftJoin(
+        activities,
+        and(
+          eq(activities.id, activityClubs.activityId),
+          eq(activities.status, "published"),
+          gte(activities.startsAt, yearStart),
+          lt(activities.startsAt, yearEnd)
+        )
+      )
+      .leftJoin(activityAttendees, eq(activityAttendees.activityId, activities.id))
+      .where(and(eq(clubs.universityId, universityId), eq(clubs.status, "approved")))
+      .groupBy(clubs.id, clubs.name)
+      .orderBy(asc(clubs.id));
+
+    return {
+      summary: {
+        year,
+        clubCount: clubCountRow[0]?.count ?? 0,
+        activityCount: activityStats[0]?.activityCount ?? 0,
+        totalParticipation: activityStats[0]?.participationCount ?? 0,
+      },
+      clubRows: mapRows(clubRows, (r) => ({
+        clubName: r.clubName,
+        activityCount: r.activityCount,
+        participationCount: r.participationCount,
+      })),
+    };
+  },
+
+  async fetchApplicationDecisionMinutes(universityId: string, applicationId: string) {
+    const application = await db.query.clubApplications.findFirst({
+      where: { id: applicationId, universityId },
+      columns: {
+        id: true,
+        proposedName: true,
+        description: true,
+        status: true,
+      },
+      with: {
+        applicant: {
+          columns: { firstName: true, lastName: true, email: true },
+        },
+        approvals: {
+          columns: {
+            step: true,
+            approverRole: true,
+            status: true,
+            note: true,
+            reviewedAt: true,
+          },
+          with: {
+            approver: {
+              columns: { firstName: true, lastName: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!application || !application.applicant) return null;
+
+    const approvals = [...application.approvals].sort((a, b) => a.step - b.step);
+
+    return {
+      header: {
+        proposedName: application.proposedName,
+        description: application.description,
+        applicantName: `${application.applicant.firstName} ${application.applicant.lastName}`,
+        applicantEmail: application.applicant.email,
+        applicationStatus: application.status,
+      },
+      approvalRows: approvals.map((row) => ({
+        step: row.step,
+        approverRole: row.approverRole,
+        approverName: row.approver
+          ? `${row.approver.firstName} ${row.approver.lastName}`
+          : null,
+        decision: row.status,
+        reviewedAt: toIso(row.reviewedAt),
+        note: row.note,
+      })),
+    };
   },
 };

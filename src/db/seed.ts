@@ -352,6 +352,12 @@ async function main() {
       value: true,
       updatedBy: antalyaSks,
     });
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED,
+      value: true,
+      updatedBy: antalyaSks,
+    });
 
     // --- Kulüpler ---
     console.log("   🏕️ Antalya kulüpleri ve üyelikleri...");

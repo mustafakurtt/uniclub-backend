@@ -8,7 +8,7 @@ export interface ReportColumnDefinition {
   width?: number;
 }
 
-export type ReportParamType = "string" | "date" | "enum";
+export type ReportParamType = "string" | "date" | "enum" | "integer";
 
 export interface ReportParamDefinition {
   name: string;
@@ -19,15 +19,35 @@ export interface ReportParamDefinition {
   enumValues?: string[];
 }
 
+export type ReportFormat = "xlsx" | "pdf";
+
 export interface ReportDefinition {
   id: string;
   labelTr: string;
   labelEn: string;
+  format: ReportFormat;
   parameters: ReportParamDefinition[];
   columns: ReportColumnDefinition[];
+  /** PDF yayın bayrağı gibi ek tenant bayrağı — kapalıysa katalogda görünmez, üretim 404. */
+  featureFlagKey?: string;
 }
 
 export type ReportRow = Record<string, string | number | null>;
+
+export interface AnnualActivitySummary {
+  year: number;
+  clubCount: number;
+  activityCount: number;
+  totalParticipation: number;
+}
+
+export interface ApplicationMinutesHeader {
+  proposedName: string;
+  description: string | null;
+  applicantName: string;
+  applicantEmail: string;
+  applicationStatus: string;
+}
 
 export interface ReportMeta {
   universityName: string;
@@ -37,10 +57,12 @@ export interface ReportMeta {
   parameterSummaryTr: string;
   parameterSummaryEn: string;
   primaryColor?: string | null;
+  annualActivitySummary?: AnnualActivitySummary;
+  applicationMinutes?: ApplicationMinutesHeader;
 }
 
 export interface ReportRenderer {
-  readonly format: "xlsx" | "csv";
+  readonly format: ReportFormat | "csv";
   readonly contentType: string;
   readonly extension: string;
   render(definition: ReportDefinition, rows: ReportRow[], meta: ReportMeta): Promise<Uint8Array>;

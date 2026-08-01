@@ -1,8 +1,10 @@
+import { TenantSettingKey } from "../../tenant-settings/tenant-settings.catalog";
 import type { ReportDefinition } from "./report.types";
 
 export const REPORT_CATALOG: ReportDefinition[] = [
   {
     id: "clubs",
+    format: "xlsx",
     labelTr: "Kulüp listesi",
     labelEn: "Club list",
     parameters: [
@@ -28,14 +30,15 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     ],
     columns: [
       { key: "name", labelTr: "Kulüp adı", labelEn: "Club name", type: "text", width: 32 },
-      { key: "slug", labelTr: "Slug", labelEn: "Slug", type: "text", width: 24 },
+      { key: "slug", labelTr: "Kısa ad", labelEn: "Short name", type: "text", width: 24 },
       { key: "status", labelTr: "Durum", labelEn: "Status", type: "enum", width: 14 },
-      { key: "joinPolicy", labelTr: "Katılım politikası", labelEn: "Join policy", type: "enum", width: 18 },
+      { key: "joinPolicy", labelTr: "Katılım koşulu", labelEn: "Join policy", type: "enum", width: 18 },
       { key: "createdAt", labelTr: "Oluşturulma", labelEn: "Created at", type: "date", width: 22 },
     ],
   },
   {
     id: "club-members",
+    format: "xlsx",
     labelTr: "Kulüp üye listesi",
     labelEn: "Club member list",
     parameters: [
@@ -43,8 +46,8 @@ export const REPORT_CATALOG: ReportDefinition[] = [
         name: "clubId",
         type: "string",
         required: true,
-        labelTr: "Kulüp kimliği",
-        labelEn: "Club ID",
+        labelTr: "Kulüp",
+        labelEn: "Club",
       },
       {
         name: "role",
@@ -66,13 +69,14 @@ export const REPORT_CATALOG: ReportDefinition[] = [
       { key: "firstName", labelTr: "Ad", labelEn: "First name", type: "text", width: 18 },
       { key: "lastName", labelTr: "Soyad", labelEn: "Last name", type: "text", width: 18 },
       { key: "email", labelTr: "E-posta", labelEn: "Email", type: "text", width: 28 },
-      { key: "role", labelTr: "Rol", labelEn: "Role", type: "enum", width: 14 },
-      { key: "status", labelTr: "Durum", labelEn: "Status", type: "enum", width: 14 },
-      { key: "joinedAt", labelTr: "Katılım", labelEn: "Joined at", type: "date", width: 22 },
+      { key: "role", labelTr: "Kulüp rolü", labelEn: "Club role", type: "enum", width: 14 },
+      { key: "status", labelTr: "Üyelik durumu", labelEn: "Membership status", type: "enum", width: 14 },
+      { key: "joinedAt", labelTr: "Katılım tarihi", labelEn: "Joined at", type: "date", width: 22 },
     ],
   },
   {
     id: "activities",
+    format: "xlsx",
     labelTr: "Etkinlik takvimi",
     labelEn: "Activity calendar",
     parameters: [
@@ -91,8 +95,8 @@ export const REPORT_CATALOG: ReportDefinition[] = [
       {
         name: "clubId",
         type: "string",
-        labelTr: "Kulüp kimliği",
-        labelEn: "Club ID",
+        labelTr: "Kulüp",
+        labelEn: "Club",
       },
       {
         name: "status",
@@ -104,11 +108,56 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     ],
     columns: [
       { key: "title", labelTr: "Başlık", labelEn: "Title", type: "text", width: 32 },
-      { key: "hostClubName", labelTr: "Host kulüp", labelEn: "Host club", type: "text", width: 24 },
+      { key: "hostClubName", labelTr: "Düzenleyen kulüp", labelEn: "Organizing club", type: "text", width: 24 },
       { key: "startsAt", labelTr: "Başlangıç", labelEn: "Starts at", type: "date", width: 22 },
       { key: "endsAt", labelTr: "Bitiş", labelEn: "Ends at", type: "date", width: 22 },
       { key: "location", labelTr: "Konum", labelEn: "Location", type: "text", width: 28 },
       { key: "status", labelTr: "Durum", labelEn: "Status", type: "enum", width: 14 },
+    ],
+  },
+  {
+    id: "annual-activity-report",
+    format: "pdf",
+    labelTr: "Yıllık faaliyet raporu",
+    labelEn: "Annual activity report",
+    featureFlagKey: TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED,
+    parameters: [
+      {
+        name: "year",
+        type: "integer",
+        required: true,
+        labelTr: "Yıl",
+        labelEn: "Year",
+      },
+    ],
+    columns: [
+      { key: "clubName", labelTr: "Kulüp", labelEn: "Club", type: "text", width: 32 },
+      { key: "activityCount", labelTr: "Etkinlik sayısı", labelEn: "Activity count", type: "number", width: 16 },
+      { key: "participationCount", labelTr: "Katılım", labelEn: "Participation", type: "number", width: 14 },
+    ],
+  },
+  {
+    id: "application-decision-minutes",
+    format: "pdf",
+    labelTr: "Kulüp başvuru karar tutanağı",
+    labelEn: "Club application decision minutes",
+    featureFlagKey: TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED,
+    parameters: [
+      {
+        name: "applicationId",
+        type: "string",
+        required: true,
+        labelTr: "Başvuru",
+        labelEn: "Application",
+      },
+    ],
+    columns: [
+      { key: "step", labelTr: "Kademe", labelEn: "Step", type: "number", width: 10 },
+      { key: "approverRoleLabel", labelTr: "Unvan", labelEn: "Role", type: "text", width: 22 },
+      { key: "approverName", labelTr: "Ad", labelEn: "Name", type: "text", width: 24 },
+      { key: "decisionLabel", labelTr: "Karar", labelEn: "Decision", type: "text", width: 18 },
+      { key: "reviewedAt", labelTr: "Tarih", labelEn: "Date", type: "date", width: 22 },
+      { key: "note", labelTr: "Not", labelEn: "Note", type: "text", width: 36 },
     ],
   },
 ];

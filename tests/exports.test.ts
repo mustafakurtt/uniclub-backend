@@ -32,8 +32,15 @@ describe("kurumsal rapor dışa aktarma (/api/universities/:id/exports)", () => 
     const uni = (await me(sks)).universityId as string;
     const res = await get(`/api/universities/${uni}/exports`, sks);
     expect(res.status).toBe(200);
-    const catalog = await data<Array<{ id: string }>>(res);
-    expect(catalog.map((r) => r.id)).toEqual(["clubs", "club-members", "activities"]);
+    const catalog = await data<Array<{ id: string; format: string }>>(res);
+    expect(catalog.map((r) => r.id)).toEqual([
+      "clubs",
+      "club-members",
+      "activities",
+      "annual-activity-report",
+      "application-decision-minutes",
+    ]);
+    expect(catalog.every((r) => ["clubs", "club-members", "activities"].includes(r.id) ? r.format === "xlsx" : r.format === "pdf")).toBe(true);
   });
 
   it("aynı parametrelerle iki üretim → aynı SHA-256", async () => {

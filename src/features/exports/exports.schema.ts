@@ -23,11 +23,23 @@ export const activitiesExportParamsSchema = z.object({
   status: z.enum(["draft", "published", "cancelled"]).optional(),
 });
 
+export const annualActivityReportParamsSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+});
+
+export const applicationDecisionMinutesParamsSchema = z.object({
+  applicationId: z.string().uuid(),
+});
+
 export type ClubsExportParams = z.infer<typeof clubsExportParamsSchema>;
 export type ClubMembersExportParams = z.infer<typeof clubMembersExportParamsSchema>;
 export type ActivitiesExportParams = z.infer<typeof activitiesExportParamsSchema>;
+export type AnnualActivityReportParams = z.infer<typeof annualActivityReportParamsSchema>;
+export type ApplicationDecisionMinutesParams = z.infer<typeof applicationDecisionMinutesParamsSchema>;
 
 export type ExportParams =
   | ClubsExportParams
   | ClubMembersExportParams
-  | ActivitiesExportParams;
+  | ActivitiesExportParams
+  | AnnualActivityReportParams
+  | ApplicationDecisionMinutesParams;

@@ -1,27 +1,34 @@
-# Kurumsal rapor dışa aktarma (T4.5 v1)
+# Kurumsal rapor dışa aktarma (T4.5)
 
-SKS ve okul yöneticisinin kulüp/üye/etkinlik verisini resmî Excel dosyası olarak indirmesi.
+SKS ve okul yöneticisinin kulüp/üye/etkinlik verisini resmî Excel veya PDF belge olarak indirmesi.
 
 **Yetki:** `university.export.generate` (`university_admin`, `student_affairs` demetlerinde). Rotalar `guard(..., { tenantScoped: true })` ile korunur; POST üretimleri `audit_logs`'a düşer.
 
-**Özellik bayrağı:** `university.export.enabled` tenant ayarı (`flagType: entitlement`, varsayılan `false`, düzenleyen: platform). Bayrak kapalı tenant'ta export uçları **404** döner (403 değil — özellik varlığı sızdırılmaz). Seed'de Antalya Bilim pilot olarak `true`; Ege ve Karadeniz kapalı. `requireFeature` middleware yetki kontrolünden **sonra** çalışır.
+**Özellik bayrakları:**
+
+| Anahtar | `flagType` | Açıklama |
+|---|---|---|
+| `university.export.enabled` | `entitlement` | Tüm export uçları. Kapalı → **404**. Seed: Antalya `true`, diğer tenantlar `false`. |
+| `university.export.pdf.enabled` | `release` (`sunsetAfter` zorunlu) | Yalnızca PDF raporları. Kapalı → PDF katalogda yok, üretim **404**; xlsx raporları çalışmaya devam eder. Seed: Antalya `true`. |
+
+Yetki kontrolü bayraktan önce çalışır (yetkisiz → **403**).
 
 ## Uçlar
 
 | Method | Path | Açıklama |
 |---|---|---|
-| GET | `/api/universities/:universityId/exports` | Rapor kataloğu (`id`, `labelTr`, `labelEn`, `parameters`) |
+| GET | `/api/universities/:universityId/exports` | Rapor kataloğu (`id`, `labelTr`, `labelEn`, `format`, `parameters`) |
 | POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret → dosya gövdesi |
 
-POST yanıtı dosya akışıdır; `Content-Disposition: attachment; filename="<reportId>-<slug>-<param-özeti>.xlsx"`.
+`format`: `"xlsx"` | `"pdf"` — arayüz bu alanı kullanır.
 
-Excel üretimi başarısızsa (Bun uyumsuzluğu) **sessiz CSV'ye düşülmez** — UTF-8 BOM + `;` ayırıcılı CSV döner; `X-Export-Fallback: csv` ve `X-Export-Fallback-Reason` başlıkları eklenir.
+POST yanıtı dosya akışıdır; `Content-Disposition: attachment; filename="<reportId>-<slug>-<param-özeti>.<uzantı>"`.
 
-## v1 raporları
+xlsx üretimi başarısızsa (Bun uyumsuzluğu) **sessiz CSV'ye düşülmez** — UTF-8 BOM + `;` ayırıcılı CSV döner; `X-Export-Fallback: csv` ve `X-Export-Fallback-Reason` başlıkları eklenir. PDF için fallback yok.
+
+## Excel raporları (`format: xlsx`)
 
 ### `clubs` — kulüp listesi
-
-Body (opsiyonel alanlar):
 
 ```jsonc
 { "status": "approved|pending|rejected|archived", "createdFrom": "ISO-8601", "createdTo": "ISO-8601" }
@@ -41,17 +48,37 @@ Body (opsiyonel alanlar):
 { "from": "ISO-8601", "to": "ISO-8601", "clubId": "uuid", "status": "draft|published|cancelled" }
 ```
 
+## PDF resmî belgeler (`format: pdf`) — v2
+
+Unicode font gömülü (DejaVu Sans). Kurum adı + tenant `primaryColor` başlıkta; logo yok (v1 kararı). Belge altında imza blokları (unvan, ad, tarih, boş imza alanı).
+
+### `annual-activity-report` — yıllık faaliyet raporu
+
+```jsonc
+{ "year": 2026 }
+```
+
+`year` zorunlu. İçerik: kurum başlığı, dönem, kulüp sayısı, etkinlik sayısı, toplam katılım, kulüp bazında özet tablo.
+
+### `application-decision-minutes` — kulüp başvuru karar tutanağı
+
+```jsonc
+{ "applicationId": "uuid" }
+```
+
+`applicationId` zorunlu. Tenant dışı veya olmayan başvuru → `404`. İçerik: başvuru bilgileri, onay zinciri kademeleri (kim, ne zaman, karar, not), imza blokları.
+
 ## Sınırlar
 
 - Üst satır sınırı: **50.000** — aşılırsa `400` + `exports.rowLimitExceeded`.
 - Cache yok; her istek canlı sorgu + üretim.
-- v1'de asenkron/kuyruk yok.
+- Asenkron/kuyruk yok.
 
 ## Deterministik çıktı
 
-Aynı parametrelerle üretilen dosyalar bayt bayt aynı olmalı: sabit xlsx meta damgası, deterministik `ORDER BY` (+ `id` tie-break), başlıkta üretim tarihi yok (yalnızca istenen dönem/parametre özeti).
+Aynı parametrelerle üretilen dosyalar bayt bayt aynı olmalı: sabit xlsx/PDF meta damgası, deterministik `ORDER BY` (+ `id` tie-break), belge gövdesinde üretim tarihi yok (yalnızca istenen dönem/parametre özeti).
 
-Başlık bloğu: üniversite adı, rapor başlığı, parametre özeti. Tenant `primaryColor` (varsa) başlık vurgusu için kullanılır; logo gömülmez (v1).
+Başlık bloğu: üniversite adı, rapor başlığı, parametre özeti. Tenant `primaryColor` (varsa) başlık vurgusu için kullanılır.
 
 ## Örnek — katalog
 
@@ -62,10 +89,18 @@ Başlık bloğu: üniversite adı, rapor başlığı, parametre özeti. Tenant `
   "data": [
     {
       "id": "clubs",
+      "format": "xlsx",
       "labelTr": "Kulüp listesi",
       "labelEn": "Club list",
+      "parameters": [ ... ]
+    },
+    {
+      "id": "annual-activity-report",
+      "format": "pdf",
+      "labelTr": "Yıllık faaliyet raporu",
+      "labelEn": "Annual activity report",
       "parameters": [
-        { "name": "status", "type": "enum", "labelTr": "Kulüp durumu", "labelEn": "Club status", "enumValues": ["pending", "approved", "rejected", "archived"] }
+        { "name": "year", "type": "integer", "required": true, "labelTr": "Yıl", "labelEn": "Year" }
       ]
     }
   ]

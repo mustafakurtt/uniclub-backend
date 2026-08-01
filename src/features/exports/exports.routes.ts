@@ -14,7 +14,8 @@ exportsRoutes.get(
   ...guard(ExportPermission.GENERATE, { tenantScoped: true }),
   requireFeature(TenantSettingKey.UNIVERSITY_EXPORT_ENABLED),
   async (c) => {
-    const catalog = exportsService.listCatalog();
+    const { universityId } = c.req.param();
+    const catalog = await exportsService.listCatalog(universityId);
     return ok(c, catalog, "exports.catalogListed");
   }
 );
