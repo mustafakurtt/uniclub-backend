@@ -3,7 +3,7 @@ import { TENANT_SETTING_KEYS } from "./tenant-settings.catalog";
 
 export const patchTenantSettingsSchema = z.object({
   settings: z
-    .record(z.string(), z.union([z.number().int(), z.array(z.string()), z.null()]))
+    .record(z.string(), z.union([z.number().int(), z.array(z.string()), z.boolean(), z.null()]))
     .refine((obj) => Object.keys(obj).length > 0, { message: "En az bir ayar anahtarı gerekli." }),
 });
 

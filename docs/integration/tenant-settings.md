@@ -60,8 +60,18 @@ Authorization: Bearer <token>
 ```
 
 - `value`: bugün geçerli çözümlenmiş değer (DB sapması + varsayılan).
+- `kind`: `"integer"` | `"role_chain"` | `"boolean"` — boolean bayraklar için `flagType` (`entitlement` | `release`) ve `release` için `sunsetAfter` (`YYYY-MM-DD`) metadata'da gelir.
 - `editor`: `"tenant"` | `"platform"` — UI'da düzenlenebilirlik.
 - Ayar ekranını bu yanıttan kurun; sabitleri frontend'e gömmeyin.
+
+### Özellik bayrakları (`kind: boolean`)
+
+Tenant başına özellik aç/kapa (pilot yayın). `flagType`:
+
+- `entitlement` — kalıcı yetkilendirme (ör. `university.export.enabled`)
+- `release` — geçici yayın bayrağı; katalogda `sunsetAfter` **zorunlu**
+
+Kapalı bayrakla korunan rotalar `requireFeature(key)` middleware'i ile **404** döner (403 değil). Yetki kontrolü (`guard`) bayraktan önce çalışır: yetkisiz kullanıcı bayrak açık olsa bile 403 alır.
 
 ---
 
@@ -99,6 +109,7 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `club.application.approval_chain` | `["club_approver"]` | 1–3 kademe, `allowedRoles` katalogda | tenant |
 | `club.formation.support_threshold` | `0` | 0–500 (0 = destek toplama kapalı, doğrudan başvuru) | tenant |
 | `club.formation.proposal_expiry_days` | `90` | 7–180 | tenant |
+| `university.export.enabled` | `false` | boolean, `flagType: entitlement` | platform |
 
 `club.application.approval_chain` — JSON dizi: her eleman bir kademenin karar verici rolü.
 `club_approver` özel token: `club.approve` yetkisini taşıyanlar. Örnek iki kademe:

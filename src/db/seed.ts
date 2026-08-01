@@ -346,6 +346,13 @@ async function main() {
     await createUser({ universityId: antalya.id, firstName: "İçerik", lastName: "Moderatörü", email: "moderator@antalya.edu.tr", role: "content_moderator" }); // duyuru/galeri moderasyonu
     await createUser({ universityId: antalya.id, firstName: "Denetim", lastName: "Görevlisi", email: "denetci@antalya.edu.tr", role: "auditor" }); // salt-okunur izleme
 
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.UNIVERSITY_EXPORT_ENABLED,
+      value: true,
+      updatedBy: antalyaSks,
+    });
+
     // --- Kulüpler ---
     console.log("   🏕️ Antalya kulüpleri ve üyelikleri...");
 

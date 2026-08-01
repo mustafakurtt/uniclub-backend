@@ -4,6 +4,8 @@ SKS ve okul yöneticisinin kulüp/üye/etkinlik verisini resmî Excel dosyası o
 
 **Yetki:** `university.export.generate` (`university_admin`, `student_affairs` demetlerinde). Rotalar `guard(..., { tenantScoped: true })` ile korunur; POST üretimleri `audit_logs`'a düşer.
 
+**Özellik bayrağı:** `university.export.enabled` tenant ayarı (`flagType: entitlement`, varsayılan `false`, düzenleyen: platform). Bayrak kapalı tenant'ta export uçları **404** döner (403 değil — özellik varlığı sızdırılmaz). Seed'de Antalya Bilim pilot olarak `true`; Ege ve Karadeniz kapalı. `requireFeature` middleware yetki kontrolünden **sonra** çalışır.
+
 ## Uçlar
 
 | Method | Path | Açıklama |

@@ -8,7 +8,7 @@ import {
   TenantSettingEditor,
   TenantSettingKey,
   mergeOverridesIntoResolved,
-  type ResolvedTenantSettings,
+  getResolvedSettingValue,
   isTenantSettingKey,
   parseTenantSettingValue,
   tenantSettingDefaultEquals,
@@ -18,35 +18,20 @@ import { getTenantSettings, setTenantSettingsCache } from "./tenant-settings.cac
 import type { PatchTenantSettingsDTO } from "./tenant-settings.schema";
 
 export interface TenantSettingView {
-  value: number | string[];
-  default: number | string[];
-  kind: "integer" | "role_chain";
+  value: number | string[] | boolean;
+  default: number | string[] | boolean;
+  kind: "integer" | "role_chain" | "boolean";
   min?: number;
   max?: number;
   allowedRoles?: readonly string[];
+  flagType?: "entitlement" | "release";
+  sunsetAfter?: string;
   editor: string;
   labelTr: string;
   labelEn: string;
 }
 
 export type TenantSettingsResponse = Record<string, TenantSettingView>;
-
-function resolvedValueForKey(resolved: ResolvedTenantSettings, key: TenantSettingKey): number | string[] {
-  switch (key) {
-    case TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX:
-      return resolved.clubPinnedAnnouncementsMax;
-    case TenantSettingKey.UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX:
-      return resolved.universityPinnedAnnouncementsMax;
-    case TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR:
-      return resolved.universityAnnouncementPublishPerHour;
-    case TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN:
-      return resolved.clubApplicationApprovalChain;
-    case TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD:
-      return resolved.clubFormationSupportThreshold;
-    case TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS:
-      return resolved.clubFormationProposalExpiryDays;
-  }
-}
 
 function canEditSetting(key: TenantSettingKey, authz: AuthzContext): boolean {
   const def = TENANT_SETTING_CATALOG[key];
@@ -65,10 +50,17 @@ export const tenantSettingsService = {
     for (const key of TENANT_SETTING_KEYS) {
       const def = TENANT_SETTING_CATALOG[key];
       response[key] = {
-        value: resolvedValueForKey(resolved, key),
+        value: getResolvedSettingValue(resolved, key),
         default: def.defaultValue,
         kind: def.kind,
-        ...(def.kind === "integer" ? { min: def.min, max: def.max } : { allowedRoles: def.allowedRoles }),
+        ...(def.kind === "integer" ? { min: def.min, max: def.max } : {}),
+        ...(def.kind === "role_chain" ? { allowedRoles: def.allowedRoles } : {}),
+        ...(def.kind === "boolean"
+          ? {
+              flagType: def.flagType,
+              ...(def.flagType === "release" ? { sunsetAfter: def.sunsetAfter } : {}),
+            }
+          : {}),
         editor: def.editor,
         labelTr: def.labelTr,
         labelEn: def.labelEn,
@@ -111,15 +103,17 @@ export const tenantSettingsService = {
     }
 
     const overrides = await tenantSettingsRepository.listOverrides(universityId);
-    const overrideMap: Partial<Record<TenantSettingKey, number | string[]>> = {};
+    const overrideMap: Partial<Record<TenantSettingKey, number | string[] | boolean>> = {};
     for (const row of overrides) {
       if (!isTenantSettingKey(row.key)) continue;
       const def = TENANT_SETTING_CATALOG[row.key];
       if (def.kind === "integer" && typeof row.value === "number") {
         overrideMap[row.key] = row.value;
+      } else if (def.kind === "boolean" && typeof row.value === "boolean") {
+        overrideMap[row.key] = row.value;
       } else if (def.kind === "role_chain") {
         const chain = parseTenantSettingValue(row.key, row.value);
-        if (chain) overrideMap[row.key] = chain;
+        if (chain && typeof chain !== "boolean") overrideMap[row.key] = chain;
       }
     }
     const resolved = mergeOverridesIntoResolved(overrideMap);

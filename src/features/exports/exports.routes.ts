@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { guard } from "../../core/rbac/guard";
 import { RbacVariables } from "../../core/rbac/rbac.middleware";
 import { ok } from "../../shared/utils/respond";
+import { TenantSettingKey } from "../tenant-settings/tenant-settings.catalog";
+import { requireFeature } from "../tenant-settings/require-feature.middleware";
 import { ExportPermission } from "./exports.permissions";
 import { exportsService } from "./exports.service";
 
@@ -10,6 +12,7 @@ export const exportsRoutes = new Hono<{ Variables: RbacVariables }>();
 exportsRoutes.get(
   "/:universityId/exports",
   ...guard(ExportPermission.GENERATE, { tenantScoped: true }),
+  requireFeature(TenantSettingKey.UNIVERSITY_EXPORT_ENABLED),
   async (c) => {
     const catalog = exportsService.listCatalog();
     return ok(c, catalog, "exports.catalogListed");
@@ -19,6 +22,7 @@ exportsRoutes.get(
 exportsRoutes.post(
   "/:universityId/exports/:reportId",
   ...guard(ExportPermission.GENERATE, { tenantScoped: true }),
+  requireFeature(TenantSettingKey.UNIVERSITY_EXPORT_ENABLED),
   async (c) => {
     const { universityId, reportId } = c.req.param();
     const body = await c.req.json().catch(() => ({}));

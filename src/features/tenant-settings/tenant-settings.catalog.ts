@@ -18,6 +18,13 @@ export const TenantSettingEditor = {
 
 export type TenantSettingEditor = (typeof TenantSettingEditor)[keyof typeof TenantSettingEditor];
 
+export const TenantSettingFlagType = {
+  ENTITLEMENT: "entitlement",
+  RELEASE: "release",
+} as const;
+
+export type TenantSettingFlagType = (typeof TenantSettingFlagType)[keyof typeof TenantSettingFlagType];
+
 export const TenantSettingKey = {
   CLUB_PINNED_ANNOUNCEMENTS_MAX: "announcement.club.pinned.max",
   UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX: "announcement.university.pinned.max",
@@ -26,22 +33,45 @@ export const TenantSettingKey = {
   /** 0 = destek toplama kapalı (doğrudan başvuru). >0 = minimum destek sayısı. */
   CLUB_FORMATION_SUPPORT_THRESHOLD: "club.formation.support_threshold",
   CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS: "club.formation.proposal_expiry_days",
+  /** Kurumsal rapor dışa aktarma (T4.5) — entitlement bayrağı; varsayılan kapalı. */
+  UNIVERSITY_EXPORT_ENABLED: "university.export.enabled",
 } as const;
 
 export type TenantSettingKey = (typeof TenantSettingKey)[keyof typeof TenantSettingKey];
 
-export type TenantSettingKind = "integer" | "role_chain";
+export type TenantSettingKind = "integer" | "role_chain" | "boolean";
 
-export interface TenantSettingDefinition {
-  kind: TenantSettingKind;
-  defaultValue: number | string[];
-  min?: number;
-  max?: number;
-  allowedRoles?: readonly string[];
+type TenantSettingDefinitionBase = {
   editor: TenantSettingEditor;
   labelTr: string;
   labelEn: string;
-}
+};
+
+export type TenantSettingDefinition =
+  | (TenantSettingDefinitionBase & {
+      kind: "integer";
+      defaultValue: number;
+      min: number;
+      max: number;
+    })
+  | (TenantSettingDefinitionBase & {
+      kind: "role_chain";
+      defaultValue: string[];
+      min: number;
+      max: number;
+      allowedRoles: readonly string[];
+    })
+  | (TenantSettingDefinitionBase & {
+      kind: "boolean";
+      defaultValue: boolean;
+      flagType: "entitlement";
+    })
+  | (TenantSettingDefinitionBase & {
+      kind: "boolean";
+      defaultValue: boolean;
+      flagType: "release";
+      sunsetAfter: string;
+    });
 
 export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefinition> = {
   [TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX]: {
@@ -99,6 +129,14 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Kuruluş önerisi destek süresi (gün)",
     labelEn: "Formation proposal support window (days)",
   },
+  [TenantSettingKey.UNIVERSITY_EXPORT_ENABLED]: {
+    kind: "boolean",
+    defaultValue: false,
+    flagType: "entitlement",
+    editor: TenantSettingEditor.PLATFORM,
+    labelTr: "Kurumsal rapor dışa aktarma",
+    labelEn: "Institutional report export",
+  },
 };
 
 export const TENANT_SETTING_KEYS = Object.keys(TENANT_SETTING_CATALOG) as TenantSettingKey[];
@@ -107,21 +145,30 @@ export function isTenantSettingKey(key: string): key is TenantSettingKey {
   return key in TENANT_SETTING_CATALOG;
 }
 
-export function parseTenantSettingValue(key: TenantSettingKey, raw: unknown): number | string[] | null {
+export function parseTenantSettingValue(
+  key: TenantSettingKey,
+  raw: unknown
+): number | string[] | boolean | null {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
     return parseApprovalChain(raw);
   }
+  if (def.kind === "boolean") {
+    return typeof raw === "boolean" ? raw : null;
+  }
   if (raw === null) return null;
   if (typeof raw !== "number" || !Number.isInteger(raw)) return null;
-  if (raw < def.min! || raw > def.max!) return null;
+  if (raw < def.min || raw > def.max) return null;
   return raw;
 }
 
-export function tenantSettingDefaultEquals(key: TenantSettingKey, value: number | string[]): boolean {
+export function tenantSettingDefaultEquals(
+  key: TenantSettingKey,
+  value: number | string[] | boolean
+): boolean {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
-    const defaults = def.defaultValue as string[];
+    const defaults = def.defaultValue;
     const candidate = value as string[];
     return defaults.length === candidate.length && defaults.every((v, i) => v === candidate[i]);
   }
@@ -136,12 +183,13 @@ export interface ResolvedTenantSettings {
   clubApplicationApprovalChain: string[];
   clubFormationSupportThreshold: number;
   clubFormationProposalExpiryDays: number;
+  universityExportEnabled: boolean;
 }
 
 export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
   return {
-    clubPinnedAnnouncementsMax: TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX]
-      .defaultValue as number,
+    clubPinnedAnnouncementsMax:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX].defaultValue as number,
     universityPinnedAnnouncementsMax:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX].defaultValue as number,
     universityAnnouncementPublishPerHour:
@@ -151,11 +199,13 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD].defaultValue as number,
     clubFormationProposalExpiryDays:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS].defaultValue as number,
+    universityExportEnabled:
+      TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED].defaultValue as boolean,
   };
 }
 
 export function mergeOverridesIntoResolved(
-  overrides: Partial<Record<TenantSettingKey, number | string[]>>
+  overrides: Partial<Record<TenantSettingKey, number | string[] | boolean>>
 ): ResolvedTenantSettings {
   const defaults = buildDefaultResolvedSettings();
   return {
@@ -177,5 +227,37 @@ export function mergeOverridesIntoResolved(
     clubFormationProposalExpiryDays:
       (overrides[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS] as number | undefined) ??
       defaults.clubFormationProposalExpiryDays,
+    universityExportEnabled:
+      (overrides[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED] as boolean | undefined) ??
+      defaults.universityExportEnabled,
   };
+}
+
+export function getResolvedSettingValue(
+  resolved: ResolvedTenantSettings,
+  key: TenantSettingKey
+): number | string[] | boolean {
+  switch (key) {
+    case TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX:
+      return resolved.clubPinnedAnnouncementsMax;
+    case TenantSettingKey.UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX:
+      return resolved.universityPinnedAnnouncementsMax;
+    case TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR:
+      return resolved.universityAnnouncementPublishPerHour;
+    case TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN:
+      return resolved.clubApplicationApprovalChain;
+    case TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD:
+      return resolved.clubFormationSupportThreshold;
+    case TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS:
+      return resolved.clubFormationProposalExpiryDays;
+    case TenantSettingKey.UNIVERSITY_EXPORT_ENABLED:
+      return resolved.universityExportEnabled;
+  }
+}
+
+/** Boolean özellik bayrağı açık mı? (non-boolean anahtarlar için true döner.) */
+export function isTenantFeatureEnabled(resolved: ResolvedTenantSettings, key: TenantSettingKey): boolean {
+  const def = TENANT_SETTING_CATALOG[key];
+  if (def.kind !== "boolean") return true;
+  return getResolvedSettingValue(resolved, key) as boolean;
 }
