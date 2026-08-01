@@ -484,7 +484,9 @@ arkasında (istisna: `GET /api/universities`, `/uploads/:key`). Afişteki QR'ı
 okuyan kişinin hesabı yoktur; tanıtım günlerindeki aday öğrenci henüz
 üniversiteye kayıtlı bile değildir. Bu iz o yüzeyi açar.
 
-### T10.1 QR kod sistemi ★
+### T10.1 QR kod sistemi ★ — **afiş + yoklama (v1)**
+
+Belge doğrulama QR bu turda **yok** (transkript işine bağlı).
 
 Üç farklı QR ihtiyacı var; **aynı şey değiller**, karıştırılmamalı:
 

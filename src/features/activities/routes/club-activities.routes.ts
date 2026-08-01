@@ -104,6 +104,14 @@ clubActivitiesRoutes.delete(
   }
 );
 
+// 7b. DÖNEN YOKLAMA QR (host staff ekranı)
+clubActivitiesRoutes.get("/:activityId/check-in-qr", authMiddleware, requireClubStaff, async (c) => {
+  const clubId = c.req.param("clubId")!;
+  const activityId = c.req.param("activityId")!;
+  const qr = await activitiesService.getCheckInQr(clubId, activityId);
+  return ok(c, qr, "activity.checkInQrReady");
+});
+
 // ── Co-host davet/kabul ─────────────────────────────────────────────────────
 // NOT: yol param'ı ":clubId" işlemi YAPAN kulüptür. Davet/liste/kaldırma'da
 // HOST kulüp (servis host doğrular); kabul/ayrılmada CO-HOST kulüp (servis bağı

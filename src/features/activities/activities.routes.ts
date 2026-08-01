@@ -4,7 +4,7 @@ import { requireActiveUser } from "../../middlewares/active-user.middleware";
 import { validate } from "../../shared/utils/validate";
 import { ok, done } from "../../shared/utils/respond";
 import { requireTenant } from "../../shared/utils/tenant.util";
-import { listActivitiesQuerySchema, rsvpSchema } from "./activities.schema";
+import { listActivitiesQuerySchema, rsvpSchema, selfCheckInSchema } from "./activities.schema";
 import { activitiesService } from "./activities.service";
 
 /**
@@ -52,3 +52,21 @@ activitiesRoutes.delete("/:activityId/rsvp", async (c) => {
   await activitiesService.cancelRsvp(user.userId, activityId);
   return done(c, "attendee.rsvpRemoved");
 });
+
+// 5. QR YOKLAMA — öğrenci kendi katılımını işaretler (RSVP + kısa ömürlü token)
+activitiesRoutes.post(
+  "/:activityId/check-in",
+  validate("json", selfCheckInSchema),
+  async (c) => {
+    const user = c.get("user");
+    const activityId = c.req.param("activityId")!;
+    const body = c.req.valid("json");
+    const attendee = await activitiesService.selfCheckIn(
+      user.userId,
+      requireTenant(user.universityId),
+      activityId,
+      body.token
+    );
+    return ok(c, attendee, "attendee.checkedIn");
+  }
+);

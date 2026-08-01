@@ -5,6 +5,7 @@ import { requireActiveUser } from "../../middlewares/active-user.middleware";
 import { requireVerifiedUserForWrites } from "../../middlewares/verified-user.middleware";
 import { announcementsRoutes } from "../announcements/announcements.routes";
 import { galleryRoutes } from "../gallery/gallery.routes";
+import { clubPosterQrRoutes } from "../poster-qr/club-poster-qr.routes";
 import { clubActivitiesRoutes } from "../activities/routes/club-activities.routes";
 import { browseRoutes } from "./routes/browse.routes";
 import { applicationsRoutes } from "./routes/applications.routes";
@@ -41,6 +42,7 @@ clubsRoutes.use("*", authMiddleware, requireActiveUser, requireVerifiedUserForWr
 clubsRoutes.route("/:clubId/announcements", announcementsRoutes);
 clubsRoutes.route("/:clubId/gallery", galleryRoutes);
 clubsRoutes.route("/:clubId/activities", clubActivitiesRoutes);
+clubsRoutes.route("/:clubId/poster-qr", clubPosterQrRoutes);
 
 clubsRoutes.route("/", applicationsRoutes);
 clubsRoutes.route("/", membershipRoutes);
