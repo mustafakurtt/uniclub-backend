@@ -1,4 +1,5 @@
 import { badRequest, notFound } from "../../shared/utils/errors";
+import { slugify } from "../../shared/utils/slug.util";
 import { exportsRepository } from "./exports.repository";
 import { EXPORT_MAX_ROWS } from "./exports.constants";
 import {
@@ -68,11 +69,7 @@ function summarizeParamsEn(
 }
 
 function filenameParamSlug(summary: string): string {
-  const slug = summary
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
+  const slug = slugify(summary).slice(0, 48);
   return slug || "all";
 }
 
