@@ -366,6 +366,9 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | GET | `/api/clubs/:clubId/general-meetings` | **staff**: genel kurul kayıtları (`attendeeCount` liste yanıtında) |
 | GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff**: genel kurul detayı |
 | POST | `/api/clubs/:clubId/general-meetings` | officer/başkan: genel kurul + kurul seçimi kaydı |
+| GET | `/api/clubs/:clubId/handover-records` | **staff**: devir teslim kayıtları |
+| GET | `/api/clubs/:clubId/handover-records/:handoverId` | **staff**: devir teslim detayı |
+| POST | `/api/clubs/:clubId/handover-records` | officer/başkan: dönemsel devir teslim (`generalMeetingId`) |
 | PATCH | `/api/clubs/:clubId` | **yalnızca başkan** (profil düzenle; durum HARİÇ) |
 | POST | `/api/clubs/:clubId/contact-links` | officer/başkan |
 | PATCH | `/api/clubs/:clubId/contact-links/:linkId` | officer/başkan (yalnızca url) |
@@ -378,6 +381,7 @@ Body şemaları:
 - `PATCH .../join-requests/:userId`: `{ "decision": "approved" | "rejected" }`
 - `PATCH .../members/:userId/role`: `{ "role": "member" | "officer" }` — `president` atanamaz (devir ayrı endpoint).
 - `POST .../transfer-presidency`: `{ "newPresidentId": "uuid" }` (kulübün onaylı üyesi olmalı).
+- `POST .../handover-records`: `{ "generalMeetingId": "uuid", "handoverAt?": "datetime" }` — genel kurul kararına dayalı devir teslim.
 - `PATCH /:clubId`: en az bir alan → `{ name?, description?, logoUrl?, coverUrl?, joinPolicy? }` (`status` yok).
 - `POST .../contact-links`: `{ "platform": "whatsapp|instagram|discord|telegram|twitter|website|email|other", "url": "url (max 512)" }` — platform başına tek link.
 - `PATCH .../contact-links/:linkId`: `{ "url": "url (max 512)" }` (platform sabit).
@@ -450,10 +454,10 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/appeal/review` | `application.view` | İtiraz incele (`decision`: upheld/dismissed) |
 | GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
 | GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
-| GET | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Onay kurullarını listele |
+| GET | `/api/admin/universities/:universityId/approval-committees` | `university.approval_committee.manage` | Onay kurullarını listele |
 | GET | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `application.view` | Kurul detayı (oylama arayüzü için) |
-| POST | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Kurul oluştur (`name`, `memberUserIds`) |
-| PATCH | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.settings.manage` | Kurul güncelle |
+| POST | `/api/admin/universities/:universityId/approval-committees` | `university.approval_committee.manage` | Kurul oluştur (`name`, `memberUserIds`) |
+| PATCH | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.approval_committee.manage` | Kurul güncelle |
 
 Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Eski format: rol dizisi (`["advisor","student_affairs"]`). Yeni format: adım nesneleri — `role_sequential` veya `committee_majority` (+ `committeeId`). Kurul kademesinde `committee-vote`; salt çoğunluk üye sayısı üzerinden. Özet `application.status` adımlardan türetilir; nihai karar bildirimi yalnızca `approved`/`rejected`. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |

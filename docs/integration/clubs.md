@@ -329,6 +329,22 @@ Kurul unvanları (`title`): `president`, `vice_president`, `secretary`, `treasur
 
 Yeter sayı tenant ayarı `club.general_meeting.quorum_percent` (onaylı üye yüzdesi); katılımcı sayısı altında `400`.
 
+### 7.8 Devir teslim — `GET/POST /:clubId/handover-records` (T1.3)
+
+Genel kurul seçimi sonrası **resmî görev devri** kaydı. `transfer-presidency` hızlı başkanlık devri olarak kalır; devir teslim onun yerine geçmez, üstüne gelir.
+
+| Method | Path | Kim |
+|---|---|---|
+| GET | `/api/clubs/:clubId/handover-records` | **staff** |
+| GET | `/api/clubs/:clubId/handover-records/:handoverId` | **staff** |
+| POST | `/api/clubs/:clubId/handover-records` | officer / başkan |
+
+`POST` body: `{ "generalMeetingId": "uuid", "handoverAt?": "datetime" }` — akademik dönem genel kurul kaydından türetilir. Aynı `generalMeetingId` için yalnızca bir devir kaydı.
+
+Yanıt: `academicTerm`, `generalMeeting`, `handoverAt`, `outgoingBoard` / `incomingBoard` (kurul anlık görüntüsü), `transferredItems` — bekleyen katılım istekleri (`pendingJoinRequestUserIds`), devam eden etkinlikler (`ongoingActivityIds`: `draft`/`published`), aktif danışmanlar (`advisorUserIds`). **Envanter bu turda yok** (T4.7).
+
+İşlem: aktif kurul üyeliklerinin görev süresi kapanır (`ended_at`); genel kurulda seçilen kurul üyelikleri aktifleştirilir; yönetim kurulu seçimi `club_members.role` ve `club_membership_events` ile senkronlanır.
+
 ---
 
 ## 8. Kulüp Profili ve İletişim Linkleri (başkan / officer)

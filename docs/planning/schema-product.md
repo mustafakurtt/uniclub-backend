@@ -91,6 +91,7 @@ küçük tenant'ta `notifyManySafe` istek içinde senkron kalır.
 - `club_general_meetings` — genel kurul kaydı (`academic_term_id`, `held_at`, `location`, `meeting_type`, `decisions`); tenant kilidi `club_id` + `university_id`.
 - `club_general_meeting_attendees` — katılımcı üyeler (`meeting_id`, `user_id`).
 - `club_board_memberships` — yönetim/denetleme kurulu (`board_type`, `seat_type` asil/yedek, `title` unvan); `ended_at` NULL = aktif görev; seçim `general_meeting_id` ile bağlı.
+- `club_handover_records` — dönemsel devir teslim (T1.3): `academic_term_id`, `general_meeting_id`, `handover_at`, devreden/devralan kurul anlık görüntüsü (`outgoing_board_snapshot` / `incoming_board_snapshot` JSON), devredilen kalemler (`transferred_items` JSON: bekleyen katılım istekleri, devam eden etkinlikler, danışmanlar). Envanter bu turda yok. Her genel kurul için tek kayıt (`general_meeting_id` unique).
 - `approval_committees` / `approval_committee_members` — tenant kapsamlı **kalıcı onay kurulları** (başvuruya özel değil); `club_application_approvals.step_kind = committee_majority` kademesi `committee_id` ile buraya bağlanır.
 - `club_application_committee_votes` — kurul oyları (upsert; karar kesinleşene kadar değiştirilebilir); salt çoğunluk üye tam sayısı üzerinden hesaplanır.
 

@@ -47,6 +47,10 @@ import {
   approvalCommitteeMessages,
   type ApprovalCommitteeMessageKey,
 } from "../../features/approval-committees/approval-committees.messages";
+import {
+  handoverMessages,
+  type HandoverMessageKey,
+} from "../../features/handover/handover.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -79,7 +83,8 @@ export const messages = mergeCatalogs(
   membershipHistoryMessages,
   clubAdvisorMessages,
   generalMeetingsMessages,
-  approvalCommitteeMessages
+  approvalCommitteeMessages,
+  handoverMessages
 );
 
 /**
@@ -112,4 +117,5 @@ export type MessageKey =
   | MembershipHistoryMessageKey
   | ClubAdvisorMessageKey
   | GeneralMeetingsMessageKey
-  | ApprovalCommitteeMessageKey;
+  | ApprovalCommitteeMessageKey
+  | HandoverMessageKey;

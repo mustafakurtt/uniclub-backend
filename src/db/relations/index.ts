@@ -15,6 +15,7 @@ import { membershipEventsRelations } from "./membership-events";
 import { advisorInvitationsRelations } from "./advisor-invitations";
 import { generalMeetingsRelations } from "./general-meetings";
 import { approvalCommitteesRelations } from "./approval-committees";
+import { handoverRelations } from "./handover";
 
 export const relations = defineRelations(schema, (r) => ({
   ...universityRelations(r),
@@ -32,4 +33,5 @@ export const relations = defineRelations(schema, (r) => ({
   ...advisorInvitationsRelations(r),
   ...generalMeetingsRelations(r),
   ...approvalCommitteesRelations(r),
+  ...handoverRelations(r),
 }));

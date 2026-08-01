@@ -4,7 +4,7 @@ import { RbacVariables } from "../../core/rbac/rbac.middleware";
 import { validate } from "../../shared/utils/validate";
 import { ok, created } from "../../shared/utils/respond";
 import { ClubPermission } from "../clubs/clubs.permissions";
-import { TenantSettingsPermission } from "../tenant-settings/tenant-settings.permissions";
+import { ApprovalCommitteePermission } from "./approval-committees.permissions";
 import { approvalCommitteesService } from "./approval-committees.service";
 import {
   createApprovalCommitteeSchema,
@@ -15,7 +15,7 @@ export const approvalCommitteesRoutes = new Hono<{ Variables: RbacVariables }>()
 
 approvalCommitteesRoutes.get(
   "/universities/:universityId/approval-committees",
-  ...guard(TenantSettingsPermission.MANAGE, { tenantScoped: true }),
+  ...guard(ApprovalCommitteePermission.MANAGE, { tenantScoped: true }),
   async (c) => {
     const { universityId } = c.req.param();
     const committees = await approvalCommitteesService.list(universityId);
@@ -35,7 +35,7 @@ approvalCommitteesRoutes.get(
 
 approvalCommitteesRoutes.post(
   "/universities/:universityId/approval-committees",
-  ...guard(TenantSettingsPermission.MANAGE, { tenantScoped: true }),
+  ...guard(ApprovalCommitteePermission.MANAGE, { tenantScoped: true }),
   validate("json", createApprovalCommitteeSchema),
   async (c) => {
     const { universityId } = c.req.param();
@@ -47,7 +47,7 @@ approvalCommitteesRoutes.post(
 
 approvalCommitteesRoutes.patch(
   "/universities/:universityId/approval-committees/:committeeId",
-  ...guard(TenantSettingsPermission.MANAGE, { tenantScoped: true }),
+  ...guard(ApprovalCommitteePermission.MANAGE, { tenantScoped: true }),
   validate("json", updateApprovalCommitteeSchema),
   async (c) => {
     const { universityId, committeeId } = c.req.param();

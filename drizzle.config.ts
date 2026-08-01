@@ -24,6 +24,7 @@ export default defineConfig({
     "./src/db/schema/membership-events.ts",
     "./src/db/schema/advisor-invitations.ts",
     "./src/db/schema/general-meetings.ts",
+    "./src/db/schema/handover.ts",
     "./src/db/schema/approval-committees.ts",
   ],
   out: "./src/db/migrations",     // SQL dosyalarının üretileceği yer
