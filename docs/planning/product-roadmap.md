@@ -691,6 +691,49 @@ backend'i de sürdürüyor. Bu, milestone büyüklüklerinin küçük tutulması
 zorunlu kılar. Her milestone **gösterilebilir bir hikâye** üretmeli; "önce tüm
 API'ler, sonra tüm ekranlar" yaklaşımı bu kapasitede tıkanır.
 
+### FE-5 Bilgi mimarisi ve derinleşme ★ — **sıradaki iş**
+
+**Teşhis (2026-08-01, koda karşı ölçüldü):** Arayüz *geniş ama sığ*. Kullanıcının
+tarifi: "karmaşık pathler her yerde ama içlerinde ayrıntı yok; yönetim kısmında her
+şey alt alta geçmiş ama detaylara ulaşamıyoruz."
+
+Ölçüm bunu doğruluyor:
+
+| Bulgu | Kanıt |
+| --- | --- |
+| **11 admin rotası, tek detay rotası** | Yalnızca `/admin/universities/:universityId` parametrik. Kulüp, kullanıcı, başvuru için detay rotası **yok** |
+| **Detaylar modal içinde** | `AdminFormationProposalDetailModal`, `ClubApplicationHistoryModal`, `ClubAdvisorsModal`, `RoleFormModal` |
+| **Menü düz ve gruplanmamış** | 9 öğe yan yana; günlük iş (kulüpler, moderasyon, raporlar) ile nadir kurulum işi (roller, yetkiler, akademik yapı) aynı düzeyde |
+
+**Modal'ın bedeli kozmetik değil, işlevsel.** Kurumsal iş akışında SKS uzmanı
+meslektaşına "şu başvuruya bak" der. Modal'a **link verilemez**, yer imi yapılamaz,
+geri tuşu çalışmaz, sekmede açılamaz, e-postayla paylaşılamaz. Denetim bağlamında
+"hangi kayda baktık" sorusunun cevabı bir URL olmalı.
+
+Yapılacaklar:
+
+1. **Modal → rota.** Her varlık için derin bağlanabilir detay sayfası:
+   `/admin/clubs/:clubId`, `/admin/users/:userId`, `/admin/applications/:applicationId`,
+   `/admin/proposals/:proposalId`. Modal yalnızca gerçekten geçici olan iş için
+   (onay kutusu, tek alanlık düzenleme) kalır.
+2. **Detay sayfaları sekmelensin.** Kulüp detayı: üyeler · etkinlikler · duyurular ·
+   danışmanlar · galeri · denetim izi. Bugün bu bilgiler farklı üst menü öğelerine
+   dağılmış durumda; varlık merkezli toplanmalı.
+3. **Menü gruplansın.** *Günlük iş* (başvurular, kulüpler, moderasyon, raporlar) /
+   *Kurum yapısı* (akademik yapı, ayarlar) / *Sistem* (roller, yetkiler, denetim izi).
+   Nadir kullanılan kurulum işleri günlük işin önünü kapatmamalı.
+4. **Rol bazlı iniş.** `student_affairs` ile `university_admin` aynı ekrana düşmemeli.
+   SKS'nin işi başvuru kuyruğu; tenant yöneticisinin işi yapılandırma. `advisor` ve
+   `content_moderator` için de kendi yüzeyleri var ama bugün hiç yok.
+5. **Öğrenci tarafı da derinleşsin.** Başvuru ve kuruluş önerisi ekranları bugün tek
+   sayfa. Süreç görünürlüğü (hangi kademede, ne bekleniyor, ne zaman), geçmiş,
+   belge ekleri eksik.
+
+**Sıralama gerekçesi:** M3'e (akademik dönem, devir teslim) geçmeden önce yapılmalı.
+M3 daha çok varlık ve daha çok ilişki getiriyor; bilgi mimarisi düzeltilmeden
+eklenirse aynı düz listeye bir öğe daha binecek ve sorun büyüyerek katılaşacak.
+Bu bir "temizlik" turu değil, **ürünün yönetilebilirliğini** belirleyen yapısal iş.
+
 ---
 
 ## 8. Rota: milestone'lar
@@ -726,7 +769,7 @@ gördüğü acıyı (dağınık takip) tek ekranda çözer.
 **Kapsam dışı bırakılanlar** (M1'i şişirmemek için): onay hiyerarşisi, resmî
 çıktılar, turnuva, transkript, analitik derinliği.
 
-### M2 — Kurumsal süreç — **devam ediyor**
+### M2 — Kurumsal süreç — **tamamlandı**
 
 **Amaç:** Kurumun ürünü gerçekten benimsemesi.
 
@@ -735,9 +778,11 @@ gördüğü acıyı (dağınık takip) tek ekranda çözer.
 | T4.1 başvuru inceleme derinleşmesi | ✅ v1 (revizyon talebi + yeniden gönderim + olay geçmişi); kontrol listesi ve itiraz bekliyor |
 | T4.2 onay hiyerarşisi | ✅ v1 (çok kademeli zincir, tenant ayarı); vekâlet ve süre aşımı bekliyor |
 | T1.1 kuruluş önerisi / destek toplama | ✅ backend v1 + tenant eşiği · arayüz bu dalgada |
-| T4.5 Excel/PDF resmî çıktılar | 🔄 v1 **veri çıktıları** (xlsx, üç rapor, yeniden üretilebilirlik) — resmî **belge/PDF** dilimi ayrıldı, aşağıya bak |
-| **FE-3** kurum paneli ilk dilimi | ✅ tenant ayarları ekranı + başvuru/zincir görünümleri |
-| T8.5 özellik yetkilendirmesi ve yayın bayrakları | ⬜ küçük; **pilot açılışını bloke ediyor** |
+| T4.5 Excel/PDF resmî çıktılar | ✅ v1 xlsx (üç rapor) + v2 PDF (yıllık faaliyet raporu, karar tutanağı). Devir teslim tutanağı T1.3'e bağlı → M3 |
+| **FE-3** kurum paneli ilk dilimi | ✅ tenant ayarları, başvuru/zincir görünümleri, raporlar ekranı |
+| T8.5 özellik yetkilendirmesi ve yayın bayrakları | ✅ boolean kind, `flagType`, `sunsetAfter` CI kapısı, `requireFeature` → 404. Canlı doğrulandı |
+
+**M2 kapandı.** Sırada M3 değil, **M2.5** — bkz. aşağısı.
 
 **T4.5 neden ikiye bölündü:** Veri çıktısı (liste/tablo) ile resmî belge (imza bloklu,
 sayfa düzenli tutanak) farklı işler. PDF motoru Türkçe karakterler için font gömme,
@@ -749,6 +794,20 @@ M2'nin ikinci yarısına kalıyor — devir teslim tutanağı zaten T1.3'e (M3) 
 **T8.5 neden M2'de:** Pilot kuruma yeni bir özelliği önce tek başına açmak isteniyor.
 Bayrak altyapısı olmadan bunun tek yolu ayrı kurulum — ki bu yanlış cevap (bkz. T8.5).
 İş küçük: katalog kaydı + rota kontrolü + `sunsetAfter` doküman kapısı.
+
+### M2.5 — Arayüz derinleşmesi ve bilgi mimarisi ★ — **sıradaki**
+
+**Amaç:** Ürünü yönetilebilir kılmak. M2 kurumun *süreçlerini* kurdu; bu milestone
+o süreçlere **ulaşılabilir** hâle getiriyor.
+
+- **FE-5** bilgi mimarisi: modal → rota, sekmeli detay sayfaları, gruplanmış menü,
+  rol bazlı iniş sayfaları (ayrıntı yukarıda)
+- Öğrenci tarafında süreç görünürlüğü: başvuru/öneri hangi kademede, ne bekleniyor
+- Backend'den gereken: detay uçlarının varlık merkezli toplanması (bugün bilgi
+  birden çok uca dağılmış), gerekirse tek çağrıda sekme verisi
+
+**Neden M3'ten önce:** M3 daha çok varlık ve ilişki getiriyor (dönem, devir teslim,
+tarihçe). Düz liste + modal mimarisi üzerine eklenirse sorun büyüyerek katılaşır.
 
 ### M3 — Dönem ve tarihçe
 
