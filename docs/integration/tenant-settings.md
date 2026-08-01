@@ -123,6 +123,8 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `club.formation.support_threshold` | `0` | 0–500 (0 = destek toplama kapalı, doğrudan başvuru) | tenant |
 | `club.formation.proposal_expiry_days` | `90` | 7–180 | tenant |
 | `club.advisor.invitation_expiry_days` | `14` | 3–60 | tenant |
+| `club.general_meeting.quorum_percent` | `50` | 1–100 | tenant |
+| `club.general_meeting.majority_percent` | `50` | 1–100 | tenant |
 | `university.export.enabled` | `false` | boolean, `flagType: entitlement` | platform |
 | `university.export.pdf.enabled` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-01` | platform |
 

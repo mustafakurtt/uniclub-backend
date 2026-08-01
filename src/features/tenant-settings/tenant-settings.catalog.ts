@@ -47,6 +47,10 @@ export const TenantSettingKey = {
   CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS: "club.formation.proposal_expiry_days",
   /** Danışman davetinin geçerlilik süresi (gün). */
   CLUB_ADVISOR_INVITATION_EXPIRY_DAYS: "club.advisor.invitation_expiry_days",
+  /** Genel kurul yeter sayısı (onaylı üye yüzdesi). */
+  CLUB_GENERAL_MEETING_QUORUM_PERCENT: "club.general_meeting.quorum_percent",
+  /** Genel kurul karar çoğunluğu (katılan üye yüzdesi). */
+  CLUB_GENERAL_MEETING_MAJORITY_PERCENT: "club.general_meeting.majority_percent",
   /** Kurumsal rapor dışa aktarma (T4.5) — entitlement bayrağı; varsayılan kapalı. */
   UNIVERSITY_EXPORT_ENABLED: "university.export.enabled",
   /** PDF resmî belgeler (T4.5 v2) — release bayrağı; pilot sonrası kaldırılacak. */
@@ -182,6 +186,24 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Danışman davet geçerlilik süresi (gün)",
     labelEn: "Advisor invitation validity (days)",
   },
+  [TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT]: {
+    kind: "integer",
+    defaultValue: 50,
+    min: 1,
+    max: 100,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Genel kurul yeter sayısı (onaylı üye %)",
+    labelEn: "General meeting quorum (approved member %)",
+  },
+  [TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT]: {
+    kind: "integer",
+    defaultValue: 50,
+    min: 1,
+    max: 100,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Genel kurul karar çoğunluğu (katılan üye %)",
+    labelEn: "General meeting decision majority (attendee %)",
+  },
   [TenantSettingKey.UNIVERSITY_EXPORT_ENABLED]: {
     kind: "boolean",
     defaultValue: false,
@@ -255,6 +277,8 @@ export interface ResolvedTenantSettings {
   clubFormationSupportThreshold: number;
   clubFormationProposalExpiryDays: number;
   clubAdvisorInvitationExpiryDays: number;
+  clubGeneralMeetingQuorumPercent: number;
+  clubGeneralMeetingMajorityPercent: number;
   universityExportEnabled: boolean;
   universityExportPdfEnabled: boolean;
 }
@@ -280,6 +304,10 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS].defaultValue as number,
     clubAdvisorInvitationExpiryDays:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS].defaultValue as number,
+    clubGeneralMeetingQuorumPercent:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT].defaultValue as number,
+    clubGeneralMeetingMajorityPercent:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT].defaultValue as number,
     universityExportEnabled:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED].defaultValue as boolean,
     universityExportPdfEnabled:
@@ -325,6 +353,12 @@ export function mergeOverridesIntoResolved(
     clubAdvisorInvitationExpiryDays:
       (overrides[TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS] as number | undefined) ??
       defaults.clubAdvisorInvitationExpiryDays,
+    clubGeneralMeetingQuorumPercent:
+      (overrides[TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT] as number | undefined) ??
+      defaults.clubGeneralMeetingQuorumPercent,
+    clubGeneralMeetingMajorityPercent:
+      (overrides[TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT] as number | undefined) ??
+      defaults.clubGeneralMeetingMajorityPercent,
     universityExportEnabled:
       (overrides[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED] as boolean | undefined) ??
       defaults.universityExportEnabled,
@@ -359,6 +393,10 @@ export function getResolvedSettingValue(
       return resolved.clubFormationProposalExpiryDays;
     case TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS:
       return resolved.clubAdvisorInvitationExpiryDays;
+    case TenantSettingKey.CLUB_GENERAL_MEETING_QUORUM_PERCENT:
+      return resolved.clubGeneralMeetingQuorumPercent;
+    case TenantSettingKey.CLUB_GENERAL_MEETING_MAJORITY_PERCENT:
+      return resolved.clubGeneralMeetingMajorityPercent;
     case TenantSettingKey.UNIVERSITY_EXPORT_ENABLED:
       return resolved.universityExportEnabled;
     case TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED:

@@ -13,6 +13,7 @@ import { mediaRelations } from "./media";
 import { academicTermsRelations } from "./academic-terms";
 import { membershipEventsRelations } from "./membership-events";
 import { advisorInvitationsRelations } from "./advisor-invitations";
+import { generalMeetingsRelations } from "./general-meetings";
 
 export const relations = defineRelations(schema, (r) => ({
   ...universityRelations(r),
@@ -28,4 +29,5 @@ export const relations = defineRelations(schema, (r) => ({
   ...academicTermsRelations(r),
   ...membershipEventsRelations(r),
   ...advisorInvitationsRelations(r),
+  ...generalMeetingsRelations(r),
 }));

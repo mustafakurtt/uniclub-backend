@@ -42,6 +42,7 @@ export const clubsMessages = defineCatalog({
     // başarı
     "club.applicationSubmitted": "Kulüp başvurunuz alındı.",
     "club.applicationFound": "Başvuru bulundu.",
+    "club.applicationHistoryListed": "Başvuru süreç geçmişi listelendi.",
     "club.applicationWithdrawn": "Başvurunuz geri çekildi.",
     "club.applicationResubmitted": "Başvurunuz yeniden gönderildi.",
     "club.applicationAppealSubmitted": "İtirazınız alındı.",
@@ -100,6 +101,7 @@ export const clubsMessages = defineCatalog({
     // success
     "club.applicationSubmitted": "Your club application has been received.",
     "club.applicationFound": "Application found.",
+    "club.applicationHistoryListed": "Application process history listed.",
     "club.applicationWithdrawn": "Your application has been withdrawn.",
     "club.applicationResubmitted": "Your application has been resubmitted.",
     "club.applicationAppealSubmitted": "Your appeal has been submitted.",

@@ -39,6 +39,10 @@ import {
   clubAdvisorMessages,
   type ClubAdvisorMessageKey,
 } from "../../features/club-advisors/club-advisors.messages";
+import {
+  generalMeetingsMessages,
+  type GeneralMeetingsMessageKey,
+} from "../../features/general-meetings/general-meetings.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -69,7 +73,8 @@ export const messages = mergeCatalogs(
   exportsMessages,
   academicTermMessages,
   membershipHistoryMessages,
-  clubAdvisorMessages
+  clubAdvisorMessages,
+  generalMeetingsMessages
 );
 
 /**
@@ -100,4 +105,5 @@ export type MessageKey =
   | ExportsMessageKey
   | AcademicTermMessageKey
   | MembershipHistoryMessageKey
-  | ClubAdvisorMessageKey;
+  | ClubAdvisorMessageKey
+  | GeneralMeetingsMessageKey;

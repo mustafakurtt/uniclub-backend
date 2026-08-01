@@ -219,6 +219,19 @@ class ClubApplicationReviewRepository {
       return { appeal: updatedAppeal, application: updatedApplication };
     });
   }
+
+  findApplicationByApplicant(applicantId: string, applicationId: string) {
+    return db.query.clubApplications.findFirst({
+      where: { id: applicationId, applicantId },
+    });
+  }
+
+  findApplicationEvents(applicationId: string) {
+    return db.query.clubApplicationEvents.findMany({
+      where: { applicationId },
+      orderBy: { createdAt: "asc" },
+    });
+  }
 }
 
 export const clubApplicationReviewRepository = new ClubApplicationReviewRepository();

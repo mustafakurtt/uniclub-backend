@@ -148,6 +148,7 @@ Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı end
 |---|---|---|
 | POST | `/api/clubs/applications` | Yeni başvuru oluştur |
 | GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (onay adımlarıyla) |
+| GET | `/api/clubs/applications/:applicationId/history` | Kendi başvurumun süreç geçmişi (sınırlı DTO) |
 | PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 | GET | `/api/users/me/applications` | Tüm başvurularım (özet liste) |
@@ -163,6 +164,10 @@ Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı end
 ### 6.2 Başvuru detayı — `GET /api/clubs/applications/:applicationId`
 
 Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulunamadı."`). Onay zinciri gömülüdür. `status: "revision_requested"` olduğunda `revisionRequest` alanı dolu:
+
+### 6.2b Süreç geçmişi — `GET /api/clubs/applications/:applicationId/history`
+
+Başvuran self-service; admin `.../club-applications/:id/history` uçundan **farklı DTO**. Öğrenciye yalnızca `revision_requested`, `resubmitted`, `approved`, `rejected` olayları; `checklist_updated` ve itiraz denetim olayları **yok**. İnceleyen kimliği (`actor`) ve iç kontrol listesi notları sızmasın.
 
 ```jsonc
 {
@@ -249,6 +254,9 @@ Yetki **global RBAC'tan değil kulüpteki rolden** gelir (`club.middleware`). Mi
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** |
 | GET | `/api/clubs/:clubId/membership-history` | **staff** (sayfalama + `academicTermId` filtresi) |
+| GET | `/api/clubs/:clubId/general-meetings` | **staff** |
+| GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff** |
+| POST | `/api/clubs/:clubId/general-meetings` | officer / başkan |
 
 ### 7.1 Bekleyen istekler — `GET /:clubId/join-requests`
 
@@ -288,6 +296,31 @@ Append-only `club_membership_events` tablosundan okur; `club_members` güncel du
 Query: `limit` (varsayılan 50), `cursor` (ISO `occurredAt`), `academicTermId` (opsiyonel filtre).
 
 `data.items[]`: `eventType` (`joined` | `role_changed` | `removed` | `left` | `join_rejected`), `role`, `previousRole`, `occurredAt`, `academicTerm`, `user`, `actor`.
+
+### 7.7 Genel kurul — `GET/POST /:clubId/general-meetings` (T1.6 temel)
+
+Karar organı kaydı: akademik dönem, tarih/saat, yer, tür (`ordinary` | `extraordinary`), alınan kararlar (serbest metin), katılımcı üyeler ve isteğe bağlı kurul seçimi.
+
+`POST` body:
+
+```jsonc
+{
+  "academicTermId": "uuid",
+  "meetingType": "ordinary",
+  "heldAt": "2026-03-15T14:00:00+03:00",
+  "location": "Salon A",
+  "decisions": "Yönetim ve denetleme kurulu seçildi.",
+  "attendeeUserIds": ["uuid", "..."],
+  "boardMembers": [
+    { "userId": "uuid", "boardType": "management", "seatType": "principal", "title": "president" },
+    { "userId": "uuid", "boardType": "audit", "seatType": "alternate", "title": "member" }
+  ]
+}
+```
+
+Kurul unvanları (`title`): `president`, `vice_president`, `secretary`, `treasurer`, `member` (denetim kurulu). `club_members.role` (`member`/`officer`/`president`) ayrı katman; yönetim kurulu başkanı seçimi kulüp başkan rolünü senkronlar ve `club_membership_events`'e `role_changed` düşer. `transfer-presidency` ayrı akış olarak kalır.
+
+Yeter sayı tenant ayarı `club.general_meeting.quorum_percent` (onaylı üye yüzdesi); katılımcı sayısı altında `400`.
 
 ---
 

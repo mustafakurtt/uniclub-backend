@@ -1,7 +1,7 @@
 import { Context, Next } from "hono";
 import { db } from "../db";
 import { Variables } from "../core/auth/auth.middleware";
-import { forbidden } from "../shared/utils/errors";
+import { forbidden, notFound } from "../shared/utils/errors";
 
 export type ClubMembershipRole = "member" | "officer" | "president";
 
@@ -101,5 +101,21 @@ export const requireClubPresident = async (c: Context<{ Variables: ClubVariables
 
   c.set("clubMembership", membership);
   c.set("clubAccess", { via: "member", role: membership.role, status: membership.status });
+  await next();
+};
+
+/** Kulüp çağıranın tenant'ında değilse 404 — çapraz tenant için staff kontrolünden önce. */
+export const requireClubInTenant = async (c: Context<{ Variables: Variables }>, next: Next) => {
+  const { clubId } = c.req.param();
+  const user = c.get("user");
+  if (!user.universityId) {
+    throw notFound("club.notFound");
+  }
+  const club = await db.query.clubs.findFirst({
+    where: { id: clubId, universityId: user.universityId },
+  });
+  if (!club) {
+    throw notFound("club.notFound");
+  }
   await next();
 };
