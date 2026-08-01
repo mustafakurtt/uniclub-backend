@@ -235,6 +235,8 @@ kullanılmamasına yol açar — kurum Excel'e geri döner.
 
 ### T4.1 Başvuru inceleme derinleşmesi ★
 
+**Durum:** v1 revizyon talebi + yeniden gönderim + olay geçmişi uygulandı; kontrol listesi ve itiraz bekliyor.
+
 Bugün başvuru onay/ret ikilisi. Gerçek süreç çok adımlı:
 
 - Kontrol listesi (evrak tam mı, tüzük uygun mu, danışman onayı var mı)

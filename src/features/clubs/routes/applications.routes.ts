@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../../core/auth/auth.middleware";
 import { ClubVariables } from "../../../middlewares/club.middleware";
-import { createApplicationSchema } from "../clubs.schema";
+import { createApplicationSchema, resubmitApplicationSchema } from "../clubs.schema";
 import { clubsService } from "../clubs.service";
 import { requireTenant } from "../../../shared/utils/tenant.util";
 import { validate } from "../../../shared/utils/validate";
@@ -48,3 +48,17 @@ applicationsRoutes.delete("/applications/:applicationId", authMiddleware, async 
   await clubsService.withdrawApplication(user.userId, applicationId);
   return done(c, "club.applicationWithdrawn");
 });
+
+// 4. REVİZYON SONRASI YENİDEN GÖNDERİM (aynı başvuru kaydı)
+applicationsRoutes.patch(
+  "/applications/:applicationId/resubmit",
+  authMiddleware,
+  validate("json", resubmitApplicationSchema),
+  async (c) => {
+    const user = c.get("user");
+    const { applicationId } = c.req.param();
+    const body = c.req.valid("json");
+    const application = await clubsService.resubmitApplication(user.userId, applicationId, body);
+    return ok(c, application, "club.applicationResubmitted");
+  }
+);

@@ -20,6 +20,7 @@ import {
   addAdvisorSchema,
   approveApplicationSchema,
   rejectApplicationSchema,
+  requestRevisionApplicationSchema,
   updateClubSchema,
   updateUserDepartmentSchema,
 } from "./admin.schema";
@@ -147,6 +148,36 @@ adminRoutes.patch(
     const { note } = c.req.valid("json");
     const result = await adminService.rejectClubApplication(universityId, applicationId, actor.userId, note);
     return ok(c, result, "admin.applicationRejected");
+  }
+);
+
+// 6b. REVİZYON TALEBİ (gerekçe zorunlu — öğrenci düzeltip yeniden gönderir)
+adminRoutes.patch(
+  "/universities/:universityId/club-applications/:applicationId/request-revision",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  validate("json", requestRevisionApplicationSchema),
+  async (c) => {
+    const { universityId, applicationId } = c.req.param();
+    const actor = c.get("user");
+    const { note } = c.req.valid("json");
+    const result = await adminService.requestClubApplicationRevision(
+      universityId,
+      applicationId,
+      actor.userId,
+      note
+    );
+    return ok(c, result, "admin.applicationRevisionRequested");
+  }
+);
+
+// 6c. BAŞVURU GEÇMİŞİ (olay günlüğü)
+adminRoutes.get(
+  "/universities/:universityId/club-applications/:applicationId/history",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, applicationId } = c.req.param();
+    const history = await adminService.getClubApplicationHistory(universityId, applicationId);
+    return ok(c, history, "admin.applicationHistoryListed");
   }
 );
 

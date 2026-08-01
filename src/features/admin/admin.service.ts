@@ -36,9 +36,23 @@ async function notifyApplicationDecision(
 
 async function notifyApplicationDecisionIfFinal(result: DecideClubApplicationResult) {
   const { application } = result;
-  if (application.status === "pending") return;
+  if (application.status === "pending" || application.status === "revision_requested") return;
   const decision = application.status as "approved" | "rejected";
   await notifyApplicationDecision(result, decision);
+}
+
+async function notifyApplicationRevisionRequested(
+  result: DecideClubApplicationResult,
+  note: string,
+  step: number
+) {
+  const { application } = result;
+  await notificationsService.notifySafe(application.applicantId, {
+    type: NotificationType.CLUB_APPLICATION_REVISION_REQUESTED,
+    title: "Kulüp başvurunuzda düzeltme talep edildi",
+    body: `'${application.proposedName}' başvurunuz için düzeltme istendi: ${note}`,
+    data: { applicationId: application.id, step },
+  });
 }
 
 export const adminService = {
@@ -118,7 +132,10 @@ export const adminService = {
     return toSafeUser(updated as User);
   },
 
-  async listClubApplications(universityId: string, status?: "pending" | "approved" | "rejected") {
+  async listClubApplications(
+    universityId: string,
+    status?: "pending" | "approved" | "rejected" | "revision_requested"
+  ) {
     const applications = await adminRepository.findClubApplicationsByUniversity(universityId, status);
     return applications.map((application) => ({
       ...application,
@@ -153,6 +170,53 @@ export const adminService = {
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "rejected", note.trim());
     await notifyApplicationDecisionIfFinal(result);
     return result;
+  },
+
+  async requestClubApplicationRevision(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    note: string
+  ) {
+    if (!note?.trim()) {
+      throw badRequest("admin.revisionNoteRequired");
+    }
+    const trimmed = note.trim();
+    const result = await adminRepository.requestClubApplicationRevision(
+      universityId,
+      applicationId,
+      actorUserId,
+      trimmed
+    );
+    const events = await adminRepository.findClubApplicationEvents(applicationId);
+    const lastRevision = events.filter((e) => e.eventType === "revision_requested").at(-1);
+    if (lastRevision) {
+      await notifyApplicationRevisionRequested(result, trimmed, lastRevision.step);
+    }
+    return result;
+  },
+
+  async getClubApplicationHistory(universityId: string, applicationId: string) {
+    const application = await adminRepository.findClubApplicationInUniversity(universityId, applicationId);
+    if (!application) {
+      throw notFound("admin.applicationNotFound");
+    }
+    const events = await adminRepository.findClubApplicationEvents(applicationId);
+    const revisionRequestCount = events.filter((e) => e.eventType === "revision_requested").length;
+    return {
+      applicationId,
+      revisionRequestCount,
+      events: events.map((event) => ({
+        id: event.id,
+        step: event.step,
+        eventType: event.eventType,
+        note: event.note,
+        proposedName: event.proposedName,
+        description: event.description,
+        createdAt: event.createdAt,
+        actor: event.actor ? toSafeUser(event.actor) : null,
+      })),
+    };
   },
 
   async listClubs(universityId: string, status?: "pending" | "approved" | "rejected" | "archived") {

@@ -145,6 +145,7 @@ Bir öğrenci yeni bir kulüp kurmak için **başvuru** açar; okul yöneticisi 
 |---|---|---|
 | POST | `/api/clubs/applications` | Yeni başvuru oluştur |
 | GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (onay adımlarıyla) |
+| PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 | GET | `/api/users/me/applications` | Tüm başvurularım (özet liste) |
 
@@ -154,25 +155,36 @@ Bir öğrenci yeni bir kulüp kurmak için **başvuru** açar; okul yöneticisi 
 // Body
 { "proposedName": "string (3-256)", "description": "string (max 2000, opsiyonel)" }
 ```
-`201` + oluşan başvuru (`status: "pending"`). İş kuralı: **aynı anda birden fazla `pending` başvuru olamaz** → `400 "Zaten bekleyen bir kulüp başvurunuz var."`. (Reddedilen/geri çekilen başvuru bunu bloklamaz — yeniden başvurulabilir.)
+`201` + oluşan başvuru (`status: "pending"`). İş kuralı: **aynı anda birden fazla aktif başvuru olamaz** (`pending` veya `revision_requested`) → `400 "Zaten bekleyen bir kulüp başvurunuz var."`. (Reddedilen/geri çekilen başvuru bunu bloklamaz — yeniden başvurulabilir.)
 
 ### 6.2 Başvuru detayı — `GET /api/clubs/applications/:applicationId`
 
-Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulunamadı."`). Onay zinciri gömülüdür:
+Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulunamadı."`). Onay zinciri gömülüdür. `status: "revision_requested"` olduğunda `revisionRequest` alanı dolu:
 
 ```jsonc
 {
   "data": {
-    "id":"...", "proposedName":"Satranç Kulübü", "status":"pending", "description":"...",
-    "approvals": [
-      { "step":1, "approverRole":"advisor", "status":"pending", "approverId":null, "approver":null, "reviewedAt":null }
-    ]
+    "id":"...", "proposedName":"Satranç Kulübü", "status":"revision_requested", "description":"...",
+    "approvals": [ /* ... */ ],
+    "revisionRequest": {
+      "step": 2,
+      "note": "Evrak eksik — lütfen tüzük maddesini düzeltin.",
+      "requestedAt": "2026-...",
+      "requestedBy": { /* SafeUser — revizyon isteyen yetkili */ }
+    }
   }
 }
 ```
-`approvals`, genişletilebilir çok-adımlı onay zinciridir (şu an tek adım). İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
 
-### 6.3 Başvuruyu geri çek — `DELETE /api/clubs/applications/:applicationId`
+`approvals`, genişletilebilir çok-adımlı onay zinciridir. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
+
+### 6.3 Revizyon sonrası yeniden gönder — `PATCH /api/clubs/applications/:applicationId/resubmit`
+
+Yalnızca `status: "revision_requested"` başvurular. Body başvuru oluşturma ile aynı (`proposedName`, `description?`). Aynı `id` devam eder; zincir kaldığı yerden sürer (önceki kademe onayları korunur).
+
+`200` + güncellenen başvuru (`status: "pending"`). Hatalar: `404 "Başvuru bulunamadı."` (başkasının başvurusu), `400 "Yalnızca revizyon bekleyen başvuru yeniden gönderilebilir."`.
+
+### 6.4 Başvuruyu geri çek — `DELETE /api/clubs/applications/:applicationId`
 
 Yalnızca **`pending`** başvuru geri çekilebilir. Hatalar: `404 "Başvuru bulunamadı."`, `400 "Yalnızca bekleyen bir başvuru geri çekilebilir."`.
 

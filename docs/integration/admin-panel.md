@@ -234,14 +234,55 @@ verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılı
 
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
-| GET | `/universities/:uid/club-applications?status=` | `application.view` | Başvuru listesi (`applicant` + `approvals` gömülü) |
+| GET | `/universities/:uid/club-applications?status=` | `application.view` | Başvuru listesi (`applicant` + `approvals` gömülü); `status=revision_requested` revizyon kuyruğu |
 | PATCH | `/universities/:uid/club-applications/:id/approve` | `application.view` | Sıradaki kademeyi onayla — **tüm kademeler** onaylandığında gerçek kulüp oluşur |
 | PATCH | `/universities/:uid/club-applications/:id/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
+| PATCH | `/universities/:uid/club-applications/:id/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) — öğrenci düzeltip yeniden gönderir |
+| GET | `/universities/:uid/club-applications/:id/history` | `application.view` | Olay geçmişi (append-only `club_application_events`) |
 
 **Özet durum** (`application.status`) onay adımlarından türetilir:
 - Herhangi bir adım `rejected` → `rejected`
 - Tüm adımlar `approved` → `approved` (+ kulüp oluşur)
+- Herhangi bir adım `revision_requested` → `revision_requested` (öğrenci bekleniyor; SKS `pending` kuyruğunda görünmez)
 - Aksi → `pending` (ara kademe onayında da `pending` kalır)
+
+**Revizyon ve yeniden gönderim:** Karar verici onay/ret yerine revizyon isteyebilir. Öğrenci **aynı başvuru kaydını** düzenleyip `PATCH /api/clubs/applications/:id/resubmit` ile yeniden gönderir. Zincir **kaldığı yerden** devam eder — önceki kademe onayları korunur; yalnızca revizyon istenen kademe `pending`'e döner. Aynı kademede birden çok revizyon turu olabilir; her tur `club_application_events` tablosunda saklanır (`unique(applicationId, step)` yalnızca güncel durum satırını sınırlar).
+
+**Geçmiş sözleşmesi** — `GET .../history` → `data`:
+
+```jsonc
+{
+  "applicationId": "uuid",
+  "revisionRequestCount": 2,
+  "events": [
+    {
+      "id": "uuid",
+      "step": 1,
+      "eventType": "approved",
+      "note": null,
+      "proposedName": null,
+      "description": null,
+      "createdAt": "2026-...",
+      "actor": { /* SafeUser */ }
+    },
+    {
+      "step": 2,
+      "eventType": "revision_requested",
+      "note": "Evrak eksik...",
+      "actor": { /* SafeUser */ }
+    },
+    {
+      "step": 2,
+      "eventType": "resubmitted",
+      "proposedName": "Yeni Ad",
+      "description": "...",
+      "actor": { /* başvuran SafeUser */ }
+    }
+  ]
+}
+```
+
+`eventType`: `revision_requested` | `resubmitted` | `approved` | `rejected`
 
 **Sıra:** Kademe N, kademe N−1 onaylanmadan karar verilemez. İlerideki kademede
 yetkili aktör erken karar vermeye çalışırsa `400` (`admin.approvalStepNotReady`).
@@ -249,7 +290,8 @@ Zincirde hiç yetkisi olmayan aktör → `403` (`admin.approvalStepForbidden`).
 
 **Bildirim:** Başvuru sahibine yalnızca **nihai** kararda (`approved` veya
 `rejected`) `club.application.decided` bildirimi gider; ara kademe onaylarında
-bildirim yok (gürültü azaltma).
+bildirim yok (gürültü azaltma). **Revizyon talebinde** ayrıca
+`club.application.revision_requested` gider (tebligat — `optOutable: false`).
 
 Onay tamamlandığında `data`: `{ application, club }`. Zaten değerlendirilmişse
 `400 "Bu başvuru zaten değerlendirilmiş."`

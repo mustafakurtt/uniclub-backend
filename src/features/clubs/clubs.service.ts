@@ -4,12 +4,14 @@ import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import {
   CreateApplicationDTO,
+  ResubmitApplicationDTO,
   UpdateMemberRoleDTO,
   CreateContactLinkDTO,
   UpdateOwnClubDTO,
 } from "./clubs.schema";
 import { notFound, badRequest } from "../../shared/utils/errors";
 import { clubsCache, clubEffects } from "./clubs.cache";
+import { findRevisionRequestedStep } from "./club-application-chain.core";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -70,13 +72,41 @@ export const clubsService = {
     if (!application) {
       throw notFound("club.applicationNotFound");
     }
+
+    const revisionRow =
+      application.status === "revision_requested"
+        ? findRevisionRequestedStep(application.approvals)
+        : null;
+    const revisionApproval = revisionRow
+      ? application.approvals.find((a) => a.step === revisionRow.step)
+      : null;
+
     return {
       ...application,
       approvals: application.approvals.map((a) => ({
         ...a,
         approver: a.approver ? toSafeUser(a.approver) : null,
       })),
+      revisionRequest: revisionApproval
+        ? {
+            step: revisionApproval.step,
+            note: revisionApproval.note,
+            requestedAt: revisionApproval.reviewedAt,
+            requestedBy: revisionApproval.approver
+              ? toSafeUser(revisionApproval.approver)
+              : null,
+          }
+        : null,
     };
+  },
+
+  /** Revizyon talebi sonrası başvuruyu güncelle ve yeniden gönder — aynı kayıt devam eder. */
+  async resubmitApplication(applicantId: string, applicationId: string, data: ResubmitApplicationDTO) {
+    const updated = await clubsRepository.resubmitApplication(applicationId, applicantId, data);
+    if (!updated) {
+      throw badRequest("club.applicationNotResubmittable");
+    }
+    return updated;
   },
 
   /**

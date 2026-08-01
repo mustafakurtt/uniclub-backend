@@ -7,6 +7,10 @@ export const createApplicationSchema = z.object({
 });
 export type CreateApplicationDTO = z.infer<typeof createApplicationSchema>;
 
+/** Revizyon sonrası yeniden gönderim — alanlar başvuru oluşturma ile aynı. */
+export const resubmitApplicationSchema = createApplicationSchema;
+export type ResubmitApplicationDTO = z.infer<typeof resubmitApplicationSchema>;
+
 export const decideJoinRequestSchema = z.object({
   decision: z.enum(["approved", "rejected"]),
 });

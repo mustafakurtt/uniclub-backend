@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db } from "../../db";
 import {
   clubs,
@@ -6,6 +6,7 @@ import {
   clubContactLinks,
   clubApplications,
   clubApplicationApprovals,
+  clubApplicationEvents,
 } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
 import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
@@ -204,8 +205,19 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
   }
 
   // ── clubApplications ─────────────────────────────────────────────────────
+  findActiveApplicationByApplicant(universityId: string, applicantId: string) {
+    return db.query.clubApplications.findFirst({
+      where: {
+        universityId,
+        applicantId,
+        status: { in: ["pending", "revision_requested"] },
+      },
+    });
+  }
+
+  /** Geriye dönük alias — yalnızca pending arayan eski çağrılar. */
   findPendingApplicationByApplicant(universityId: string, applicantId: string) {
-    return applicationsRepo.findOne({ universityId, applicantId, status: "pending" });
+    return this.findActiveApplicationByApplicant(universityId, applicantId);
   }
 
   /** Başvuranın tek bir başvurusu, onay adımlarıyla (kendi başvurusunu görüntüleme). */
@@ -250,13 +262,85 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     });
   }
 
-  /** Bekleyen başvuruyu geri çekme — onay satırları FK olduğu için önce onlar silinir. */
+  /** Bekleyen başvuruyu geri çekme — onay satırları ve olay günlüğü FK ile silinir. */
   deleteApplication(applicationId: string) {
     return this.transaction(async (_repo, tx) => {
+      await tx.delete(clubApplicationEvents).where(eq(clubApplicationEvents.applicationId, applicationId));
       await tx.delete(clubApplicationApprovals)
         .where(eq(clubApplicationApprovals.applicationId, applicationId));
       await tx.delete(clubApplications)
         .where(eq(clubApplications.id, applicationId));
+    });
+  }
+
+  /**
+   * Revizyon talebi sonrası başvuru güncelleme — aynı kayıt, zincir kaldığı yerden devam eder.
+   */
+  async resubmitApplication(
+    applicationId: string,
+    applicantId: string,
+    data: CreateClubApplicationPayload
+  ) {
+    return this.transaction(async (_repo, tx) => {
+      const [application] = await tx
+        .select()
+        .from(clubApplications)
+        .where(
+          and(
+            eq(clubApplications.id, applicationId),
+            eq(clubApplications.applicantId, applicantId)
+          )
+        )
+        .limit(1);
+      if (!application || application.status !== "revision_requested") return null;
+
+      const approvals = await tx
+        .select()
+        .from(clubApplicationApprovals)
+        .where(eq(clubApplicationApprovals.applicationId, applicationId))
+        .orderBy(asc(clubApplicationApprovals.step));
+
+      const revisionStep = approvals.find((a) => a.status === "revision_requested");
+      if (!revisionStep) return null;
+
+      const [updatedApplication] = await tx
+        .update(clubApplications)
+        .set({
+          proposedName: data.proposedName,
+          description: data.description,
+          status: "pending",
+        })
+        .where(eq(clubApplications.id, applicationId))
+        .returning();
+
+      await tx
+        .update(clubApplicationApprovals)
+        .set({
+          status: "pending",
+          approverId: null,
+          reviewedAt: null,
+          note: null,
+        })
+        .where(eq(clubApplicationApprovals.id, revisionStep.id));
+
+      await tx.insert(clubApplicationEvents).values({
+        applicationId,
+        step: revisionStep.step,
+        eventType: "resubmitted",
+        actorId: applicantId,
+        proposedName: data.proposedName,
+        description: data.description ?? null,
+      });
+
+      return updatedApplication;
+    });
+  }
+
+  listApplicationEvents(applicationId: string) {
+    return db.query.clubApplicationEvents.findMany({
+      where: { applicationId },
+      orderBy: { createdAt: "asc" },
+      with: { actor: true },
     });
   }
 
