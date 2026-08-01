@@ -4,11 +4,9 @@
 İşleyiş ile İlgili Genel Kurallar". Tam metin: `genel-kurallar-metin.txt`.
 **Çıkarım:** 2026-08-01, pdfjs-dist.
 
-> ⚠️ **Yönergenin tam metni hâlâ YOK.** Bu belge yönergeye atıf yapıyor
-> ("MADDE 9 – c", "Yönerge eki Form 2/Form 3"). Kuruluş bilgileri aşağıda
-> **SKS'nin SSS sayfasından** alındı (`sks.akdeniz.edu.tr/tr/s_s_s-2251`),
-> iki ayrı sorguda birebir aynı ifadeyle doğrulandı. Organlar, seçim ve kapatma
-> kuralları için yönergenin kendisi hâlâ gerekli.
+**Ek kaynaklar:** `ogrenci-topluluklari-yonergesi.docx` (yönergenin kendisi,
+tam metin `yonerge-metin.txt`) ve SKS'nin 12 formu
+(`sks.akdeniz.edu.tr/tr/yonerge_ve_formlar-2252`).
 
 ---
 
@@ -47,9 +45,10 @@ Yol haritasında T5.3 (resmî yazışma ve imza) "gerekli mi bilmiyoruz" durumun
 
 **İki yapısal fark:**
 
-**a) Kurucu sayısı üçe katlanıyor.** Antalya Bilim **8**, Konya Teknik **15**,
-Akdeniz **30**. Aralık geniş → `club.formation.support_threshold` ayarının
-üst sınırı (şu an 500) rahat; ama varsayılanın kuruma göre çok değiştiği kesin.
+**a) Kurucu sayısı altıya katlanıyor.** Antalya Bilim **8**, Konya Teknik **15**,
+Akdeniz **50** (üstelik üç farklı akademik birimden). Aralık çok geniş →
+`club.formation.support_threshold` ayarı doğru tasarlanmış, varsayılan kuruma göre
+tamamen değişiyor.
 
 **b) BAŞVURAN ÖĞRENCİ DEĞİL, DANIŞMAN.** Dilekçeyi danışman öğretim elemanı
 hazırlıyor. Antalya ve Konya'da öğrenci başvuruyor, danışman yalnızca kabul
@@ -165,57 +164,8 @@ Pazar teorik değil; **rakip mevcut**. İkisine de bakılmalı.
 
 ---
 
-## Eksik: Akdeniz yönergesinin kendisi
+## Kalan eksik
 
-Kuruluş şartları (kurucu sayısı, onay mercii, organlar, üyelik, kapatma) bu
-belgede yok. `sks.akdeniz.edu.tr` üzerinde yönerge sayfası var ama doğrudan PDF
-bağlantısı bulunamadı. **Bir sonraki adım:** yönergeyi bul, karşılaştırma
-tablosunun A/B/C/E bölümlerini doldur.
-
----
-
-## 13. Organlar ve seçim (yönergeden)
-
-- **Genel kurul** (MADDE 14): tüm üyelerden oluşur. Salt çoğunlukla toplanır;
-  ilk toplantıda yeter sayı yoksa **en az iki gün sonra** yapılacak ikinci
-  toplantıda çoğunluk aranmaz. Kararlar katılanların salt çoğunluğuyla;
-  **oy eşitliğinde başkanın bulunduğu taraf çoğunluk sayılır.**
-- **Divan kurulu**: başkan + iki yazman. Kararlar "genel kurul karar kayıt
-  belgesi"ne (Form 6) yazılıp imzalanır.
-- **Yönetim kurulu** (MADDE 15): genel kurul tarafından **bir yıl için** seçilir,
-  **başkan dâhil beş asil + beş yedek**.
-- **Denetim kurulu** ayrıca var.
-
-→ **Yedek üye** kavramı bizde yok. Konya'da da geçiyordu ("yedek üyeler dâhil").
-İki kurumda birden çıktığına göre gerçek bir ihtiyaç.
-
-## 14. Afiş izni ZORUNLU ve sosyal medyayı da bağlıyor
-
-MADDE 9(2): *"Topluluk tarafından düzenlenen etkinliklerin afişleri Daire
-Başkanlığının iznine tabidir. İzin almamış etkinlik afişleri kullanılamaz.
-Topluluğun sosyal medya hesaplarında etkinlik duyurulurken **sadece izin verilen
-etkinlik afişi** kullanılır, bunun dışında reklam ve gelir amaçlı paylaşımlar
-yapılamaz."*
-
-→ Afiş onayı sadece basılı değil **dijital yayını da** kapsıyor. Bizim afiş/QR
-özelliğimizde onay adımı yok.
-
-## 15. Süreli yayın için editör kurulu ve telif
-
-MADDE 9(3): bülten/dergi/gazete çıkarılabilir; akademik danışman + topluluk
-başkanı + üye öğrencilerden **editör kurulu** oluşturulur, içerikten sorumludur.
-Üçüncü kişilere ait eser/görsel/kimlik bilgisi kullanılıyorsa **izin alınır**.
-
-## 16. Form seti (12 form) — bizde karşılığı olmayanlar
-
-`1 Yıllık Faaliyet Planı` · `2 Etkinlik Talep` · `3 Etkinlik Geri Bildirim` ·
-`4 Topluluk Kurma` · **`5 Üyelikten Ayrılma`** · **`6 Genel Kurul Toplantı
-Tutanağı`** · **`7 Yönetim Kurulu Toplantı Tutanağı`** · `8 Araç Takip` ·
-`9 Araç Talep` · `10 Topluluk Üyelik` · **`11 RİSK KABUL BEYANI`** ·
-`12 Topluluk Üye Kayıt (xlsx)`
-
-**Risk Kabul Beyanı** üç kurum içinde ilk kez çıkıyor: riskli etkinliklerde
-katılımcıdan alınan sorumluluk beyanı. Bizde hiç yok ve hukuki karşılığı var.
-
-**Toplantı tutanakları** (Form 6 ve 7) da bizde yok — oysa genel kurul ve yönetim
-kurulu kararları bunlarla kayda geçiyor. T4.5 resmî çıktılar bunları üretebilmeli.
+12 formun içeriği henüz çıkarılmadı (yalnızca adları biliniyor). Özellikle
+**Form 11 Risk Kabul Beyanı**, **Form 6/7 toplantı tutanakları** ve
+**Form 4 Topluluk Kurma** açılmaya değer.
