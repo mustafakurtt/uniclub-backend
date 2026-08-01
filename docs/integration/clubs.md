@@ -211,6 +211,8 @@ Tenant `club.formation.support_threshold > 0` olduğunda `POST /api/clubs/applic
 
 **Bildirim:** Eşik ilk kez aşıldığında öneri sahibine `club.formation.threshold_reached` (her destekte gitmez).
 
+**Liste/detay alanları:** her öğede `hasSupported: boolean` — isteği yapan kullanıcı bu öneriyi desteklemiş mi (`true` → arayüzde "Desteği geri çek"). Destekçi kimlikleri yalnızca admin detayında.
+
 **SKS görünürlüğü:** Destekçi listesi yalnızca admin detayında (`GET .../formation-proposals/:id`) — bkz. [admin-panel.md](admin-panel.md), [kvkk.md](../compliance/kvkk.md).
 
 ---

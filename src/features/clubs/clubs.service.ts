@@ -88,9 +88,9 @@ export const clubsService = {
     return { ...application, kind: "application" as const };
   },
 
-  async listFormationProposals(universityId: string) {
+  async listFormationProposals(universityId: string, viewerId: string) {
     const settings = await getTenantSettings(universityId);
-    const proposals = await clubsRepository.listCollectingFormationProposals(universityId);
+    const proposals = await clubsRepository.listCollectingFormationProposals(universityId, viewerId);
     return proposals.map((p) => ({
       id: p.id,
       proposedName: p.proposedName,
@@ -100,12 +100,17 @@ export const clubsService = {
       supportThreshold: settings.clubFormationSupportThreshold,
       expiresAt: p.expiresAt,
       createdAt: p.createdAt,
-      proposer: p.proposer ? toSafeUser(p.proposer) : null,
+      hasSupported: p.hasSupported,
+      proposer: p.proposer ? toSafeUser(p.proposer as unknown as Parameters<typeof toSafeUser>[0]) : null,
     }));
   },
 
   async getFormationProposal(universityId: string, proposalId: string, viewerId: string) {
-    const proposal = await clubsRepository.findFormationProposalInUniversity(universityId, proposalId);
+    const proposal = await clubsRepository.findFormationProposalInUniversity(
+      universityId,
+      proposalId,
+      viewerId
+    );
     if (!proposal) {
       throw notFound("club.formationProposalNotFound");
     }
@@ -122,6 +127,7 @@ export const clubsService = {
       submittedAt: proposal.submittedAt,
       applicationId: proposal.applicationId,
       createdAt: proposal.createdAt,
+      hasSupported: proposal.hasSupported,
       proposer: proposal.proposer ? toSafeUser(proposal.proposer) : null,
       isProposer,
     };

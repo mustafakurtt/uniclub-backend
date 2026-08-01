@@ -1,4 +1,4 @@
-import { eq, and, asc, gt, lt } from "drizzle-orm";
+import { eq, and, asc, gt, lt, desc, sql, getTableColumns } from "drizzle-orm";
 import { db } from "../../db";
 import {
   clubs,
@@ -9,6 +9,7 @@ import {
   clubApplicationEvents,
   clubFormationProposals,
   clubFormationSupports,
+  users,
 } from "../../db/schema";
 import { BaseRepository, type Database } from "../../core/db";
 import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
@@ -431,17 +432,45 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     return proposal;
   }
 
-  async listCollectingFormationProposals(universityId: string) {
+  async listCollectingFormationProposals(universityId: string, viewerId: string) {
     await this.expireFormationProposalsPastDeadline(universityId);
-    return db.query.clubFormationProposals.findMany({
-      where: {
-        universityId,
-        status: "collecting_support",
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: "desc" },
-      with: { proposer: true },
-    });
+    const rows = await db
+      .select({
+        proposal: getTableColumns(clubFormationProposals),
+        hasSupported: sql<boolean>`exists(
+          select 1 from ${clubFormationSupports} s
+          where s.proposal_id = ${clubFormationProposals.id}
+          and s.supporter_id = ${viewerId}
+        )`,
+        proposer: {
+          id: users.id,
+          universityId: users.universityId,
+          departmentId: users.departmentId,
+          studentNumber: users.studentNumber,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          photoUrl: users.photoUrl,
+          preferredLanguage: users.preferredLanguage,
+          status: users.status,
+        },
+      })
+      .from(clubFormationProposals)
+      .innerJoin(users, eq(users.id, clubFormationProposals.proposerId))
+      .where(
+        and(
+          eq(clubFormationProposals.universityId, universityId),
+          eq(clubFormationProposals.status, "collecting_support"),
+          gt(clubFormationProposals.expiresAt, new Date())
+        )
+      )
+      .orderBy(desc(clubFormationProposals.createdAt));
+
+    return rows.map((row) => ({
+      ...row.proposal,
+      proposer: row.proposer,
+      hasSupported: row.hasSupported,
+    }));
   }
 
   findFormationProposalById(proposalId: string) {
@@ -450,11 +479,27 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     });
   }
 
-  findFormationProposalInUniversity(universityId: string, proposalId: string) {
-    return db.query.clubFormationProposals.findFirst({
+  async findFormationProposalInUniversity(
+    universityId: string,
+    proposalId: string,
+    viewerId?: string
+  ) {
+    const proposal = await db.query.clubFormationProposals.findFirst({
       where: { id: proposalId, universityId },
       with: { proposer: true, application: true },
     });
+    if (!proposal) return null;
+
+    let hasSupported = false;
+    if (viewerId) {
+      const support = await db.query.clubFormationSupports.findFirst({
+        where: { proposalId, supporterId: viewerId },
+        columns: { id: true },
+      });
+      hasSupported = !!support;
+    }
+
+    return { ...proposal, hasSupported };
   }
 
   findFormationProposalByProposer(proposerId: string, proposalId: string) {

@@ -203,6 +203,46 @@ describe("kuruluş dijital destek toplama", () => {
       expect(detail.supportCount).toBe(1);
     });
 
+    it("hasSupported — destek ve geri çekme listede ve detayda yansır", async () => {
+      const yusuf = await clearActiveForStudent("yusuf.celik@std.kartek.edu.tr");
+      const merve = await clearActiveForStudent("merve.acar@std.kartek.edu.tr");
+
+      const createRes = await reqAuth("POST", "/api/clubs/applications", yusuf.token, {
+        proposedName: `Has Supported ${Date.now()}`,
+        description: "hasSupported sözleşmesi.",
+      });
+      const proposalId = (await createRes.json()).data.id as string;
+
+      let detail = await data<{ hasSupported: boolean }>(
+        await get(`/api/clubs/formation-proposals/${proposalId}`, merve.token)
+      );
+      expect(detail.hasSupported).toBe(false);
+
+      expect(
+        (await reqAuth("POST", `/api/clubs/formation-proposals/${proposalId}/support`, merve.token)).status
+      ).toBe(200);
+
+      const list = await data<Array<{ id: string; hasSupported: boolean }>>(
+        await get("/api/clubs/formation-proposals", merve.token)
+      );
+      const row = list.find((p) => p.id === proposalId);
+      expect(row?.hasSupported).toBe(true);
+
+      detail = await data<{ hasSupported: boolean }>(
+        await get(`/api/clubs/formation-proposals/${proposalId}`, merve.token)
+      );
+      expect(detail.hasSupported).toBe(true);
+
+      expect(
+        (await reqAuth("DELETE", `/api/clubs/formation-proposals/${proposalId}/support`, merve.token)).status
+      ).toBe(200);
+
+      detail = await data<{ hasSupported: boolean }>(
+        await get(`/api/clubs/formation-proposals/${proposalId}`, merve.token)
+      );
+      expect(detail.hasSupported).toBe(false);
+    });
+
     it("öneri sahibi kendi önerisini destekleyemez", async () => {
       const yusuf = await clearActiveForStudent("yusuf.celik@std.kartek.edu.tr");
 

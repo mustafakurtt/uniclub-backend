@@ -13,7 +13,10 @@ export const formationProposalsRoutes = new Hono<{ Variables: ClubVariables }>()
 
 formationProposalsRoutes.get("/formation-proposals", authMiddleware, async (c) => {
   const user = c.get("user");
-  const proposals = await clubsService.listFormationProposals(requireTenant(user.universityId));
+  const proposals = await clubsService.listFormationProposals(
+    requireTenant(user.universityId),
+    user.userId
+  );
   return ok(c, proposals, "club.formationProposalsListed");
 });
 
