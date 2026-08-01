@@ -314,6 +314,17 @@ Hata: `404 "Bölüm bulunamadı."`, `400 "Bu bölüme bağlı kullanıcılar var
 4) POST /api/auth/register                     → seçilen department + okul maili ile kayıt
 ```
 
+### 8.4 Akademik dönemler (`university.academic_term.manage`)
+
+Kurum kendi takvimini tanımlar; aktif dönem `open` + bugün aralıkta türetilir. Çakışan tarih aralıkları reddedilir.
+
+```
+GET/POST   /api/universities/:universityId/academic-terms
+PATCH/DELETE /api/universities/:universityId/academic-terms/:termId
+```
+
+Body örneği: `{ "name": "2026–2027 Güz", "startsAt": "2026-09-01T00:00:00+03:00", "endsAt": "2027-01-31T23:59:59+03:00" }`. Bağlı üyelik olayı olan dönem silinemez.
+
 Kayıtta üniversite ayrı bir alan olarak gönderilmez — backend e-posta domaininden çözer. Yani formda üniversite seçimi yalnızca **fakülte/bölüm ağacını daraltmak** ve kullanıcıya doğru maili hatırlatmak içindir.
 
 ### 8.2 Sistem yönetim paneli (super_admin)

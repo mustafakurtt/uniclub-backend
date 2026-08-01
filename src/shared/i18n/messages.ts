@@ -27,6 +27,14 @@ import {
 import { publicMessages, type PublicMessageKey } from "../../features/public/public.messages";
 import { posterQrMessages, type PosterQrMessageKey } from "../../features/poster-qr/poster-qr.messages";
 import { exportsMessages, type ExportsMessageKey } from "../../features/exports/exports.messages";
+import {
+  academicTermMessages,
+  type AcademicTermMessageKey,
+} from "../../features/academic-terms/academic-terms.messages";
+import {
+  membershipHistoryMessages,
+  type MembershipHistoryMessageKey,
+} from "../../features/membership-history/membership-history.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -54,7 +62,9 @@ export const messages = mergeCatalogs(
   tenantSettingsMessages,
   publicMessages,
   posterQrMessages,
-  exportsMessages
+  exportsMessages,
+  academicTermMessages,
+  membershipHistoryMessages
 );
 
 /**
@@ -82,4 +92,6 @@ export type MessageKey =
   | TenantSettingsMessageKey
   | PublicMessageKey
   | PosterQrMessageKey
-  | ExportsMessageKey;
+  | ExportsMessageKey
+  | AcademicTermMessageKey
+  | MembershipHistoryMessageKey;

@@ -10,6 +10,8 @@ import { applicationsRelations } from "./applications";
 import { clubFormationRelations } from "./club-formation";
 import { activitiesRelations } from "./activities";
 import { mediaRelations } from "./media";
+import { academicTermsRelations } from "./academic-terms";
+import { membershipEventsRelations } from "./membership-events";
 
 export const relations = defineRelations(schema, (r) => ({
   ...universityRelations(r),
@@ -22,4 +24,6 @@ export const relations = defineRelations(schema, (r) => ({
   ...clubFormationRelations(r),
   ...activitiesRelations(r),
   ...mediaRelations(r),
+  ...academicTermsRelations(r),
+  ...membershipEventsRelations(r),
 }));

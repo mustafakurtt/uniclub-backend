@@ -228,6 +228,7 @@ Yetki **global RBAC'tan değil kulüpteki rolden** gelir (`club.middleware`). Mi
 | DELETE | `/api/clubs/:clubId/members/:userId` | officer / başkan |
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** |
+| GET | `/api/clubs/:clubId/membership-history` | **staff** (sayfalama + `academicTermId` filtresi) |
 
 ### 7.1 Bekleyen istekler — `GET /:clubId/join-requests`
 
@@ -259,6 +260,14 @@ Hata: `400/404 "Bekleyen bir üyelik isteği bulunamadı."` (istek yok veya `pen
 `200 "Başkanlık devredildi."` + yeni başkanın üyelik satırı. Eski başkan **officer** olur. Hatalar:
 - `400 "Başkanlığı kendinize devredemezsiniz."`
 - `400 "Yeni başkan, kulübün onaylı bir üyesi olmalıdır."`
+
+### 7.6 Üyelik tarihçesi — `GET /:clubId/membership-history` (staff)
+
+Append-only `club_membership_events` tablosundan okur; `club_members` güncel durumu tutmaya devam eder.
+
+Query: `limit` (varsayılan 50), `cursor` (ISO `occurredAt`), `academicTermId` (opsiyonel filtre).
+
+`data.items[]`: `eventType` (`joined` | `role_changed` | `removed` | `left` | `join_rejected`), `role`, `previousRole`, `occurredAt`, `academicTerm`, `user`, `actor`.
 
 ---
 

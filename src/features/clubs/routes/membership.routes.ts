@@ -43,17 +43,19 @@ membershipRoutes.patch(
   requireClubOfficer,
   validate("json", decideJoinRequestSchema),
   async (c) => {
+    const user = c.get("user");
     const { clubId, userId } = c.req.param();
     const { decision } = c.req.valid("json");
-    const updated = await clubsService.decideJoinRequest(clubId, userId, decision);
+    const updated = await clubsService.decideJoinRequest(clubId, userId, decision, user.userId);
     return ok(c, updated, "club.joinRequestDecided");
   }
 );
 
 // 3. ÜYE ÇIKARMA (officer/president)
 membershipRoutes.delete("/:clubId/members/:userId", authMiddleware, requireClubOfficer, async (c) => {
+  const user = c.get("user");
   const { clubId, userId } = c.req.param();
-  await clubsService.removeMember(clubId, userId);
+  await clubsService.removeMember(clubId, userId, user.userId);
   return done(c, "club.memberRemoved");
 });
 
@@ -64,9 +66,10 @@ membershipRoutes.patch(
   requireClubPresident,
   validate("json", updateMemberRoleSchema),
   async (c) => {
+    const user = c.get("user");
     const { clubId, userId } = c.req.param();
     const body = c.req.valid("json");
-    const updated = await clubsService.updateMemberRole(clubId, userId, body);
+    const updated = await clubsService.updateMemberRole(clubId, userId, body, user.userId);
     return ok(c, updated, "club.memberRoleUpdated");
   }
 );

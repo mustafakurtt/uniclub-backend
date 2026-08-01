@@ -13,3 +13,5 @@ export * from "./media";
 export * from "./invitations";
 export * from "./tenant-settings";
 export * from "./poster-qr";
+export * from "./academic-terms";
+export * from "./membership-events";

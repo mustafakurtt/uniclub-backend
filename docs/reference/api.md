@@ -280,6 +280,17 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | GET | `/api/universities/:universityId/settings` | `university.settings.manage` | Çözümlenmiş ayarlar + katalog metadata |
 | PATCH | `/api/universities/:universityId/settings` | `university.settings.manage` | Kısmi güncelleme; `null` = varsayılana dönüş |
 
+**Akademik dönemler** (`university.academic_term.manage`, tenantScoped):
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| GET | `/api/universities/:universityId/academic-terms` | `university.academic_term.manage` | Dönem listesi (`isActive` türetilmiş) |
+| POST | `/api/universities/:universityId/academic-terms` | aynı | Dönem oluştur (çakışan aralık → 400) |
+| PATCH | `/api/universities/:universityId/academic-terms/:termId` | aynı | Güncelle |
+| DELETE | `/api/universities/:universityId/academic-terms/:termId` | aynı | Sil (bağlı üyelik olayı varsa → 400) |
+
+Body: `{ name, startsAt, endsAt (ISO 8601), status?: "open"|"closed" }`.
+
 **Bölümler** (her zaman `facultyId` üzerinden — `departments` tablosu `universityId` taşımaz)
 
 | Method | Path | Yetki | Açıklama |
@@ -349,6 +360,7 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | DELETE | `/api/clubs/:clubId/members/:userId` | officer/başkan (başkan çıkarılamaz) |
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** (member↔officer) |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** (eski başkan officer olur) |
+| GET | `/api/clubs/:clubId/membership-history` | **staff**: danışman/officer/başkan; sayfalanabilir, `?academicTermId=` |
 | PATCH | `/api/clubs/:clubId` | **yalnızca başkan** (profil düzenle; durum HARİÇ) |
 | POST | `/api/clubs/:clubId/contact-links` | officer/başkan |
 | PATCH | `/api/clubs/:clubId/contact-links/:linkId` | officer/başkan (yalnızca url) |

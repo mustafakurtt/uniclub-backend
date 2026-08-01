@@ -13,6 +13,7 @@ import { notFound, badRequest } from "../../shared/utils/errors";
 // admin yalnızca olayı emit eder.
 import { clubEffects } from "../clubs/clubs.cache";
 import { clubApplicationReviewService } from "../clubs/club-application-review.service";
+import { membershipHistoryService } from "../membership-history/membership-history.service";
 import { announcementEffects } from "../announcements/announcements.cache";
 import { galleryEffects } from "../gallery/gallery.cache";
 
@@ -241,7 +242,14 @@ export const adminService = {
     await clubApplicationReviewService.assertChecklistAllowsApproval(universityId, applicationId);
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved", note ?? null);
     await notifyApplicationDecisionIfFinal(result);
-    if (result.application.status === "approved") {
+    if (result.application.status === "approved" && result.club) {
+      await membershipHistoryService.recordJoined(
+        result.club.id,
+        result.application.applicantId,
+        universityId,
+        "president",
+        actorUserId
+      );
       await clubEffects.clubApproved.emit(universityId);
     }
     return result;
