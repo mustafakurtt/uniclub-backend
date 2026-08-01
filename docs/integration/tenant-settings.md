@@ -46,6 +46,15 @@ Authorization: Bearer <token>
     "max": 100,
     "editor": "platform",
     ...
+  },
+  "club.application.approval_chain": {
+    "value": ["club_approver"],
+    "default": ["club_approver"],
+    "kind": "role_chain",
+    "allowedRoles": ["club_approver", "advisor", "student_affairs", "university_admin", ...],
+    "editor": "tenant",
+    "labelTr": "Kulüp başvuru onay zinciri (kademe → rol)",
+    "labelEn": "Club application approval chain (step → role)"
   }
 }
 ```
@@ -87,6 +96,12 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `announcement.club.pinned.max` | 3 | 0–10 | tenant |
 | `announcement.university.pinned.max` | 3 | 0–10 | tenant |
 | `announcement.university.publish.per_hour` | 5 | 1–100 | platform |
+| `club.application.approval_chain` | `["club_approver"]` | 1–3 kademe, `allowedRoles` katalogda | tenant |
+
+`club.application.approval_chain` — JSON dizi: her eleman bir kademenin karar verici rolü.
+`club_approver` özel token: `club.approve` yetkisini taşıyanlar. Örnek iki kademe:
+`["advisor", "student_affairs"]` (seed'de Ege Bilim). Varsayılan tek kademe mevcut
+tenant'larda davranışı değiştirmez.
 
 ---
 

@@ -8,6 +8,8 @@ import {
   clubApplicationApprovals,
 } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
+import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
+import { buildApprovalInsertRows, parseApprovalChain, DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN } from "./club-application-chain.core";
 import {
   CreateClubApplicationPayload,
   CreateContactLinkPayload,
@@ -219,11 +221,13 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
   }
 
   /**
-   * Başvuruyu ve admin'in daha sonra karar vereceği step:1 onay satırını
-   * birlikte oluşturur (admin.repository.decideClubApplication bu satırı
-   * UPDATE eder, bu yüzden burada var olması şart).
+   * Başvuruyu ve tenant onay zincirindeki tüm adım satırlarını birlikte oluşturur.
    */
-  createApplication(universityId: string, applicantId: string, data: CreateClubApplicationPayload) {
+  async createApplication(universityId: string, applicantId: string, data: CreateClubApplicationPayload) {
+    const settings = await getTenantSettings(universityId);
+    const chain = parseApprovalChain(settings.clubApplicationApprovalChain) ?? DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN;
+    const approvalRows = buildApprovalInsertRows(chain);
+
     return this.transaction(async (_repo, tx) => {
       const [application] = await tx.insert(clubApplications).values({
         universityId,
@@ -233,12 +237,14 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
         status: "pending",
       }).returning();
 
-      await tx.insert(clubApplicationApprovals).values({
-        applicationId: application.id,
-        step: 1,
-        approverRole: "advisor",
-        status: "pending",
-      });
+      await tx.insert(clubApplicationApprovals).values(
+        approvalRows.map((row) => ({
+          applicationId: application.id,
+          step: row.step,
+          approverRole: row.approverRole,
+          status: row.status,
+        }))
+      );
 
       return application;
     });

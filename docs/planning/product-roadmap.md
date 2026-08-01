@@ -245,8 +245,10 @@ Bugün başvuru onay/ret ikilisi. Gerçek süreç çok adımlı:
 
 ### T4.2 Onay hiyerarşisi ve delegasyon
 
+**Durum:** v1 çok kademeli zincir uygulandı (tenant ayarı + sıra + yetki); vekâlet ve süre aşımı bekliyor.
+
 - Çok kademeli onay (danışman → SKS uzmanı → SKS müdürü → dekanlık)
-- Kademe sayısı ve sırası **tenant ayarı** (kurumdan kuruma değişir)
+- Kademe sayısı ve sırası **tenant ayarı** (`club.application.approval_chain`) — varsayılan tek kademe `club_approver`
 - Vekâlet/devir (izindeki yöneticinin yetkisi)
 - Süre aşımı davranışı (otomatik yükseltme veya hatırlatma)
 

@@ -7,20 +7,23 @@ import {
   TENANT_SETTING_KEYS,
   TenantSettingEditor,
   TenantSettingKey,
+  mergeOverridesIntoResolved,
   type ResolvedTenantSettings,
   isTenantSettingKey,
   parseTenantSettingValue,
-  mergeOverridesIntoResolved,
+  tenantSettingDefaultEquals,
 } from "./tenant-settings.catalog";
 import { tenantSettingsRepository } from "./tenant-settings.repository";
 import { getTenantSettings, setTenantSettingsCache } from "./tenant-settings.cache";
 import type { PatchTenantSettingsDTO } from "./tenant-settings.schema";
 
 export interface TenantSettingView {
-  value: number;
-  default: number;
-  min: number;
-  max: number;
+  value: number | string[];
+  default: number | string[];
+  kind: "integer" | "role_chain";
+  min?: number;
+  max?: number;
+  allowedRoles?: readonly string[];
   editor: string;
   labelTr: string;
   labelEn: string;
@@ -28,7 +31,7 @@ export interface TenantSettingView {
 
 export type TenantSettingsResponse = Record<string, TenantSettingView>;
 
-function resolvedValueForKey(resolved: ResolvedTenantSettings, key: TenantSettingKey): number {
+function resolvedValueForKey(resolved: ResolvedTenantSettings, key: TenantSettingKey): number | string[] {
   switch (key) {
     case TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX:
       return resolved.clubPinnedAnnouncementsMax;
@@ -36,6 +39,8 @@ function resolvedValueForKey(resolved: ResolvedTenantSettings, key: TenantSettin
       return resolved.universityPinnedAnnouncementsMax;
     case TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR:
       return resolved.universityAnnouncementPublishPerHour;
+    case TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN:
+      return resolved.clubApplicationApprovalChain;
   }
 }
 
@@ -58,8 +63,8 @@ export const tenantSettingsService = {
       response[key] = {
         value: resolvedValueForKey(resolved, key),
         default: def.defaultValue,
-        min: def.min,
-        max: def.max,
+        kind: def.kind,
+        ...(def.kind === "integer" ? { min: def.min, max: def.max } : { allowedRoles: def.allowedRoles }),
         editor: def.editor,
         labelTr: def.labelTr,
         labelEn: def.labelEn,
@@ -94,8 +99,7 @@ export const tenantSettingsService = {
         throw badRequest("tenantSettings.invalidValue");
       }
 
-      const def = TENANT_SETTING_CATALOG[key];
-      if (parsed === def.defaultValue) {
+      if (tenantSettingDefaultEquals(key, parsed)) {
         await tenantSettingsRepository.deleteOverride(universityId, key);
       } else {
         await tenantSettingsRepository.upsertOverride(universityId, key, parsed, actorId);
@@ -103,11 +107,16 @@ export const tenantSettingsService = {
     }
 
     const overrides = await tenantSettingsRepository.listOverrides(universityId);
-    const overrideMap: Partial<Record<TenantSettingKey, number>> = {};
+    const overrideMap: Partial<Record<TenantSettingKey, number | string[]>> = {};
     for (const row of overrides) {
       if (!isTenantSettingKey(row.key)) continue;
-      if (typeof row.value !== "number") continue;
-      overrideMap[row.key] = row.value;
+      const def = TENANT_SETTING_CATALOG[row.key];
+      if (def.kind === "integer" && typeof row.value === "number") {
+        overrideMap[row.key] = row.value;
+      } else if (def.kind === "role_chain") {
+        const chain = parseTenantSettingValue(row.key, row.value);
+        if (chain) overrideMap[row.key] = chain;
+      }
     }
     const resolved = mergeOverridesIntoResolved(overrideMap);
     await setTenantSettingsCache(universityId, resolved);

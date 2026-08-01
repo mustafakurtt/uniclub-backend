@@ -13,7 +13,7 @@ class TenantSettingsRepository {
   async upsertOverride(
     universityId: string,
     key: TenantSettingKey,
-    value: number,
+    value: number | string[],
     updatedBy: string
   ): Promise<void> {
     await db

@@ -223,7 +223,8 @@ export const universityAnnouncementPublishLimit = limiter({
   limit: async (c) => {
     const universityId = c.req.param("universityId");
     if (!universityId) {
-      return TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR].defaultValue;
+      return TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR]
+        .defaultValue as number;
     }
     const settings = await getTenantSettings(universityId);
     return settings.universityAnnouncementPublishPerHour;

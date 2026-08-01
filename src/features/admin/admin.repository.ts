@@ -3,6 +3,11 @@ import { db } from "../../db";
 import * as schema from "../../db/schema";
 import { BaseRepository } from "../../core/db";
 import { slugify } from "../../shared/utils/slug.util";
+import {
+  deriveApplicationStatus,
+  findCurrentApprovalStep,
+  assertActorCanDecideCurrentStep,
+} from "../clubs/club-application-chain";
 import { notFound, badRequest } from "../../shared/utils/errors";
 import {
   User,
@@ -109,7 +114,10 @@ export const adminRepository = {
   async findClubApplicationsByUniversity(universityId: string, status?: ClubApplication["status"]) {
     return await db.query.clubApplications.findMany({
       where: { universityId, ...(status ? { status } : {}) },
-      with: { applicant: true },
+      with: {
+        applicant: true,
+        approvals: { orderBy: { step: "asc" } },
+      },
     });
   },
 
@@ -118,8 +126,8 @@ export const adminRepository = {
   },
 
   /**
-   * Başvuruyu onaylar/reddeder. Onay durumunda gerçek bir `clubs` satırı
-   * ve başvuranı başkan yapan bir `clubMembers` satırı oluşturur.
+   * Başvuruyu onaylar/reddeder — yalnızca sıradaki kademe; özet durum adımlardan türetilir.
+   * Onay tamamlandığında gerçek `clubs` satırı oluşturulur.
    */
   async decideClubApplication(
     universityId: string,
@@ -131,6 +139,7 @@ export const adminRepository = {
     return await db.transaction(async (tx) => {
       const application = await tx.query.clubApplications.findFirst({
         where: { id: applicationId, universityId },
+        with: { approvals: { orderBy: { step: "asc" } } },
       });
 
       if (!application) {
@@ -141,26 +150,47 @@ export const adminRepository = {
         throw badRequest("admin.applicationAlreadyDecided");
       }
 
-      const [updatedApplication] = await tx
-        .update(schema.clubApplications)
-        .set({ status: decision })
-        .where(eq(schema.clubApplications.id, applicationId))
-        .returning();
+      const currentStep = findCurrentApprovalStep(application.approvals);
+      if (!currentStep) {
+        throw badRequest("admin.applicationAlreadyDecided");
+      }
+
+      const approvalRow = application.approvals.find((a) => a.step === currentStep.step);
+      if (!approvalRow) {
+        throw badRequest("admin.applicationAlreadyDecided");
+      }
+
+      await assertActorCanDecideCurrentStep(actorUserId, application.approvals, approvalRow);
 
       await tx
         .update(schema.clubApplicationApprovals)
-        // note: reddederken zorunlu (servis katmanında doğrulanır), onayda opsiyonel.
-        .set({ status: decision, approverId: actorUserId, reviewedAt: new Date(), note })
-        .where(and(
-          eq(schema.clubApplicationApprovals.applicationId, applicationId),
-          eq(schema.clubApplicationApprovals.step, 1)
-        ));
+        .set({
+          status: decision,
+          approverId: actorUserId,
+          reviewedAt: new Date(),
+          note,
+        })
+        .where(eq(schema.clubApplicationApprovals.id, approvalRow.id));
 
-      if (decision === "rejected") {
+      const approvalsAfter = application.approvals.map((a) =>
+        a.id === approvalRow.id
+          ? { ...a, status: decision, approverRole: a.approverRole }
+          : a
+      );
+
+      const derivedStatus = deriveApplicationStatus(approvalsAfter);
+
+      const [updatedApplication] = await tx
+        .update(schema.clubApplications)
+        .set({ status: derivedStatus })
+        .where(eq(schema.clubApplications.id, applicationId))
+        .returning();
+
+      if (derivedStatus !== "approved") {
         return { application: updatedApplication, club: null };
       }
 
-      // Onay: gerçek kulübü oluştur (slug, üniversite içinde benzersiz olmalı)
+      // Nihai onay: gerçek kulübü oluştur
       const baseSlug = slugify(application.proposedName);
       let club: Club | undefined;
 
@@ -189,7 +219,7 @@ export const adminRepository = {
       await tx.insert(schema.clubMembers).values({
         clubId: club.id,
         userId: application.applicantId,
-        universityId: club.universityId, // bileşik FK: kulüp == satır == kullanıcı tenant'ı
+        universityId: club.universityId,
         role: "president",
         status: "approved",
       });
