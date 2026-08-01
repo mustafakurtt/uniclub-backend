@@ -1,8 +1,8 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { announcements, clubAdvisors, clubMembers } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
-import type { CreateAnnouncementPayload } from "./announcements.types";
+import type { CreateAnnouncementPayload, UpdateAnnouncementPayload } from "./announcements.types";
 
 const STAFF_ROLES = ["officer", "president"] as const;
 
@@ -68,15 +68,18 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
     authorId: string,
     data: CreateAnnouncementPayload
   ) {
-    const now = data.publish ? new Date() : null;
+    const scheduled = data.scheduledPublishAt ?? null;
+    const publishNow = data.publish && !scheduled;
+    const now = publishNow ? new Date() : null;
     return this.create({
       universityId,
       clubId,
       authorId,
       title: data.title,
       content: data.content,
-      status: data.publish ? "published" : "draft",
+      status: publishNow ? "published" : "draft",
       publishedAt: now,
+      scheduledPublishAt: scheduled,
       pinned: data.pinned,
       visibility: data.visibility,
     });
@@ -85,17 +88,26 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
   addUniversity(
     universityId: string,
     authorId: string,
-    data: { title: string; content: string; pinned: boolean; publish: boolean }
+    data: {
+      title: string;
+      content: string;
+      pinned: boolean;
+      publish: boolean;
+      scheduledPublishAt?: Date | null;
+    }
   ) {
-    const now = data.publish ? new Date() : null;
+    const scheduled = data.scheduledPublishAt ?? null;
+    const publishNow = data.publish && !scheduled;
+    const now = publishNow ? new Date() : null;
     return this.create({
       universityId,
       clubId: null,
       authorId,
       title: data.title,
       content: data.content,
-      status: data.publish ? "published" : "draft",
+      status: publishNow ? "published" : "draft",
       publishedAt: now,
+      scheduledPublishAt: scheduled,
       pinned: data.pinned,
       visibility: "university",
     });
@@ -107,16 +119,22 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
       .set({
         status: "published",
         publishedAt: sql`COALESCE(${announcements.publishedAt}, NOW())`,
+        scheduledPublishAt: null,
         updatedAt: new Date(),
       })
       .where(and(eq(announcements.id, announcementId), eq(announcements.status, "draft")))
       .returning();
   }
 
-  updateInClub(clubId: string, announcementId: string, data: { pinned?: boolean; visibility?: "university" | "members" }) {
+  findById(announcementId: string) {
+    return this.findOne({ id: announcementId });
+  }
+
+  updateInClub(clubId: string, announcementId: string, data: UpdateAnnouncementPayload) {
     const patch: Partial<typeof announcements.$inferInsert> = { updatedAt: new Date() };
     if (data.pinned !== undefined) patch.pinned = data.pinned;
     if (data.visibility !== undefined) patch.visibility = data.visibility;
+    if (data.scheduledPublishAt !== undefined) patch.scheduledPublishAt = data.scheduledPublishAt;
     return db
       .update(announcements)
       .set(patch)
@@ -189,10 +207,11 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
   updateInUniversity(
     universityId: string,
     announcementId: string,
-    data: { pinned?: boolean }
+    data: { pinned?: boolean; scheduledPublishAt?: Date | null }
   ) {
     const patch: Partial<typeof announcements.$inferInsert> = { updatedAt: new Date() };
     if (data.pinned !== undefined) patch.pinned = data.pinned;
+    if (data.scheduledPublishAt !== undefined) patch.scheduledPublishAt = data.scheduledPublishAt;
     return db
       .update(announcements)
       .set(patch)
@@ -220,6 +239,17 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
           isNull(announcements.clubId)
         )
       );
+  }
+
+  /** Mutabakat taraması: zamanlanmış taslak duyurular. */
+  findScheduledDrafts() {
+    return db
+      .select({
+        id: announcements.id,
+        scheduledPublishAt: announcements.scheduledPublishAt,
+      })
+      .from(announcements)
+      .where(and(eq(announcements.status, "draft"), isNotNull(announcements.scheduledPublishAt)));
   }
 }
 

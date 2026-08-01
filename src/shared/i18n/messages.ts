@@ -24,6 +24,7 @@ import {
   tenantSettingsMessages,
   type TenantSettingsMessageKey,
 } from "../../features/tenant-settings/tenant-settings.messages";
+import { publicMessages, type PublicMessageKey } from "../../features/public/public.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -48,7 +49,8 @@ export const messages = mergeCatalogs(
   dashboardMessages,
   mediaMessages,
   platformMessages,
-  tenantSettingsMessages
+  tenantSettingsMessages,
+  publicMessages
 );
 
 /**
@@ -73,4 +75,5 @@ export type MessageKey =
   | DashboardMessageKey
   | MediaMessageKey
   | PlatformMessageKey
-  | TenantSettingsMessageKey;
+  | TenantSettingsMessageKey
+  | PublicMessageKey;

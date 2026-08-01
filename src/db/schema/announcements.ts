@@ -31,6 +31,8 @@ export const announcements = table("announcements", {
   // Duyuruda `cancelled` kullanılmaz; servis yalnızca draft/published geçişlerini kabul eder.
   status: activityStatusEnum().default("draft").notNull(),
   publishedAt: t.timestamp("published_at", { withTimezone: true }),
+  /** Tenant yerel saatinde planlanan yayın anı (UTC); yayınlanana kadar taslak kalır. */
+  scheduledPublishAt: t.timestamp("scheduled_publish_at", { withTimezone: true }),
   pinned: t.boolean().notNull().default(false),
   visibility: activityVisibilityEnum().default("university").notNull(),
 

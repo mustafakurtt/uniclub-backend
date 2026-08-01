@@ -1,4 +1,5 @@
 import { usersRepository } from "./users.repository";
+import { invalidateUserPreferredLanguage } from "../../shared/i18n/locale.cache";
 import { verifyPassword, hashPassword } from "../../shared/utils/password.util";
 import { toSafeUser } from "../../shared/utils/user.util";
 import { revokeUserSessions } from "../../shared/rbac/session-revocation";
@@ -21,6 +22,9 @@ export const usersService = {
     const updated = await usersRepository.updateProfile(userId, data);
     if (!updated) {
       throw notFound("user.notFound");
+    }
+    if (data.preferredLanguage !== undefined) {
+      await invalidateUserPreferredLanguage(userId);
     }
     return toSafeUser(updated);
   },

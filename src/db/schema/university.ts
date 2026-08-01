@@ -24,6 +24,12 @@ export const universities = table("universities", {
   statusChangedAt: t.timestamp("status_changed_at", { withTimezone: true, mode: "date" }),
   /** FK users.id — migration'da ON DELETE SET NULL (şema döngüsü nedeniyle burada referans yok). */
   statusChangedBy: t.uuid("status_changed_by"),
+  /** IANA saat dilimi — tenant yerel gün/hafta sınırları için (C2). */
+  timezone: t.varchar({ length: 64 }).default("Europe/Istanbul").notNull(),
+  /** Tenant varsayılan dili (ISO 639-1); kullanıcı tercihi ve Accept-Language sonrası düşer. */
+  defaultLocale: t.varchar("default_locale", { length: 10 }).default("tr").notNull(),
+  logoUrl: t.varchar("logo_url", { length: 2048 }),
+  primaryColor: t.varchar("primary_color", { length: 7 }),
   ...timestamps,
   ...softDeleteColumn,
 });

@@ -11,9 +11,11 @@ export interface CreateAnnouncementPayload {
   visibility: AnnouncementVisibility;
   pinned: boolean;
   publish: boolean;
+  scheduledPublishAt?: Date | null;
 }
 
 export interface UpdateAnnouncementPayload {
   pinned?: boolean;
   visibility?: AnnouncementVisibility;
+  scheduledPublishAt?: Date | null;
 }

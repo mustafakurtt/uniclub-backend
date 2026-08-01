@@ -24,6 +24,7 @@ export interface CreateActivityPayload {
   endsAt?: Date | null;
   capacity?: number | null;
   visibility: ActivityVisibility;
+  scheduledPublishAt?: Date | null;
 }
 
 /** Etkinlik güncelleme yükü — verilen alanlar güncellenir (hepsi opsiyonel). */
@@ -36,4 +37,5 @@ export interface UpdateActivityPayload {
   endsAt?: Date | null;
   capacity?: number | null;
   visibility?: ActivityVisibility;
+  scheduledPublishAt?: Date | null;
 }

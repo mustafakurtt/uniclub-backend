@@ -13,7 +13,12 @@ import { dispatchNotificationFanout } from "../notifications/notifications.fanou
 import { NotificationType } from "../notifications/notifications.types";
 import { resolveAuthz } from "../../shared/rbac/rbac.cache";
 import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
-import type { Announcement } from "./announcements.types";
+import { resolveScheduledPublishAt } from "../../shared/publishing/schedule.util";
+import {
+  cancelScheduledPublish,
+  enqueueScheduledPublish,
+} from "../../shared/publishing/scheduled-publish.queue";
+import type { Announcement, UpdateAnnouncementPayload } from "./announcements.types";
 
 type AnnouncementRow = Awaited<ReturnType<typeof announcementsRepository.findByClubForStaff>>[number];
 type UniversityAnnouncementRow = Awaited<
@@ -67,15 +72,22 @@ export const announcementsService = {
       await assertPinnedCapacity(universityId, clubId);
     }
 
+    const scheduledAt = data.scheduledPublishAtLocal
+      ? await resolveScheduledPublishAt(universityId, data.scheduledPublishAtLocal)
+      : null;
+
     const announcement = await announcementsRepository.add(universityId, clubId, authorId, {
       title: data.title,
       content: data.content,
       visibility: data.visibility,
       pinned: data.pinned,
-      publish: data.publish,
+      publish: data.publish && !scheduledAt,
+      scheduledPublishAt: scheduledAt,
     });
 
-    if (data.publish) {
+    if (scheduledAt) {
+      await enqueueScheduledPublish("announcement", announcement.id, scheduledAt);
+    } else if (data.publish) {
       await notifyClubMembersPublished(clubId, announcement, authorId);
     }
 
@@ -92,19 +104,61 @@ export const announcementsService = {
       await assertUniversityPinnedCapacity(universityId);
     }
 
+    const scheduledAt = data.scheduledPublishAtLocal
+      ? await resolveScheduledPublishAt(universityId, data.scheduledPublishAtLocal)
+      : null;
+
     const announcement = await announcementsRepository.addUniversity(universityId, authorId, {
       title: data.title,
       content: data.content,
       pinned: data.pinned,
-      publish: data.publish,
+      publish: data.publish && !scheduledAt,
+      scheduledPublishAt: scheduledAt,
     });
 
-    if (data.publish) {
+    if (scheduledAt) {
+      await enqueueScheduledPublish("announcement", announcement.id, scheduledAt);
+    } else if (data.publish) {
       await notifyTenantPublished(universityId, announcement, authorId);
     }
 
     await announcementEffects.universityChanged.emit(universityId);
     return announcement;
+  },
+
+  /** BullMQ worker — zamanlanmış kulüp/okul duyurusu yayını (idempotent). */
+  async publishScheduled(announcementId: string) {
+    const existing = await announcementsRepository.findById(announcementId);
+    if (!existing || existing.status !== "draft" || !existing.scheduledPublishAt) {
+      return;
+    }
+    if (existing.scheduledPublishAt.getTime() > Date.now()) {
+      return;
+    }
+
+    const firstPublish = existing.publishedAt == null;
+    const rows = await announcementsRepository.publishAnnouncement(announcementId);
+    if (rows.length === 0) {
+      return;
+    }
+    const published = rows[0];
+
+    if (firstPublish) {
+      if (published.clubId) {
+        await notifyClubMembersPublished(published.clubId, published, published.authorId);
+        await announcementEffects.changed.emit(published.clubId);
+      } else {
+        await notifyTenantPublished(published.universityId, published, published.authorId);
+        await announcementEffects.universityChanged.emit(published.universityId);
+      }
+      return;
+    }
+
+    if (published.clubId) {
+      await announcementEffects.changed.emit(published.clubId);
+    } else {
+      await announcementEffects.universityChanged.emit(published.universityId);
+    }
   },
 
   async publish(clubId: string, announcementId: string, actorUserId: string) {
@@ -165,7 +219,22 @@ export const announcementsService = {
       await assertPinnedCapacity(existing.universityId, clubId);
     }
 
-    const [updated] = await announcementsRepository.updateInClub(clubId, announcementId, data);
+    const scheduledAt = await resolveSchedulePatch(
+      existing.universityId,
+      announcementId,
+      existing,
+      data.scheduledPublishAtLocal
+    );
+
+    const patch: UpdateAnnouncementPayload = {
+      pinned: data.pinned,
+      visibility: data.visibility,
+    };
+    if (scheduledAt !== undefined) {
+      patch.scheduledPublishAt = scheduledAt;
+    }
+
+    const [updated] = await announcementsRepository.updateInClub(clubId, announcementId, patch);
     if (!updated) {
       throw notFound("announcement.notFound");
     }
@@ -188,11 +257,21 @@ export const announcementsService = {
       await assertUniversityPinnedCapacity(universityId);
     }
 
-    const [updated] = await announcementsRepository.updateInUniversity(
+    const scheduledAt = await resolveSchedulePatch(
       universityId,
       announcementId,
-      data
+      existing,
+      data.scheduledPublishAtLocal
     );
+
+    const patch: { pinned?: boolean; scheduledPublishAt?: Date | null } = {
+      pinned: data.pinned,
+    };
+    if (scheduledAt !== undefined) {
+      patch.scheduledPublishAt = scheduledAt;
+    }
+
+    const [updated] = await announcementsRepository.updateInUniversity(universityId, announcementId, patch);
     if (!updated) {
       throw notFound("announcement.notFound");
     }
@@ -286,4 +365,25 @@ async function notifyTenantPublished(
     body: announcement.title,
     data: { announcementId: announcement.id, universityId },
   });
+}
+
+async function resolveSchedulePatch(
+  universityId: string,
+  announcementId: string,
+  existing: Announcement,
+  localIso: string | null | undefined
+): Promise<Date | null | undefined> {
+  if (localIso === undefined) {
+    return undefined;
+  }
+  if (existing.status !== "draft") {
+    throw badRequest("schedule.notDraft");
+  }
+  if (localIso === null) {
+    await cancelScheduledPublish("announcement", announcementId);
+    return null;
+  }
+  const at = await resolveScheduledPublishAt(universityId, localIso);
+  await enqueueScheduledPublish("announcement", announcementId, at);
+  return at;
 }

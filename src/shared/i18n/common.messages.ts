@@ -28,6 +28,9 @@ export const commonMessages = defineCatalog({
     "validation.field.invalid_format": "Geçersiz biçim.",
     "validation.field.invalid_value": "Geçersiz değer.",
     "validation.field.unrecognized_keys": "Tanınmayan alan gönderildi.",
+    "schedule.inPast": "Yayın zamanı geçmişte olamaz.",
+    "schedule.invalidLocalTime": "Yayın zamanı geçerli bir yerel saat biçiminde olmalıdır.",
+    "schedule.notDraft": "Yalnızca taslak içeriklerin yayın zamanı değiştirilebilir.",
   },
   en: {
     "validation.failed": "Validation failed.",
@@ -52,6 +55,9 @@ export const commonMessages = defineCatalog({
     "validation.field.invalid_format": "Invalid format.",
     "validation.field.invalid_value": "Invalid value.",
     "validation.field.unrecognized_keys": "Unrecognized key(s) sent.",
+    "schedule.inPast": "Publish time cannot be in the past.",
+    "schedule.invalidLocalTime": "Publish time must be a valid local datetime.",
+    "schedule.notDraft": "Only draft content can change its publish schedule.",
   },
 });
 

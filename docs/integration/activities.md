@@ -102,7 +102,7 @@ Announcements/gallery gibi kulüp alt-kaynağı. Listeleme her giriş yapmış k
 |---|---|---|---|
 | GET | `/api/clubs/:clubId/activities` | Bearer (herkes) | Kulübün etkinlikleri (`members` yalnızca üyeye; **taslaklar yalnızca staff'a**) |
 | POST | `/api/clubs/:clubId/activities` | host staff | Etkinlik oluştur (bu kulüp **host**; `publish:false` → taslak) |
-| PATCH | `/api/clubs/:clubId/activities/:activityId` | host staff | Güncelle (iptal edilmiş güncellenemez) |
+| PATCH | `/api/clubs/:clubId/activities/:activityId` | host staff | Güncelle (iptal edilmiş güncellenemez; taslakta zamanlama) |
 | POST | `/api/clubs/:clubId/activities/:activityId/publish` | host staff | **Taslağı yayınla** (üyelere bildirim) |
 | POST | `/api/clubs/:clubId/activities/:activityId/cancel` | host staff | İptal et (katılımcılara bildirim gider) |
 | GET | `/api/clubs/:clubId/activities/:activityId/attendees` | host staff | Katılımcı listesi (safe user + rsvp + `checkedInAt`) |
@@ -125,9 +125,20 @@ Yol param'ındaki `:clubId` **işlemi yapan kulüp**tür: davet/liste/kaldırmad
 > (`accepted`) kadar etkinlik o kulübün üniversitesinin akışında görünmez ve
 > detayın `coHostClubs`'ında yer almaz.
 
+### Zamanlanmış yayın
+
+Duyurularla aynı sözleşme: `scheduledPublishAtLocal` = tenant yerel `YYYY-MM-DDTHH:mm`
+(offset/Z yok; sunucu tenant `timezone` ile UTC `scheduledPublishAt` saklar).
+
+- `scheduledPublishAtLocal` verildiğinde anında yayınlanmaz (`publish: true` bile taslak kalır).
+- Geçmişe dönük zaman **400** (`schedule.inPast`).
+- Yalnızca `draft` içerikte `PATCH` ile değiştirilebilir veya `null` ile iptal.
+- Yayın anında `published` + bildirim fan-out (elle `POST .../publish` ile aynı).
+- Zamanlanmış taslak keşif listesinde (`GET /api/activities`) **görünmez**.
+
 ### Body şemaları
-- **POST** `create`: `{ title (3-256), description? (max 5000), location? (max 512), coverUrl? (url), startsAt (ISO tarih), endsAt? (ISO), capacity? (pozitif int), visibility? ("university"|"members", vars. "university"), publish? (bool, vars. true) }`
-- **PATCH** `update`: `title/description/location/coverUrl/startsAt/endsAt/capacity/visibility` — hepsi opsiyonel, **en az bir alan**.
+- **POST** `create`: `{ title (3-256), description? (max 5000), location? (max 512), coverUrl? (url), startsAt (ISO tarih), endsAt? (ISO), capacity? (pozitif int), visibility? ("university"|"members", vars. "university"), publish? (bool, vars. true), scheduledPublishAtLocal? }`
+- **PATCH** `update`: `title/description/location/coverUrl/startsAt/endsAt/capacity/visibility/scheduledPublishAtLocal` — hepsi opsiyonel, **en az bir alan**. `scheduledPublishAtLocal: null` iptal.
 - **POST** `/co-hosts`: `{ clubId (uuid) }`. Diğerleri (publish/cancel/accept/check-in/...) body almaz.
 
 ### İş kuralı hataları

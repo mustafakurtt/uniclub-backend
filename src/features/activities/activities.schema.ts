@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalScheduledPublishAtLocalField, nullableScheduledPublishAtLocalField } from "../../shared/publishing/schedule.schema";
 
 /**
  * activities feature'ının zod istek şemaları + türetilmiş DTO tipleri (aynı diğer
@@ -26,6 +27,7 @@ export const createActivitySchema = z.object({
   // true (varsayılan) → anında yayınla + üyelere bildir; false → taslak kaydet
   // (yalnızca kulüp staff görür, sonra POST .../publish ile yayınlanır).
   publish: z.boolean().default(true),
+  scheduledPublishAtLocal: optionalScheduledPublishAtLocalField,
 });
 export type CreateActivityDTO = z.infer<typeof createActivitySchema>;
 
@@ -38,6 +40,7 @@ export const updateActivitySchema = z.object({
   endsAt: z.coerce.date().optional(),
   capacity: z.number().int().positive("Kontenjan pozitif bir tam sayı olmalıdır.").optional(),
   visibility: visibilityEnum.optional(),
+  scheduledPublishAtLocal: nullableScheduledPublishAtLocalField,
 }).refine((data) => Object.keys(data).length > 0, {
   message: "Güncellenecek en az bir alan girilmelidir.",
 });

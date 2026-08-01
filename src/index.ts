@@ -20,6 +20,7 @@ import { notificationsRoutes } from "./features/notifications/notifications.rout
 import { auditRoutes } from "./features/audit/audit.routes";
 import { moderationRoutes } from "./features/moderation/moderation.routes";
 import { platformRoutes } from "./features/platform/platform.routes";
+import { publicRoutes } from "./features/public/public.routes";
 import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
@@ -31,12 +32,18 @@ import { resolveAuthz } from "./shared/rbac/rbac.cache";
 import { enforceAuthzPolicy } from "./shared/rbac/authz-policy";
 import "./shared/auth/claims"; // AuthClaims declaration merging (proje claim şekli)
 import "./shared/rbac/authz"; // AuthzContext declaration merging (proje authz alanları)
-import { createLocaleMiddleware, type LocaleVariables } from "./core/i18n/locale";
-import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./shared/i18n/translator";
+import { createAppLocaleMiddleware } from "./middlewares/app-locale.middleware";
+import { optionalAuthMiddleware } from "./middlewares/optional-auth.middleware";
+import type { LocaleVariables } from "./core/i18n/locale";
 import { verifyMailConnection, mailer } from "./shared/mail/mailer";
 import { redisSubscriber } from "./shared/redis/redis.subscriber";
 import { closeEmailQueue } from "./features/auth/auth.queue";
 import { closeNotificationFanoutQueue } from "./features/notifications/notifications.fanout";
+import { closeScheduledPublishQueue } from "./shared/publishing/scheduled-publish.queue";
+import {
+  reconcileScheduledPublishes,
+  SCHEDULED_PUBLISH_RECONCILE_INTERVAL_MS,
+} from "./shared/publishing/scheduled-publish.reconcile";
 import { websocket } from "./shared/ws/bun-ws";
 import { logger } from "./shared/logger/logger";
 import { metrics } from "./shared/metrics/metrics";
@@ -83,9 +90,9 @@ const globalBodyLimit = bodyLimit({
 app.use("*", (c, next) =>
   c.req.path.startsWith("/api/uploads") ? next() : globalBodyLimit(c, next)
 );
-// Dil çözümü erkenden: Accept-Language → c.get("locale"); errorHandler mesajları
-// bu dile çevirir (bkz. core/i18n).
-app.use("*", createLocaleMiddleware({ supported: SUPPORTED_LOCALES, fallback: DEFAULT_LOCALE }));
+// Dil: isteğe bağlı auth → kullanıcı tercihi → Accept-Language → tenant varsayılanı → tr.
+app.use("*", optionalAuthMiddleware);
+app.use("*", createAppLocaleMiddleware());
 app.use("*", requestLogger);
 // CORS: allowlist env'den (CORS_ORIGINS). Verilmezse tüm origin'lere açık (`*`) —
 // dev için; PROD'da CORS_ORIGINS doldurulmalı. Kimlik Authorization'da, cookie yok.
@@ -185,6 +192,7 @@ app.route("/api/notifications", notificationsRoutes);
 app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);
 app.route("/api/platform", platformRoutes);
+app.route("/api/public", publicRoutes);
 
 // Sunucuyu başlat + graceful shutdown — YALNIZCA bu dosya doğrudan entrypoint
 // iken (import.meta.main). Testler `app`'i import eder (import.meta.main false),
@@ -207,6 +215,16 @@ if (import.meta.main) {
 
   log.info({ port: env.PORT }, "🚀 Sistem ayağa kalktı");
 
+  // Zamanlanmış yayın mutabakatı — açılışı bloklamaz (fail-open).
+  reconcileScheduledPublishes().catch((err) =>
+    log.warn({ err }, "açılış zamanlanmış yayın mutabakatı atlandı")
+  );
+  const reconcileTimer = setInterval(() => {
+    reconcileScheduledPublishes().catch((err) =>
+      log.warn({ err }, "periyodik zamanlanmış yayın mutabakatı atlandı")
+    );
+  }, SCHEDULED_PUBLISH_RECONCILE_INTERVAL_MS);
+
   // Graceful shutdown: SIGTERM/SIGINT'te SIRAYLA kapat — önce trafiği kes, sonra
   // bağımlılıkları. Böylece deploy'da yeni istek gelmez, uçuştaki istek biter ve
   // yarım job/bağlantı kalmaz. Kaynaklar core'a değil BURADA (proje) enjekte edilir.
@@ -220,6 +238,8 @@ if (import.meta.main) {
   shutdown.register("http-server", () => server.stop()); // yeni bağlantı yok, uçuştakini bekle
   shutdown.register("email-queue", closeEmailQueue); // worker önce (job'u bitir), sonra queue
   shutdown.register("notification-fanout-queue", closeNotificationFanoutQueue);
+  shutdown.register("scheduled-publish-queue", closeScheduledPublishQueue);
+  shutdown.register("scheduled-publish-reconcile", async () => clearInterval(reconcileTimer));
   shutdown.register("redis-subscriber", async () => void (await redisSubscriber.quit()));
   shutdown.register("redis", async () => void (await redis.quit()));
   shutdown.register("db", () => db.$client.end({ timeout: 5 }));

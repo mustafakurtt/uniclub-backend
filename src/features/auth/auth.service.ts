@@ -6,6 +6,7 @@ import { hashPassword, verifyPasswordOrDummy } from "../../shared/utils/password
 import { generateToken } from "../../shared/utils/jwt.util"; // JWT üreteci eklendi
 import { generateOneTimeToken, hashToken } from "../../core/auth/token"; // e-posta doğrulama token'ı (JWT DEĞİL)
 import { emailQueue } from "./auth.queue";
+import { resolveBackgroundLocale, resolveBackgroundLocaleForTenant } from "../../shared/i18n/background-locale";
 import { resolveAuthz, invalidateUserPermissions, invalidateUsersPermissions } from "../../shared/rbac/rbac.cache";
 import { revokeUserSessions } from "../../shared/rbac/session-revocation";
 import { toSafeUser } from "../../shared/utils/user.util";
@@ -232,7 +233,12 @@ const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
  * Not: DB'de saklanan tek kullanımlık bir token (JWT değil) — `usedAt` ile
  * tüketilebilmesi gerekiyor.
  */
-async function issueVerificationEmail(user: { id: string; email: string; firstName: string }) {
+async function issueVerificationEmail(user: {
+  id: string;
+  email: string;
+  firstName: string;
+  universityId: string | null;
+}) {
   await authRepository.invalidateUserEmailVerifications(user.id);
 
   // DB'ye token'ın ÖZETİ yazılır, düz hali yalnızca maildeki linkte yaşar
@@ -246,29 +252,50 @@ async function issueVerificationEmail(user: { id: string; email: string; firstNa
     expiresAt
   );
 
+  const locale = await resolveBackgroundLocale(user.id, user.universityId);
   await emailQueue.add("send-verify-email", {
     email: user.email,
     firstName: user.firstName,
     token: verificationToken,
+    locale,
   });
 }
 
-async function queuePasswordResetEmail(email: string, firstName: string, token: string) {
-  await emailQueue.add("send-password-reset", { email, firstName, token });
+async function queuePasswordResetEmail(
+  email: string,
+  firstName: string,
+  token: string,
+  locale: string
+) {
+  await emailQueue.add("send-password-reset", { email, firstName, token, locale });
 }
 
-async function issuePasswordResetEmail(user: { id: string; email: string; firstName: string }) {
+async function issuePasswordResetEmail(user: {
+  id: string;
+  email: string;
+  firstName: string;
+  universityId: string | null;
+}) {
   await authRepository.invalidateUserPasswordResets(user.id);
   const resetToken = generateOneTimeToken();
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
   await authRepository.createPasswordReset(user.id, await hashToken(resetToken), expiresAt);
-  await queuePasswordResetEmail(user.email, user.firstName, resetToken);
+  const locale = await resolveBackgroundLocale(user.id, user.universityId);
+  await queuePasswordResetEmail(user.email, user.firstName, resetToken, locale);
 }
-async function queueTenantAdminInvitationEmail(email: string, firstName: string, token: string) {
+
+async function queueTenantAdminInvitationEmail(
+  email: string,
+  firstName: string,
+  token: string,
+  universityId: string
+) {
+  const locale = await resolveBackgroundLocaleForTenant(universityId);
   await emailQueue.add("send-tenant-admin-invitation", {
     email,
     firstName,
     token,
+    locale,
   });
 }
 
@@ -608,7 +635,7 @@ export const authService = {
     return {
       result: publicInvitation,
       afterCommit: async () => {
-        await queueTenantAdminInvitationEmail(params.email, params.firstName, token);
+        await queueTenantAdminInvitationEmail(params.email, params.firstName, token, params.universityId);
       },
     };
   },

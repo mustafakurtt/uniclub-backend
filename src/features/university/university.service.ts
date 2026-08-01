@@ -6,6 +6,7 @@ import {
 } from "./repositories";
 import { notFound, badRequest } from "../../shared/utils/errors";
 import { universityCache } from "./university.cache";
+import { invalidateTenantDefaultLocale } from "../../shared/i18n/locale.cache";
 import {
   CreateUniversityDTO,
   UpdateUniversityDTO,
@@ -155,7 +156,11 @@ export const universityService = {
       }
     }
 
-    return await universityRepository.updateById(universityId, data);
+    const updated = await universityRepository.updateById(universityId, data);
+    if (data.defaultLocale !== undefined) {
+      await invalidateTenantDefaultLocale(universityId);
+    }
+    return updated;
   },
 
   /**

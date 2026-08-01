@@ -68,6 +68,10 @@ export interface UpdateTenantLifecyclePayload {
 export interface UpdateUniversityPayload {
   name?: string;
   slug?: string;
+  timezone?: string;
+  defaultLocale?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }
 
 export interface UpdateDomainPayload {

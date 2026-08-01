@@ -14,6 +14,7 @@ export const universityMessages = defineCatalog({
     // university — hata
     "university.notFound": "Üniversite bulunamadı.",
     "university.slugTaken": "Bu slug zaten kullanılıyor.",
+    "university.invalidTimezone": "Geçerli bir IANA saat dilimi giriniz.",
     "university.domainDuplicateInRequest": "\"{domain}\" domaini istekte birden fazla kez girilmiş.",
     "university.domainAlreadyRegistered": "\"{domain}\" domaini zaten kayıtlı.",
     "university.hasUsers": "Bu üniversiteye bağlı kullanıcılar var, silinemez.",
@@ -57,6 +58,7 @@ export const universityMessages = defineCatalog({
     // university — error
     "university.notFound": "University not found.",
     "university.slugTaken": "This slug is already in use.",
+    "university.invalidTimezone": "Enter a valid IANA time zone.",
     "university.domainDuplicateInRequest": "Domain \"{domain}\" was provided more than once in the request.",
     "university.domainAlreadyRegistered": "Domain \"{domain}\" is already registered.",
     "university.hasUsers": "This university has users and cannot be deleted.",

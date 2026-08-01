@@ -79,7 +79,7 @@ Her tablo tenant'a aynı şekilde bağlanmaz; üç kalıp var:
 
 | Tablo | Ne tutar | Notlar |
 |---|---|---|
-| `universities` | Satılan birim | Soft delete var. `status`: `trial` / `active` / `past_due` / `suspended` (varsayılan `active`). `tenant_settings` sapmaları (C1); `timezone`, marka henüz yok (C2) |
+| `universities` | Satılan birim | Soft delete var. `status`: `trial` / `active` / `past_due` / `suspended` (varsayılan `active`). `tenant_settings` sapmaları (C1). C2 profil: `timezone` (IANA, varsayılan `Europe/Istanbul`), `defaultLocale` (`tr`/`en`, varsayılan `tr`), `logoUrl`, `primaryColor` (nullable) |
 | `university_domains` | Bir üniversitenin e-posta domainleri, `student`/`staff` etiketiyle | Kayıt akışı tenant'ı VE rolü buradan çıkarır ([ADR 0007](../adr/0007-email-domain-tenant-inference.md)). `domain = lower(domain)` CHECK'i var |
 | `faculties` → `departments` | Akademik yapı | `departments`'ta bilinçli olarak `university_id` **yok**: fakülte zinciriyle ulaşılır |
 | `tenant_settings` | Tenant başına ayar sapmaları | Seyrek model: varsayılanlar kodda (`tenant-settings.catalog.ts`). `key` varchar(64), `value` jsonb. UNIQUE `(university_id, key)`. FK: `university_id` CASCADE, `updated_by` SET NULL |

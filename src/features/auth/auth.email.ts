@@ -35,28 +35,46 @@ function escapeHtml(value: string): string {
 export interface VerificationEmailParams {
   firstName: string;
   token: string;
+  locale?: string;
 }
 
-export function buildVerificationEmail({ firstName, token }: VerificationEmailParams) {
+export function buildVerificationEmail({ firstName, token, locale }: VerificationEmailParams) {
   const link = buildVerifyLink(token);
   const safeName = escapeHtml(firstName);
+  const lang = locale === "en" ? "en" : "tr";
 
-  const subject = "Kampüs Kulüp Sistemi — E-posta adresinizi doğrulayın";
+  const subject =
+    lang === "en"
+      ? "Campus Club System — Verify your email address"
+      : "Kampüs Kulüp Sistemi — E-posta adresinizi doğrulayın";
 
-  const text = [
-    `Merhaba ${firstName},`,
-    "",
-    "Kampüs Kulüp Sistemi'ne kaydolduğunuz için teşekkürler.",
-    "Hesabınızı aktifleştirmek için aşağıdaki adresi tarayıcınıza yapıştırın:",
-    "",
-    link,
-    "",
-    "Bu link 24 saat geçerlidir ve yalnızca bir kez kullanılabilir.",
-    "Bu kaydı siz yapmadıysanız bu e-postayı yok sayabilirsiniz.",
-  ].join("\n");
+  const text =
+    lang === "en"
+      ? [
+          `Hello ${firstName},`,
+          "",
+          "Thank you for registering with the Campus Club System.",
+          "Paste the following link into your browser to activate your account:",
+          "",
+          link,
+          "",
+          "This link is valid for 24 hours and can only be used once.",
+          "If you did not register, you can ignore this email.",
+        ].join("\n")
+      : [
+          `Merhaba ${firstName},`,
+          "",
+          "Kampüs Kulüp Sistemi'ne kaydolduğunuz için teşekkürler.",
+          "Hesabınızı aktifleştirmek için aşağıdaki adresi tarayıcınıza yapıştırın:",
+          "",
+          link,
+          "",
+          "Bu link 24 saat geçerlidir ve yalnızca bir kez kullanılabilir.",
+          "Bu kaydı siz yapmadıysanız bu e-postayı yok sayabilirsiniz.",
+        ].join("\n");
 
   const html = `<!doctype html>
-<html lang="tr">
+<html lang="${lang}">
   <body style="margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:32px 12px;">
       <tr>
@@ -118,6 +136,7 @@ export function buildVerificationEmail({ firstName, token }: VerificationEmailPa
 export interface PasswordResetEmailParams {
   firstName: string;
   token: string;
+  locale?: string;
 }
 
 export function buildPasswordResetEmail({ firstName, token }: PasswordResetEmailParams) {
@@ -191,6 +210,7 @@ export function buildPasswordResetEmail({ firstName, token }: PasswordResetEmail
 export interface TenantAdminInvitationEmailParams {
   firstName: string;
   token: string;
+  locale?: string;
 }
 
 export function buildTenantAdminInvitationEmail({ firstName, token }: TenantAdminInvitationEmailParams) {

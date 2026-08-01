@@ -4,6 +4,11 @@ import { toSafeUser } from "../../shared/utils/user.util";
 import { notFound, badRequest, forbidden } from "../../shared/utils/errors";
 import { dispatchNotificationFanout } from "../notifications/notifications.fanout";
 import { NotificationType } from "../notifications/notifications.types";
+import { resolveScheduledPublishAt } from "../../shared/publishing/schedule.util";
+import {
+  cancelScheduledPublish,
+  enqueueScheduledPublish,
+} from "../../shared/publishing/scheduled-publish.queue";
 import { CreateActivityDTO, UpdateActivityDTO, ListActivitiesQueryDTO, RsvpDTO } from "./activities.schema";
 import type { Activity } from "./activities.types";
 
@@ -95,8 +100,17 @@ export const activitiesService = {
     // 1
     assertValidWindow(data.startsAt, data.endsAt);
 
+    const universityId = await activitiesRepository.getClubUniversityId(hostClubId);
+    if (!universityId) {
+      throw notFound("club.notFound");
+    }
+
+    const scheduledAt = data.scheduledPublishAtLocal
+      ? await resolveScheduledPublishAt(universityId, data.scheduledPublishAtLocal)
+      : null;
+
     // 2
-    const status = data.publish ? "published" : "draft";
+    const status = data.publish && !scheduledAt ? "published" : "draft";
     const activity = await activitiesRepository.createWithHost(hostClubId, createdBy, {
       title: data.title,
       description: data.description ?? null,
@@ -106,14 +120,41 @@ export const activitiesService = {
       endsAt: data.endsAt ?? null,
       capacity: data.capacity ?? null,
       visibility: data.visibility,
+      scheduledPublishAt: scheduledAt,
     }, status);
 
     // 3
-    if (status === "published") {
+    if (scheduledAt) {
+      await enqueueScheduledPublish("activity", activity.id, scheduledAt);
+    } else if (status === "published") {
       await notifyMembersPublished(hostClubId, activity);
-      await this.invalidateCache(activity.id); // yayınlandıysa keşif listesi değişir
+      await this.invalidateCache(activity.id);
     }
     return activity;
+  },
+
+  /** BullMQ worker — zamanlanmış etkinlik yayını (idempotent). */
+  async publishScheduled(activityId: string) {
+    const activity = await activitiesRepository.findById(activityId);
+    if (!activity || activity.status !== "draft" || !activity.scheduledPublishAt) {
+      return;
+    }
+    if (activity.scheduledPublishAt.getTime() > Date.now()) {
+      return;
+    }
+
+    const hostClubId = await activitiesRepository.getHostClubId(activityId);
+    if (!hostClubId) {
+      return;
+    }
+
+    const published = await activitiesRepository.publishActivity(activityId);
+    if (!published) {
+      return;
+    }
+
+    await notifyMembersPublished(hostClubId, published);
+    await this.invalidateCache(activityId);
   },
 
   /**
@@ -158,9 +199,36 @@ export const activitiesService = {
     const endsAt = data.endsAt ?? activity.endsAt;
     assertValidWindow(startsAt, endsAt);
 
+    const universityId = await activitiesRepository.getClubUniversityId(hostClubId);
+    if (!universityId) {
+      throw notFound("club.notFound");
+    }
+
+    let scheduledPublishAt: Date | null | undefined = undefined;
+    if (data.scheduledPublishAtLocal !== undefined) {
+      if (activity.status !== "draft") {
+        throw badRequest("schedule.notDraft");
+      }
+      if (data.scheduledPublishAtLocal === null) {
+        await cancelScheduledPublish("activity", activityId);
+        scheduledPublishAt = null;
+      } else {
+        const at = await resolveScheduledPublishAt(universityId, data.scheduledPublishAtLocal);
+        await enqueueScheduledPublish("activity", activityId, at);
+        scheduledPublishAt = at;
+      }
+    }
+
     const updated = await activitiesRepository.updateActivity(activityId, {
-      ...data,
+      title: data.title,
       description: data.description ?? undefined,
+      location: data.location ?? undefined,
+      coverUrl: data.coverUrl ?? undefined,
+      startsAt: data.startsAt,
+      endsAt: data.endsAt ?? undefined,
+      capacity: data.capacity ?? undefined,
+      visibility: data.visibility,
+      ...(scheduledPublishAt !== undefined ? { scheduledPublishAt } : {}),
     });
     await this.invalidateCache(activityId);
     return updated;

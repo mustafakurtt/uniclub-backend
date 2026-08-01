@@ -30,6 +30,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Activities (etkinlikler)](#12-activities--apiactivities)
   - [Dashboard & Feed](#13-dashboard--feed--apifeed)
   - [Media (dosya yükleme)](#14-media--apiuploads)
+  - [Public (kamuya açık okuma)](#15-public--apipublic)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -37,7 +38,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/public`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -269,7 +270,7 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | GET | `/api/universities/:universityId/announcements` | Bearer | Tenant duyuruları (öğrenci: yalnızca yayınlanmış) |
 | POST | `/api/universities/:universityId/announcements` | `announcement.university.manage` | Oluştur / yayınla (saatte 5 hız sınırı) |
 | POST | `/api/universities/:universityId/announcements/:id/publish` | `announcement.university.manage` | Taslak yayınla |
-| PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sabitleme güncelle |
+| PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sabitleme / zamanlanmış yayın güncelle |
 | DELETE | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sil |
 
 **Tenant ayarları** (`university.settings.manage`, tenantScoped):
@@ -371,10 +372,12 @@ Body şemaları:
 | GET | `/api/clubs/:clubId/announcements` | Bearer | Kulübün duyurularını listele (görünürlük serviste) |
 | POST | `/api/clubs/:clubId/announcements` | staff (danışman/officer/president) | Duyuru oluştur |
 | POST | `/api/clubs/:clubId/announcements/:announcementId/publish` | staff | Taslak duyuruyu yayınla |
-| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff | Sabitleme / görünürlük güncelle |
+| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff | Sabitleme / görünürlük / zamanlanmış yayın güncelle |
 | DELETE | `/api/clubs/:clubId/announcements/:announcementId` | staff (danışman/officer/president) | Duyuru sil |
 
-**POST** body: `{ "title": "string (3-256)", "content": "string (1-5000)", "visibility?": "university"|"members", "pinned?": bool, "publish?": bool (vars. true) }`. Ayrıntı: [integration/announcements.md](../integration/announcements.md).
+**POST** body: `{ "title": "string (3-256)", "content": "string (1-5000)", "visibility?": "university"|"members", "pinned?": bool, "publish?": bool (vars. true), "scheduledPublishAtLocal?": "YYYY-MM-DDTHH:mm" (tenant yerel) }`. Ayrıntı: [integration/announcements.md](../integration/announcements.md).
+
+**PATCH** body: `{ "pinned?", "visibility?", "scheduledPublishAtLocal?": "YYYY-MM-DDTHH:mm" | null }` — `null` zamanlamayı iptal eder.
 
 ---
 
@@ -587,7 +590,7 @@ etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva s
 | POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
 | POST | `/api/admin/universities/:uid/activities/:activityId/cancel` | `activity.moderate` (tenant) | **Moderasyon:** tenant'taki herhangi bir kulübün etkinliğini iptal etme |
 
-Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true) }`; `PATCH` aynı alanlar opsiyonel (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
+Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true), scheduledPublishAtLocal? ("YYYY-MM-DDTHH:mm", tenant yerel) }`; `PATCH` aynı alanlar opsiyonel + `scheduledPublishAtLocal: null` iptal (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
 
 ---
 
@@ -620,6 +623,19 @@ Akış: **yükle → dönen URL'yi mevcut `*Url` alanına yaz** (endpoint'ler h�
 | GET | `/uploads/:key` | Public | Servis (`Cache-Control: immutable`) |
 
 `purpose`: `avatar\|club_logo\|club_cover\|gallery\|other`. Boyut aşımı → `413`; görsel değil → `400`.
+
+---
+
+### 15) Public — `/api/public`
+
+Kimlik doğrulama **yok**. IP başına hız sınırı (120/dk). Tam sözleşme: [`docs/integration/public.md`](../integration/public.md).
+
+| Method | Path | Açıklama |
+|---|---|---|
+| GET | `/api/public/universities/:universitySlug/clubs/:clubSlug` | Kulüp tanıtım + yaklaşan `university` etkinlikleri |
+| GET | `/api/public/universities/:universitySlug/activities/:activityId` | Yayınlanmış `university` etkinlik detayı |
+
+Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404**.
 
 ---
 
