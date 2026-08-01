@@ -37,6 +37,7 @@ export const clubsRelations = (r: RelationHelpers) => ({
       to: r.activities.id.through(r.activityClubs.activityId),
     }),
     activityClubs: r.many.activityClubs(),
+    membershipEvents: r.many.clubMembershipEvents(),
   },
   clubAdvisors: {
     club: r.one.clubs({ from: r.clubAdvisors.clubId, to: r.clubs.id }),

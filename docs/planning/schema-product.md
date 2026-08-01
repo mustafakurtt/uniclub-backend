@@ -83,9 +83,11 @@ eder (kilit delinmedi).
 hız sınırı. Fan-out **500 alıcıdan büyükse** BullMQ kuyruğuna (`notification-fanout`);
 küçük tenant'ta `notifyManySafe` istek içinde senkron kalır.
 
-### 3.3 Akademik dönem
+### 3.3 Akademik dönem ve üyelik tarihçesi
 
-`academic_terms` + `clubMembers.termId`; tam giriş-çıkış tarihçesi (PK refactor ile birlikte).
+- `academic_terms` — tenant kapsamlı (`university_id`); `name`, `startsAt`, `endsAt`, `status` (`open`/`closed`). Aktif dönem: `open` + bugün aralıkta. Çakışan aralıklar Postgres `EXCLUDE` (gist + `tstzrange`) ile reddedilir.
+- `club_membership_events` — append-only olaylar (`joined`, `role_changed`, `removed`, `left`, `join_rejected`); `club_members` güncel durumu tutmaya devam eder. `academic_term_id` → `onDelete: restrict` (dönem silme geçmiş veriye bağlıysa engellenir).
+- Migration backfill: onaylı ve `left_at IS NULL` üyelikler için `joined` olayı (`joined_at` damgasıyla).
 
 ### 3.4 Medya varlıkları
 

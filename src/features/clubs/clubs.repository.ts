@@ -231,6 +231,7 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
         approvals: {
           with: { approver: true },
         },
+        appeal: { with: { reviewer: true } },
       },
     });
   }

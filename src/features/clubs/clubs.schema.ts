@@ -11,6 +11,11 @@ export type CreateApplicationDTO = z.infer<typeof createApplicationSchema>;
 export const resubmitApplicationSchema = createApplicationSchema;
 export type ResubmitApplicationDTO = z.infer<typeof resubmitApplicationSchema>;
 
+export const submitAppealSchema = z.object({
+  note: z.string().trim().min(10, "İtiraz gerekçesi en az 10 karakter olmalıdır.").max(2000),
+});
+export type SubmitAppealDTO = z.infer<typeof submitAppealSchema>;
+
 export const decideJoinRequestSchema = z.object({
   decision: z.enum(["approved", "rejected"]),
 });

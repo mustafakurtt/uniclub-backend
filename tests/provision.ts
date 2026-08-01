@@ -8,6 +8,7 @@
  */
 import postgres from "postgres";
 import Redis from "ioredis";
+import { backfillMembershipJoinedEvents } from "../src/db/backfill-membership-joined";
 import { ADMIN_DATABASE_URL, TEST_DATABASE_URL, TEST_REDIS_URL } from "./config";
 
 const TEST_DB_NAME = new URL(TEST_DATABASE_URL).pathname.slice(1);
@@ -41,6 +42,7 @@ const childEnv = {
 };
 await run(["bunx", "drizzle-kit", "migrate"], childEnv);
 await run(["bun", "run", "src/db/seed.ts"], childEnv);
+await backfillMembershipJoinedEvents(TEST_DATABASE_URL);
 
 // 3. Test Redis DB'sini temizle (önceki koşudan kalan RBAC cache / rate-limit).
 const redis = new Redis(TEST_REDIS_URL);

@@ -280,6 +280,17 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | GET | `/api/universities/:universityId/settings` | `university.settings.manage` | Çözümlenmiş ayarlar + katalog metadata |
 | PATCH | `/api/universities/:universityId/settings` | `university.settings.manage` | Kısmi güncelleme; `null` = varsayılana dönüş |
 
+**Akademik dönemler** (`university.academic_term.manage`, tenantScoped):
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| GET | `/api/universities/:universityId/academic-terms` | `university.academic_term.manage` | Dönem listesi (`isActive` türetilmiş) |
+| POST | `/api/universities/:universityId/academic-terms` | aynı | Dönem oluştur (çakışan aralık → 400) |
+| PATCH | `/api/universities/:universityId/academic-terms/:termId` | aynı | Güncelle |
+| DELETE | `/api/universities/:universityId/academic-terms/:termId` | aynı | Sil (bağlı üyelik olayı varsa → 400) |
+
+Body: `{ name, startsAt, endsAt (ISO 8601), status?: "open"|"closed" }`.
+
 **Bölümler** (her zaman `facultyId` üzerinden — `departments` tablosu `universityId` taşımaz)
 
 | Method | Path | Yetki | Açıklama |
@@ -349,6 +360,7 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | DELETE | `/api/clubs/:clubId/members/:userId` | officer/başkan (başkan çıkarılamaz) |
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** (member↔officer) |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** (eski başkan officer olur) |
+| GET | `/api/clubs/:clubId/membership-history` | **staff**: danışman/officer/başkan; sayfalanabilir, `?academicTermId=` |
 | PATCH | `/api/clubs/:clubId` | **yalnızca başkan** (profil düzenle; durum HARİÇ) |
 | POST | `/api/clubs/:clubId/contact-links` | officer/başkan |
 | PATCH | `/api/clubs/:clubId/contact-links/:linkId` | officer/başkan (yalnızca url) |
@@ -356,6 +368,7 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 
 Body şemaları:
 - `POST /applications`, `PATCH /applications/:id/resubmit`: `{ proposedName (3-256), description? (max 2000) }`
+- `POST /applications/:id/appeal`: `{ note (10-2000) }` — reddedilen başvuruya **bir kez** itiraz
 - `POST /:clubId/join`, `DELETE .../leave`: body almaz.
 - `PATCH .../join-requests/:userId`: `{ "decision": "approved" | "rejected" }`
 - `PATCH .../members/:userId/role`: `{ "role": "member" | "officer" }` — `president` atanamaz (devir ayrı endpoint).
@@ -426,6 +439,9 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
+| GET | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist` | `application.view` | İnceleme kontrol listesi |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/appeal/review` | `application.view` | İtiraz incele (`decision`: upheld/dismissed) |
 | GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
 | GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
 

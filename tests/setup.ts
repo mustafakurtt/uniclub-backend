@@ -18,3 +18,6 @@ process.env.RATE_LIMIT_DISABLED = "true"; // testler hız sınırına takılmas�
 process.env.CACHE_DRIVER = "memory"; // koşu-başı izolasyon (Redis'e taşmaz) + InMemory adaptörünü test eder
 process.env.STORAGE_DRIVER = "memory"; // dosya yüklemeleri diske yazılmaz + InMemory storage adaptörünü test eder
 process.env.LOG_LEVEL ||= "error"; // test çıktısını sessizleştir (beklenen 4xx'ler warn üretir)
+// Paralel test worker'ları aynı Postgres'e bağlanır — süreç başına havuzu küçük tut.
+process.env.DATABASE_POOL_MAX = "4";
+process.env.DATABASE_SCRIPT_POOL_MAX = "2";

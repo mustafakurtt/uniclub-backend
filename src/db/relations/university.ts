@@ -8,6 +8,7 @@ export const universityRelations = (r: RelationHelpers) => ({
     clubs: r.many.clubs(),
     announcements: r.many.announcements(),
     clubApplications: r.many.clubApplications(),
+    academicTerms: r.many.academicTerms(),
   },
   universityDomains: {
     university: r.one.universities({

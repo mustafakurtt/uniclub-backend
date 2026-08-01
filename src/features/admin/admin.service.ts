@@ -12,6 +12,8 @@ import { notFound, badRequest } from "../../shared/utils/errors";
 // anahtarlarının düştüğü bilgisi ilgili feature'ın kendi keyspace'inde durur;
 // admin yalnızca olayı emit eder.
 import { clubEffects } from "../clubs/clubs.cache";
+import { clubApplicationReviewService } from "../clubs/club-application-review.service";
+import { membershipHistoryService } from "../membership-history/membership-history.service";
 import { announcementEffects } from "../announcements/announcements.cache";
 import { galleryEffects } from "../gallery/gallery.cache";
 
@@ -174,7 +176,13 @@ export const adminService = {
       throw notFound("admin.applicationNotFound");
     }
     const revisionRequestCount = await adminRepository.countClubApplicationRevisionRequests(applicationId);
-    const { applicant, approvals, ...rest } = application;
+    const { applicant, approvals, appeal, ...rest } = application;
+    const review = await clubApplicationReviewService.buildReviewEnrichment(
+      universityId,
+      applicationId,
+      { ...application, approvals },
+      appeal
+    );
     return {
       ...rest,
       applicant: applicant ? toSafeUser(applicant) : null,
@@ -182,11 +190,14 @@ export const adminService = {
         step: approval.step,
         approverRole: approval.approverRole,
         status: approval.status,
-        note: approval.note,
+        note: approval.status === "rejected" || approval.status === "revision_requested"
+          ? approval.note
+          : approval.note,
         reviewedAt: approval.reviewedAt,
         approver: approval.approver ? toSafeUser(approval.approver) : null,
       })),
       revisionRequestCount,
+      ...review,
     };
   },
 
@@ -228,9 +239,17 @@ export const adminService = {
    * (bkz. admin.repository.decideClubApplication).
    */
   async approveClubApplication(universityId: string, applicationId: string, actorUserId: string, note?: string) {
+    await clubApplicationReviewService.assertChecklistAllowsApproval(universityId, applicationId);
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved", note ?? null);
     await notifyApplicationDecisionIfFinal(result);
-    if (result.application.status === "approved") {
+    if (result.application.status === "approved" && result.club) {
+      await membershipHistoryService.recordJoined(
+        result.club.id,
+        result.application.applicantId,
+        universityId,
+        "president",
+        actorUserId
+      );
       await clubEffects.clubApproved.emit(universityId);
     }
     return result;

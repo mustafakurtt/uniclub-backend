@@ -13,6 +13,8 @@ import {
 import { notFound, badRequest } from "../../shared/utils/errors";
 import { clubsCache, clubEffects } from "./clubs.cache";
 import { findRevisionRequestedStep } from "./club-application-chain.core";
+import { clubApplicationReviewService } from "./club-application-review.service";
+import { membershipHistoryService } from "../membership-history/membership-history.service";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -206,6 +208,13 @@ export const clubsService = {
       ? application.approvals.find((a) => a.step === revisionRow.step)
       : null;
 
+    const review = await clubApplicationReviewService.buildReviewEnrichment(
+      application.universityId,
+      applicationId,
+      application,
+      application.appeal
+    );
+
     return {
       ...application,
       approvals: application.approvals.map((a) => ({
@@ -222,6 +231,10 @@ export const clubsService = {
               : null,
           }
         : null,
+      rejectionReason: review.rejectionReason,
+      appealDeadline: review.appealDeadline,
+      canAppeal: review.canAppeal,
+      appeal: review.appeal,
     };
   },
 
@@ -283,8 +296,14 @@ export const clubsService = {
       club.universityId,
       status
     );
-    // Yalnızca "approved" (open policy) üye listesini/profili değiştirir; pending değil.
     if (status === "approved") {
+      await membershipHistoryService.recordJoined(
+        clubId,
+        userId,
+        club.universityId,
+        "member",
+        userId
+      );
       await clubEffects.membershipChanged.emit(clubId);
     }
     return membership;
@@ -306,6 +325,7 @@ export const clubsService = {
     }
 
     await clubsRepository.removeMembership(clubId, userId);
+    await membershipHistoryService.recordLeft(clubId, userId, club.universityId, membership.role);
     // Ayrılan üye onaylıysa listeyi/profili etkiler; pending istekte membership
     // zaten listede değildi ama invalidasyon ucuz + güvenli.
     await clubEffects.membershipChanged.emit(clubId);
@@ -336,15 +356,33 @@ export const clubsService = {
       .map((r) => ({ ...r, user: toSafeUser(r.user!) }));
   },
 
-  async decideJoinRequest(clubId: string, targetUserId: string, decision: "approved" | "rejected") {
+  async decideJoinRequest(
+    clubId: string,
+    targetUserId: string,
+    decision: "approved" | "rejected",
+    actorId: string
+  ) {
     const membership = await clubsRepository.findMembership(clubId, targetUserId);
     if (!membership || membership.status !== "pending") {
       throw notFound("club.pendingJoinRequestNotFound");
     }
     const updated = await clubsRepository.updateMembershipStatus(clubId, targetUserId, decision);
-    // Onaylanan istek üye listesine girer; reddedilen zaten listede değildi.
     if (decision === "approved") {
+      await membershipHistoryService.recordJoined(
+        clubId,
+        targetUserId,
+        membership.universityId,
+        membership.role,
+        actorId
+      );
       await clubEffects.membershipChanged.emit(clubId);
+    } else {
+      await membershipHistoryService.recordJoinRejected(
+        clubId,
+        targetUserId,
+        membership.universityId,
+        actorId
+      );
     }
 
     const club = await clubsRepository.findClubById(clubId);
@@ -361,7 +399,7 @@ export const clubsService = {
     return updated;
   },
 
-  async removeMember(clubId: string, targetUserId: string) {
+  async removeMember(clubId: string, targetUserId: string, actorId: string) {
     const membership = await clubsRepository.findMembership(clubId, targetUserId);
     if (!membership) {
       throw notFound("club.memberNotFound");
@@ -370,6 +408,13 @@ export const clubsService = {
       throw badRequest("club.presidentCannotBeRemoved");
     }
     await clubsRepository.removeMembership(clubId, targetUserId);
+    await membershipHistoryService.recordRemoved(
+      clubId,
+      targetUserId,
+      membership.universityId,
+      membership.role,
+      actorId
+    );
     await clubEffects.membershipChanged.emit(clubId);
   },
 
@@ -377,7 +422,7 @@ export const clubsService = {
    * Sadece member <-> officer arasında geçiş yapılabilir; başkanlık devri
    * ayrı bir endpoint'tir (transferPresidency).
    */
-  async updateMemberRole(clubId: string, targetUserId: string, data: UpdateMemberRoleDTO) {
+  async updateMemberRole(clubId: string, targetUserId: string, data: UpdateMemberRoleDTO, actorId: string) {
     const membership = await clubsRepository.findMembership(clubId, targetUserId);
     if (!membership || membership.status !== "approved") {
       throw notFound("club.memberNotFound");
@@ -386,6 +431,14 @@ export const clubsService = {
       throw badRequest("club.presidentRoleCannotChange");
     }
     const updated = await clubsRepository.updateMembershipRole(clubId, targetUserId, data.role);
+    await membershipHistoryService.recordRoleChanged(
+      clubId,
+      targetUserId,
+      membership.universityId,
+      membership.role,
+      data.role,
+      actorId
+    );
     await clubEffects.membershipChanged.emit(clubId); // rol üye listesinde görünür
     return updated;
   },
@@ -407,6 +460,25 @@ export const clubsService = {
     }
 
     const result = await clubsRepository.transferPresidency(clubId, currentPresidentId, newPresidentId);
+    const club = await clubsRepository.findClubById(clubId);
+    if (club) {
+      await membershipHistoryService.recordRoleChanged(
+        clubId,
+        currentPresidentId,
+        club.universityId,
+        "president",
+        "officer",
+        currentPresidentId
+      );
+      await membershipHistoryService.recordRoleChanged(
+        clubId,
+        newPresidentId,
+        club.universityId,
+        target.role,
+        "president",
+        currentPresidentId
+      );
+    }
     await clubEffects.membershipChanged.emit(clubId); // roller üye listesinde görünür
     return result;
   },

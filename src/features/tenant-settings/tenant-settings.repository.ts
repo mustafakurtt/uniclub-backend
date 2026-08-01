@@ -13,7 +13,7 @@ class TenantSettingsRepository {
   async upsertOverride(
     universityId: string,
     key: TenantSettingKey,
-    value: number | string[] | boolean,
+    value: number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[],
     updatedBy: string
   ): Promise<void> {
     await db

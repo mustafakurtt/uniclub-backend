@@ -181,6 +181,26 @@ Yalnızca **kendi** başvurunu görürsün (başkasınınki `404 "Başvuru bulun
 
 `approvals`, genişletilebilir çok-adımlı onay zinciridir. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
 
+`status: "rejected"` olduğunda `rejectionReason`, `appealDeadline`, `canAppeal` ve (itiraz varsa) tam `appeal` nesnesi döner:
+
+```jsonc
+{
+  "rejectionReason": "Evraklar eksik.",
+  "appealDeadline": "2026-...",
+  "canAppeal": false,
+  "appeal": {
+    "status": "pending",
+    "reason": "Evrakları tamamladım, yeniden değerlendirme talep ediyorum.",
+    "submittedAt": "2026-...",
+    "reviewedAt": null,
+    "reviewNote": null,
+    "reviewedBy": null
+  }
+}
+```
+
+İnceleme sonrası `reviewedAt`, `reviewNote` ve `reviewedBy` (SafeUser) dolu gelir. Öğrenci kendi itirazının tüm alanlarını görür; inceleyen kimliği kamu görevi kapsamında şeffaflık için gösterilir (KVKK: kurumsal karar mercii, gizli kişisel veri değil).
+
 ### 6.3 Revizyon sonrası yeniden gönder — `PATCH /api/clubs/applications/:applicationId/resubmit`
 
 Yalnızca `status: "revision_requested"` başvurular. Body başvuru oluşturma ile aynı (`proposedName`, `description?`). Aynı `id` devam eder; zincir kaldığı yerden sürer (önceki kademe onayları korunur).
@@ -228,6 +248,7 @@ Yetki **global RBAC'tan değil kulüpteki rolden** gelir (`club.middleware`). Mi
 | DELETE | `/api/clubs/:clubId/members/:userId` | officer / başkan |
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** |
+| GET | `/api/clubs/:clubId/membership-history` | **staff** (sayfalama + `academicTermId` filtresi) |
 
 ### 7.1 Bekleyen istekler — `GET /:clubId/join-requests`
 
@@ -259,6 +280,14 @@ Hata: `400/404 "Bekleyen bir üyelik isteği bulunamadı."` (istek yok veya `pen
 `200 "Başkanlık devredildi."` + yeni başkanın üyelik satırı. Eski başkan **officer** olur. Hatalar:
 - `400 "Başkanlığı kendinize devredemezsiniz."`
 - `400 "Yeni başkan, kulübün onaylı bir üyesi olmalıdır."`
+
+### 7.6 Üyelik tarihçesi — `GET /:clubId/membership-history` (staff)
+
+Append-only `club_membership_events` tablosundan okur; `club_members` güncel durumu tutmaya devam eder.
+
+Query: `limit` (varsayılan 50), `cursor` (ISO `occurredAt`), `academicTermId` (opsiyonel filtre).
+
+`data.items[]`: `eventType` (`joined` | `role_changed` | `removed` | `left` | `join_rejected`), `role`, `previousRole`, `occurredAt`, `academicTerm`, `user`, `actor`.
 
 ---
 

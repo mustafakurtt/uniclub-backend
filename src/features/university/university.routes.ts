@@ -8,6 +8,7 @@ import { universityAnnouncementsRoutes } from "../announcements/university-annou
 import { tenantSettingsRoutes } from "../tenant-settings/tenant-settings.routes";
 import { universityPosterQrRoutes } from "../poster-qr/university-poster-qr.routes";
 import { exportsRoutes } from "../exports/exports.routes";
+import { academicTermsRoutes } from "../academic-terms/academic-terms.routes";
 
 /**
  * university feature'ının kök router'ı — `/api/universities` altına mount edilir
@@ -30,3 +31,4 @@ universityRoutes.route("/", universityAnnouncementsRoutes);
 universityRoutes.route("/", tenantSettingsRoutes);
 universityRoutes.route("/", universityPosterQrRoutes);
 universityRoutes.route("/", exportsRoutes);
+universityRoutes.route("/", academicTermsRoutes);
