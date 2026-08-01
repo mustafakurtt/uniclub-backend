@@ -4,6 +4,7 @@ import {
   activities,
   activityAttendees,
   activityClubs,
+  clubAdvisors,
   clubs,
   clubMembers,
   users,
@@ -15,6 +16,67 @@ import type {
   ClubsExportParams,
 } from "./exports.schema";
 import type { ReportRow } from "./reports/report.types";
+import type { GeneralMeetingMinutesBoardMember } from "./reports/report.types";
+
+const BOARD_TITLE_LABELS_TR: Record<string, string> = {
+  president: "Başkan",
+  vice_president: "Başkan Yardımcısı",
+  secretary: "Sekreter",
+  treasurer: "Sayman",
+  member: "Üye",
+};
+
+const MEETING_TYPE_LABELS_TR: Record<string, string> = {
+  ordinary: "Olağan",
+  extraordinary: "Olağanüstü",
+};
+
+const BOARD_TYPE_LABELS_TR: Record<string, string> = {
+  management: "Yönetim Kurulu",
+  audit: "Denetleme Kurulu",
+};
+
+const SEAT_TYPE_LABELS_TR: Record<string, string> = {
+  principal: "Asil",
+  alternate: "Yedek",
+};
+
+function formatHeldAtLabel(date: Date): string {
+  const iso = date.toISOString();
+  const [datePart, timePart] = iso.split("T");
+  const [y, m, d] = datePart.split("-");
+  const [hh, mm] = timePart.split(":");
+  return `${d}.${m}.${y} ${hh}:${mm}`;
+}
+
+function mapBoardMember(
+  row: {
+    boardType: "management" | "audit";
+    seatType: "principal" | "alternate";
+    title: string;
+    user: { firstName: string; lastName: string } | null;
+  }
+): GeneralMeetingMinutesBoardMember {
+  return {
+    fullName: row.user ? `${row.user.firstName} ${row.user.lastName}` : "—",
+    titleLabel: BOARD_TITLE_LABELS_TR[row.title] ?? row.title,
+    boardType: row.boardType,
+    seatType: row.seatType,
+  };
+}
+
+const BOARD_TITLE_ORDER = ["president", "vice_president", "secretary", "treasurer", "member"];
+
+function sortMemberships<T extends { title: string; userId: string }>(members: T[]): T[] {
+  return [...members].sort((a, b) => {
+    const ai = BOARD_TITLE_ORDER.indexOf(a.title);
+    const bi = BOARD_TITLE_ORDER.indexOf(b.title);
+    const aRank = ai === -1 ? BOARD_TITLE_ORDER.length : ai;
+    const bRank = bi === -1 ? BOARD_TITLE_ORDER.length : bi;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.userId.localeCompare(b.userId);
+  });
+}
 
 function toIso(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -278,5 +340,83 @@ export const exportsRepository = {
         note: row.note,
       })),
     };
+  },
+
+  async fetchGeneralMeetingMinutes(universityId: string, meetingId: string) {
+    const meeting = await db.query.clubGeneralMeetings.findFirst({
+      where: { id: meetingId, universityId },
+      with: {
+        club: { columns: { id: true, name: true } },
+        boardMemberships: {
+          with: {
+            user: { columns: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+
+    if (!meeting?.club) return null;
+
+    const advisorRow = await db
+      .select({
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(clubAdvisors)
+      .innerJoin(users, eq(users.id, clubAdvisors.userId))
+      .where(
+        and(eq(clubAdvisors.clubId, meeting.clubId), eq(clubAdvisors.universityId, universityId))
+      )
+      .orderBy(asc(users.id))
+      .limit(1);
+
+    const sortedMemberships = sortMemberships(meeting.boardMemberships);
+
+    const boardMembers = sortedMemberships.map((m) =>
+      mapBoardMember({
+        boardType: m.boardType,
+        seatType: m.seatType,
+        title: m.title,
+        user: m.user,
+      })
+    );
+
+    const managementPrincipal = boardMembers.filter(
+      (m) => m.boardType === "management" && m.seatType === "principal"
+    );
+    const managementAlternate = boardMembers.filter(
+      (m) => m.boardType === "management" && m.seatType === "alternate"
+    );
+    const auditPrincipal = boardMembers.filter(
+      (m) => m.boardType === "audit" && m.seatType === "principal"
+    );
+    const auditAlternate = boardMembers.filter(
+      (m) => m.boardType === "audit" && m.seatType === "alternate"
+    );
+
+    const advisor = advisorRow[0];
+    const advisorName = advisor ? `${advisor.firstName} ${advisor.lastName}` : null;
+
+    const header = {
+      clubName: meeting.club.name,
+      advisorName,
+      meetingTypeLabel: MEETING_TYPE_LABELS_TR[meeting.meetingType] ?? meeting.meetingType,
+      heldAtLabel: formatHeldAtLabel(meeting.heldAt),
+      location: meeting.location,
+      decisions: meeting.decisions,
+      managementPrincipal,
+      managementAlternate,
+      auditPrincipal,
+      auditAlternate,
+    };
+
+    const rows: ReportRow[] = boardMembers.map((m) => ({
+      fullName: m.fullName,
+      titleLabel: m.titleLabel,
+      seatLabel: SEAT_TYPE_LABELS_TR[m.seatType] ?? m.seatType,
+      boardLabel: BOARD_TYPE_LABELS_TR[m.boardType] ?? m.boardType,
+    }));
+
+    return { header, rows };
   },
 };

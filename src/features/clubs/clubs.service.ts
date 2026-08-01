@@ -225,12 +225,27 @@ export const clubsService = {
       application.appeal
     );
 
+    const mappedApprovals = application.approvals.map((a) => ({
+      step: a.step,
+      stepKind: a.stepKind,
+      committeeId: a.committeeId,
+      approverRole: a.approverRole,
+      status: a.status,
+      note: a.note,
+      reviewedAt: a.reviewedAt,
+      approver: a.approver ? toSafeUser(a.approver) : null,
+    }));
+    const approvalsWithTally = await clubApplicationCommitteeService.enrichApprovalsWithCommitteeTally(
+      application.universityId,
+      applicationId,
+      mappedApprovals,
+      applicantId,
+      true
+    );
+
     return {
       ...application,
-      approvals: application.approvals.map((a) => ({
-        ...a,
-        approver: a.approver ? toSafeUser(a.approver) : null,
-      })),
+      approvals: approvalsWithTally,
       revisionRequest: revisionApproval
         ? {
             step: revisionApproval.step,

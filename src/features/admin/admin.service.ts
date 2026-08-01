@@ -173,7 +173,7 @@ export const adminService = {
     }));
   },
 
-  async getClubApplication(universityId: string, applicationId: string) {
+  async getClubApplication(universityId: string, applicationId: string, actorUserId: string) {
     const application = await adminRepository.findClubApplicationDetail(universityId, applicationId);
     if (!application) {
       throw notFound("admin.applicationNotFound");
@@ -186,21 +186,29 @@ export const adminService = {
       { ...application, approvals },
       appeal
     );
+    const mappedApprovals = approvals.map((approval) => ({
+      step: approval.step,
+      stepKind: approval.stepKind,
+      committeeId: approval.committeeId,
+      approverRole: approval.approverRole,
+      status: approval.status,
+      note: approval.status === "rejected" || approval.status === "revision_requested"
+        ? approval.note
+        : approval.note,
+      reviewedAt: approval.reviewedAt,
+      approver: approval.approver ? toSafeUser(approval.approver) : null,
+    }));
+    const approvalsWithTally = await clubApplicationCommitteeService.enrichApprovalsWithCommitteeTally(
+      universityId,
+      applicationId,
+      mappedApprovals,
+      actorUserId,
+      false
+    );
     return {
       ...rest,
       applicant: applicant ? toSafeUser(applicant) : null,
-      approvals: approvals.map((approval) => ({
-        step: approval.step,
-        stepKind: approval.stepKind,
-        committeeId: approval.committeeId,
-        approverRole: approval.approverRole,
-        status: approval.status,
-        note: approval.status === "rejected" || approval.status === "revision_requested"
-          ? approval.note
-          : approval.note,
-        reviewedAt: approval.reviewedAt,
-        approver: approval.approver ? toSafeUser(approval.approver) : null,
-      })),
+      approvals: approvalsWithTally,
       revisionRequestCount,
       ...review,
     };

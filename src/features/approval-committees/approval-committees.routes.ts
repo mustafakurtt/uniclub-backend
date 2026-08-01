@@ -3,6 +3,7 @@ import { guard } from "../../core/rbac/guard";
 import { RbacVariables } from "../../core/rbac/rbac.middleware";
 import { validate } from "../../shared/utils/validate";
 import { ok, created } from "../../shared/utils/respond";
+import { ClubPermission } from "../clubs/clubs.permissions";
 import { TenantSettingsPermission } from "../tenant-settings/tenant-settings.permissions";
 import { approvalCommitteesService } from "./approval-committees.service";
 import {
@@ -24,7 +25,7 @@ approvalCommitteesRoutes.get(
 
 approvalCommitteesRoutes.get(
   "/universities/:universityId/approval-committees/:committeeId",
-  ...guard(TenantSettingsPermission.MANAGE, { tenantScoped: true }),
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
   async (c) => {
     const { universityId, committeeId } = c.req.param();
     const committee = await approvalCommitteesService.getById(universityId, committeeId);

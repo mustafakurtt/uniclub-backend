@@ -207,6 +207,75 @@ function renderAnnualActivity(
   ]);
 }
 
+function renderBoardMemberList(
+  doc: PDFKit.PDFDocument,
+  fonts: { regular: string; bold: string },
+  title: string,
+  members: Array<{ fullName: string; titleLabel: string }>
+) {
+  doc.font(fonts.bold).fontSize(10).text(title);
+  doc.font(fonts.regular).fontSize(9);
+  if (members.length === 0) {
+    doc.text("—");
+  } else {
+    for (const member of members) {
+      doc.text(`${member.titleLabel}: ${member.fullName}`);
+    }
+  }
+  doc.moveDown(0.5);
+}
+
+function renderGeneralMeetingMinutes(
+  doc: PDFKit.PDFDocument,
+  definition: ReportDefinition,
+  rows: ReportRow[],
+  meta: ReportMeta,
+  fonts: { regular: string; bold: string }
+) {
+  const accent = parseRgb(meta.primaryColor);
+  drawDocumentHeader(doc, meta, accent);
+
+  const header = meta.generalMeetingMinutes;
+  if (header) {
+    doc.font(fonts.bold).fontSize(11).text("Topluluk bilgileri");
+    doc.font(fonts.regular).fontSize(10);
+    doc.text(`Topluluk adı: ${header.clubName}`);
+    doc.text(`Akademik danışman: ${header.advisorName ?? "—"}`);
+    doc.moveDown(0.5);
+    doc.font(fonts.bold).fontSize(11).text("Toplantı bilgileri");
+    doc.font(fonts.regular).fontSize(10);
+    doc.text(`Tür: ${header.meetingTypeLabel}`);
+    doc.text(`Tarih ve saat: ${header.heldAtLabel}`);
+    doc.text(`Yer: ${header.location}`);
+    doc.moveDown(0.5);
+    doc.font(fonts.bold).fontSize(11).text("Alınan kararlar");
+    doc.font(fonts.regular).fontSize(10).text(header.decisions);
+    doc.moveDown(0.8);
+    renderBoardMemberList(doc, fonts, "Yönetim Kurulu — Asil Üyeler", header.managementPrincipal);
+    renderBoardMemberList(doc, fonts, "Yönetim Kurulu — Yedek Üyeler", header.managementAlternate);
+    renderBoardMemberList(doc, fonts, "Denetleme Kurulu — Asil Üyeler", header.auditPrincipal);
+    renderBoardMemberList(doc, fonts, "Denetleme Kurulu — Yedek Üyeler", header.auditAlternate);
+    doc.moveDown(0.5);
+  }
+
+  if (rows.length > 0) {
+    doc.font(fonts.bold).fontSize(11).text("Kurul üyeleri (özet tablo)");
+    doc.moveDown(0.3);
+    drawTableHeader(doc, definition.columns, fonts, accent);
+    doc.font(fonts.regular).fontSize(9);
+    drawTableRows(doc, definition, rows, fonts);
+  }
+
+  const advisorName = header?.advisorName;
+  drawSignatureBlocks(doc, [
+    { title: "Topluluk Başkanı" },
+    {
+      title: "Akademik Danışman",
+      nameLine: advisorName ? `Uygundur — ${advisorName}` : "Uygundur",
+    },
+  ]);
+}
+
 function renderApplicationMinutes(
   doc: PDFKit.PDFDocument,
   definition: ReportDefinition,
@@ -259,6 +328,9 @@ export const pdfReportRenderer: ReportRenderer = {
           break;
         case "application-decision-minutes":
           renderApplicationMinutes(doc, definition, rows, meta, fonts);
+          break;
+        case "general-meeting-minutes":
+          renderGeneralMeetingMinutes(doc, definition, rows, meta, fonts);
           break;
         default:
           throw new Error(`PDF renderer: desteklenmeyen rapor '${definition.id}'`);

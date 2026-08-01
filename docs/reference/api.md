@@ -451,7 +451,7 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
 | GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
 | GET | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Onay kurullarını listele |
-| GET | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.settings.manage` | Kurul detayı |
+| GET | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `application.view` | Kurul detayı (oylama arayüzü için) |
 | POST | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Kurul oluştur (`name`, `memberUserIds`) |
 | PATCH | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.settings.manage` | Kurul güncelle |
 
@@ -709,7 +709,7 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 | Method | Path | Açıklama |
 |---|---|---|
 | GET | `/api/universities/:universityId/exports` | Rapor kataloğu |
-| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (dosya yanıtı; `clubs`, `club-members`, `activities`) |
+| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (`clubs`, `club-members`, `activities`, PDF: `annual-activity-report`, `application-decision-minutes`, `general-meeting-minutes`) |
 
 Detay: [integration/exports.md](../integration/exports.md).
 

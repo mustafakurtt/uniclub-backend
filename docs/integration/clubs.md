@@ -184,7 +184,7 @@ Başvuran self-service; admin `.../club-applications/:id/history` uçundan **far
 }
 ```
 
-`approvals`, genişletilebilir çok-adımlı onay zinciridir. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
+`approvals`, genişletilebilir çok-adımlı onay zinciridir. `stepKind: "committee_majority"` kademelerinde `committeeTally` gömülüdür — öğrenci yalnızca özet sayım ve kurul adını görür (`committeeName`, `memberCount`, `threshold`, `approveCount`, `rejectCount`, `notVotedCount`); **bireysel oylar (`votes`, `myVote`) yok**. İleride SKS gibi 2. adım eklenirse burada `step:2` satırı görünür — şema değişmez.
 
 `status: "rejected"` olduğunda `rejectionReason`, `appealDeadline`, `canAppeal` ve (itiraz varsa) tam `appeal` nesnesi döner:
 

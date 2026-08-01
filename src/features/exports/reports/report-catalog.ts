@@ -160,6 +160,28 @@ export const REPORT_CATALOG: ReportDefinition[] = [
       { key: "note", labelTr: "Not", labelEn: "Note", type: "text", width: 36 },
     ],
   },
+  {
+    id: "general-meeting-minutes",
+    format: "pdf",
+    labelTr: "Genel kurul toplantı tutanağı",
+    labelEn: "General meeting minutes",
+    featureFlagKey: TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED,
+    parameters: [
+      {
+        name: "meetingId",
+        type: "string",
+        required: true,
+        labelTr: "Genel kurul kaydı",
+        labelEn: "General meeting record",
+      },
+    ],
+    columns: [
+      { key: "fullName", labelTr: "Ad", labelEn: "Name", type: "text", width: 28 },
+      { key: "titleLabel", labelTr: "Unvan", labelEn: "Title", type: "text", width: 22 },
+      { key: "seatLabel", labelTr: "Koltuk", labelEn: "Seat", type: "text", width: 14 },
+      { key: "boardLabel", labelTr: "Kurul", labelEn: "Board", type: "text", width: 18 },
+    ],
+  },
 ];
 
 export function findReportDefinition(reportId: string): ReportDefinition | undefined {

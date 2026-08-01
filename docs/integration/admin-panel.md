@@ -239,6 +239,8 @@ ile verilir (`PATCH .../committee-vote`); doğrudan `approve`/`reject` bu kademe
 veya çekimser üye fiilen onayı engeller (çoğunluğa ulaşılamaz). Karar kesinleşene
 kadar üye oyunu değiştirebilir (upsert). Her oy `audit_logs`'a düşer.
 
+**Kurul oy tally (okuma):** `committee_majority` kademelerinde admin detay (`GET .../club-applications/:id`) ve öğrenci detay (`GET /api/clubs/applications/:id`) yanıtında `approvals[].committeeTally` gömülüdür. Admin/kurul üyesi (veya `application.view` yetkili, kurul üyesi olmasa bile) tam liste: bireysel oylar (`votes`: kim, yön, zaman, gerekçe) ve istek yapanın `myVote`. Öğrenci yalnızca özet — kurul adı, üye sayısı, eşik (`floor(n/2)+1`), onay/ret/oy vermeyen sayıları; kim oyladı bilgisi **sızmaz**. Tek kurul okuma: `GET .../approval-committees/:committeeId` — `application.view` (liste/oluşturma hâlâ `university.settings.manage`).
+
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
 | GET | `/universities/:uid/club-applications?status=` | `application.view` | Başvuru listesi (`applicant` + `approvals` gömülü); `status=revision_requested` revizyon kuyruğu |

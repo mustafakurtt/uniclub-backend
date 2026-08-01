@@ -49,6 +49,26 @@ export interface ApplicationMinutesHeader {
   applicationStatus: string;
 }
 
+export interface GeneralMeetingMinutesBoardMember {
+  fullName: string;
+  titleLabel: string;
+  boardType: "management" | "audit";
+  seatType: "principal" | "alternate";
+}
+
+export interface GeneralMeetingMinutesMeta {
+  clubName: string;
+  advisorName: string | null;
+  meetingTypeLabel: string;
+  heldAtLabel: string;
+  location: string;
+  decisions: string;
+  managementPrincipal: GeneralMeetingMinutesBoardMember[];
+  managementAlternate: GeneralMeetingMinutesBoardMember[];
+  auditPrincipal: GeneralMeetingMinutesBoardMember[];
+  auditAlternate: GeneralMeetingMinutesBoardMember[];
+}
+
 export interface ReportMeta {
   universityName: string;
   universitySlug: string;
@@ -59,6 +79,7 @@ export interface ReportMeta {
   primaryColor?: string | null;
   annualActivitySummary?: AnnualActivitySummary;
   applicationMinutes?: ApplicationMinutesHeader;
+  generalMeetingMinutes?: GeneralMeetingMinutesMeta;
 }
 
 export interface ReportRenderer {

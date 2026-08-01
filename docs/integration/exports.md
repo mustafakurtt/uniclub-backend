@@ -68,6 +68,14 @@ Unicode font gömülü (DejaVu Sans). Kurum adı + tenant `primaryColor` başlı
 
 `applicationId` zorunlu. Tenant dışı veya olmayan başvuru → `404`. İçerik: başvuru bilgileri, onay zinciri kademeleri (kim, ne zaman, karar, not), imza blokları.
 
+### `general-meeting-minutes` — genel kurul toplantı tutanağı (Form 6)
+
+```jsonc
+{ "meetingId": "uuid" }
+```
+
+`meetingId` zorunlu. Tenant dışı veya olmayan kayıt → `404`. İçerik: kurum başlığı, topluluk adı, akademik danışman, toplantı tarihi/saati/yeri, tür (olağan/olağanüstü), alınan kararlar, yönetim ve denetleme kurulu (asil/yedek, unvanlarla), imza blokları (danışman «Uygundur»). Gövdede üretim tarihi yok; aynı `meetingId` → aynı SHA-256.
+
 ## Sınırlar
 
 - Üst satır sınırı: **50.000** — aşılırsa `400` + `exports.rowLimitExceeded`.

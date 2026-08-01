@@ -7,12 +7,36 @@ import { auditService } from "../audit/audit.service";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { badRequest, forbidden, notFound } from "../../shared/utils/errors";
+import { toSafeUser } from "../../shared/utils/user.util";
 import {
   computeCommitteeMajorityThreshold,
   findCurrentApprovalStep,
   isCommitteeMajorityStep,
   type ApplicationApprovalRow,
 } from "./club-application-chain.core";
+
+export type CommitteeTallySummary = {
+  committeeId: string;
+  committeeName: string;
+  memberCount: number;
+  threshold: number;
+  approveCount: number;
+  rejectCount: number;
+  notVotedCount: number;
+};
+
+export type CommitteeVoteRecord = {
+  voterUserId: string;
+  voter: ReturnType<typeof toSafeUser> | null;
+  vote: "approve" | "reject";
+  reason: string | null;
+  votedAt: Date;
+};
+
+export type CommitteeTallyFull = CommitteeTallySummary & {
+  votes: CommitteeVoteRecord[];
+  myVote: CommitteeVoteRecord | null;
+};
 
 export type CommitteeVoteInput = {
   vote: "approve" | "reject";
@@ -89,6 +113,103 @@ export const clubApplicationCommitteeService = {
     if (!isMember) {
       throw forbidden("admin.approvalStepForbidden");
     }
+  },
+
+  async getCommitteeTally(
+    universityId: string,
+    applicationId: string,
+    approvalStep: number,
+    committeeId: string,
+    viewerUserId: string | null,
+    includeIndividualVotes: boolean
+  ): Promise<CommitteeTallySummary | CommitteeTallyFull | null> {
+    const committee = await approvalCommitteesRepository.findByIdInUniversity(
+      universityId,
+      committeeId
+    );
+    if (!committee) return null;
+
+    const memberCount = await approvalCommitteesRepository.countActiveMembers(
+      committeeId,
+      universityId
+    );
+    const threshold = computeCommitteeMajorityThreshold(memberCount);
+
+    const voteRows = await db.query.clubApplicationCommitteeVotes.findMany({
+      where: {
+        applicationId,
+        approvalStep,
+        committeeId,
+        universityId,
+      },
+      with: { voter: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const approveCount = voteRows.filter((v) => v.vote === "approve").length;
+    const rejectCount = voteRows.filter((v) => v.vote === "reject").length;
+    const notVotedCount = Math.max(0, memberCount - voteRows.length);
+
+    const summary: CommitteeTallySummary = {
+      committeeId,
+      committeeName: committee.name,
+      memberCount,
+      threshold,
+      approveCount,
+      rejectCount,
+      notVotedCount,
+    };
+
+    if (!includeIndividualVotes) {
+      return summary;
+    }
+
+    const mapVote = (row: typeof voteRows[number]): CommitteeVoteRecord => ({
+      voterUserId: row.voterUserId,
+      voter: row.voter ? toSafeUser(row.voter) : null,
+      vote: row.vote,
+      reason: row.reason,
+      votedAt: row.updatedAt ?? row.createdAt,
+    });
+
+    const myVoteRow = viewerUserId
+      ? voteRows.find((v) => v.voterUserId === viewerUserId)
+      : undefined;
+
+    return {
+      ...summary,
+      votes: voteRows.map(mapVote),
+      myVote: myVoteRow ? mapVote(myVoteRow) : null,
+    };
+  },
+
+  async enrichApprovalsWithCommitteeTally<T extends {
+    step: number;
+    stepKind: "role_sequential" | "committee_majority";
+    committeeId: string | null;
+  }>(
+    universityId: string,
+    applicationId: string,
+    approvals: T[],
+    viewerUserId: string | null,
+    studentView: boolean
+  ) {
+    return Promise.all(
+      approvals.map(async (approval) => {
+        if (approval.stepKind !== "committee_majority" || !approval.committeeId) {
+          return { ...approval, committeeTally: null };
+        }
+        const committeeTally = await this.getCommitteeTally(
+          universityId,
+          applicationId,
+          approval.step,
+          approval.committeeId,
+          viewerUserId,
+          !studentView
+        );
+        return { ...approval, committeeTally };
+      })
+    );
   },
 
   async castVote(

@@ -138,7 +138,12 @@ adminRoutes.get(
   ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
-    const application = await adminService.getClubApplication(universityId, applicationId);
+    const actor = c.get("user");
+    const application = await adminService.getClubApplication(
+      universityId,
+      applicationId,
+      actor.userId
+    );
     return ok(c, application, "admin.applicationFound");
   }
 );
