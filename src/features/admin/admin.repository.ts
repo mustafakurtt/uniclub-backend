@@ -116,7 +116,12 @@ async function applyApplicationStepDecision(
 
   const [updatedApplication] = await tx
     .update(schema.clubApplications)
-    .set({ status: derivedStatus })
+    .set({
+      status: derivedStatus,
+      ...(derivedStatus === "rejected"
+        ? { rejectedAt: new Date(), rejectApproverId: actorUserId }
+        : {}),
+    })
     .where(eq(schema.clubApplications.id, applicationId))
     .returning();
 
@@ -275,6 +280,7 @@ export const adminRepository = {
           orderBy: { step: "asc" },
           with: { approver: true },
         },
+        appeal: true,
       },
     });
   },

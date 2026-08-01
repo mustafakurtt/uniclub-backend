@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../../core/auth/auth.middleware";
 import { ClubVariables } from "../../../middlewares/club.middleware";
-import { createApplicationSchema, resubmitApplicationSchema } from "../clubs.schema";
+import { createApplicationSchema, resubmitApplicationSchema, submitAppealSchema } from "../clubs.schema";
 import { clubsService } from "../clubs.service";
+import { clubApplicationReviewService } from "../club-application-review.service";
 import { requireTenant } from "../../../shared/utils/tenant.util";
 import { validate } from "../../../shared/utils/validate";
 import { ok, created, done } from "../../../shared/utils/respond";
@@ -60,5 +61,19 @@ applicationsRoutes.patch(
     const body = c.req.valid("json");
     const application = await clubsService.resubmitApplication(user.userId, applicationId, body);
     return ok(c, application, "club.applicationResubmitted");
+  }
+);
+
+// 5. RET SONRASI İTİRAZ (bir kez)
+applicationsRoutes.post(
+  "/applications/:applicationId/appeal",
+  authMiddleware,
+  validate("json", submitAppealSchema),
+  async (c) => {
+    const user = c.get("user");
+    const { applicationId } = c.req.param();
+    const { note } = c.req.valid("json");
+    const appeal = await clubApplicationReviewService.submitAppeal(user.userId, applicationId, note);
+    return created(c, appeal, "club.applicationAppealSubmitted");
   }
 );

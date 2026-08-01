@@ -13,6 +13,7 @@ import {
 import { notFound, badRequest } from "../../shared/utils/errors";
 import { clubsCache, clubEffects } from "./clubs.cache";
 import { findRevisionRequestedStep } from "./club-application-chain.core";
+import { clubApplicationReviewService } from "./club-application-review.service";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -206,6 +207,13 @@ export const clubsService = {
       ? application.approvals.find((a) => a.step === revisionRow.step)
       : null;
 
+    const review = await clubApplicationReviewService.buildReviewEnrichment(
+      application.universityId,
+      applicationId,
+      application,
+      application.appeal
+    );
+
     return {
       ...application,
       approvals: application.approvals.map((a) => ({
@@ -222,6 +230,10 @@ export const clubsService = {
               : null,
           }
         : null,
+      rejectionReason: review.rejectionReason,
+      appealDeadline: review.appealDeadline,
+      canAppeal: review.canAppeal,
+      appeal: review.appeal,
     };
   },
 

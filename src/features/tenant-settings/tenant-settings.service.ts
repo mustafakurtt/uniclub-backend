@@ -18,9 +18,9 @@ import { getTenantSettings, setTenantSettingsCache } from "./tenant-settings.cac
 import type { PatchTenantSettingsDTO } from "./tenant-settings.schema";
 
 export interface TenantSettingView {
-  value: number | string[] | boolean;
-  default: number | string[] | boolean;
-  kind: "integer" | "role_chain" | "boolean";
+  value: number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[];
+  default: number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[];
+  kind: "integer" | "role_chain" | "boolean" | "checklist";
   min?: number;
   max?: number;
   allowedRoles?: readonly string[];
@@ -103,7 +103,12 @@ export const tenantSettingsService = {
     }
 
     const overrides = await tenantSettingsRepository.listOverrides(universityId);
-    const overrideMap: Partial<Record<TenantSettingKey, number | string[] | boolean>> = {};
+    const overrideMap: Partial<
+      Record<
+        TenantSettingKey,
+        number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[]
+      >
+    > = {};
     for (const row of overrides) {
       if (!isTenantSettingKey(row.key)) continue;
       const def = TENANT_SETTING_CATALOG[row.key];
@@ -113,7 +118,14 @@ export const tenantSettingsService = {
         overrideMap[row.key] = row.value;
       } else if (def.kind === "role_chain") {
         const chain = parseTenantSettingValue(row.key, row.value);
-        if (chain && typeof chain !== "boolean") overrideMap[row.key] = chain;
+        if (Array.isArray(chain) && typeof chain[0] === "string") {
+          overrideMap[row.key] = chain;
+        }
+      } else if (def.kind === "checklist") {
+        const checklist = parseTenantSettingValue(row.key, row.value);
+        if (Array.isArray(checklist) && checklist[0] && typeof checklist[0] === "object") {
+          overrideMap[row.key] = checklist as import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[];
+        }
       }
     }
     const resolved = mergeOverridesIntoResolved(overrideMap);

@@ -48,6 +48,18 @@ export const approveApplicationSchema = z.object({
 });
 export type ApproveApplicationDTO = z.infer<typeof approveApplicationSchema>;
 
+export const patchChecklistItemSchema = z.object({
+  checked: z.boolean(),
+  note: z.string().trim().max(500).optional(),
+});
+export type PatchChecklistItemDTO = z.infer<typeof patchChecklistItemSchema>;
+
+export const reviewAppealSchema = z.object({
+  decision: z.enum(["upheld", "dismissed"]),
+  note: z.string().trim().min(10, "İtiraz karar gerekçesi en az 10 karakter olmalıdır.").max(2000),
+});
+export type ReviewAppealDTO = z.infer<typeof reviewAppealSchema>;
+
 export const addAdvisorSchema = z.object({
   userId: z.string().uuid(),
 });

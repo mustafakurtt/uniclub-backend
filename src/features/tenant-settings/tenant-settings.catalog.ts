@@ -10,6 +10,12 @@ import {
   APPROVAL_CHAIN_ROLE_TOKENS,
   parseApprovalChain,
 } from "../clubs/club-application-chain.core";
+import {
+  DEFAULT_APPLICATION_REVIEW_CHECKLIST,
+  parseReviewChecklist,
+  reviewChecklistEquals,
+  type ApplicationReviewChecklistItemDef,
+} from "../clubs/application-review-checklist.core";
 
 export const TenantSettingEditor = {
   TENANT: "tenant",
@@ -30,6 +36,12 @@ export const TenantSettingKey = {
   UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX: "announcement.university.pinned.max",
   UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR: "announcement.university.publish.per_hour",
   CLUB_APPLICATION_APPROVAL_CHAIN: "club.application.approval_chain",
+  /** SKS inceleme kontrol listesi maddeleri (tenant kataloğu). */
+  CLUB_APPLICATION_REVIEW_CHECKLIST: "club.application.review_checklist",
+  /** Zorunlu kontrol listesi maddeleri işaretlenmeden onay engeli — varsayılan kapalı. */
+  CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL: "club.application.require_checklist_for_approval",
+  /** Ret sonrası itiraz süresi (gün). */
+  CLUB_APPLICATION_APPEAL_PERIOD_DAYS: "club.application.appeal_period_days",
   /** 0 = destek toplama kapalı (doğrudan başvuru). >0 = minimum destek sayısı. */
   CLUB_FORMATION_SUPPORT_THRESHOLD: "club.formation.support_threshold",
   CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS: "club.formation.proposal_expiry_days",
@@ -41,7 +53,7 @@ export const TenantSettingKey = {
 
 export type TenantSettingKey = (typeof TenantSettingKey)[keyof typeof TenantSettingKey];
 
-export type TenantSettingKind = "integer" | "role_chain" | "boolean";
+export type TenantSettingKind = "integer" | "role_chain" | "boolean" | "checklist";
 
 type TenantSettingDefinitionBase = {
   editor: TenantSettingEditor;
@@ -73,6 +85,10 @@ export type TenantSettingDefinition =
       defaultValue: boolean;
       flagType: "release";
       sunsetAfter: string;
+    })
+  | (TenantSettingDefinitionBase & {
+      kind: "checklist";
+      defaultValue: ApplicationReviewChecklistItemDef[];
     });
 
 export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefinition> = {
@@ -112,6 +128,30 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     editor: TenantSettingEditor.TENANT,
     labelTr: "Kulüp başvuru onay zinciri (kademe → rol)",
     labelEn: "Club application approval chain (step → role)",
+  },
+  [TenantSettingKey.CLUB_APPLICATION_REVIEW_CHECKLIST]: {
+    kind: "checklist",
+    defaultValue: [...DEFAULT_APPLICATION_REVIEW_CHECKLIST],
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Kulüp başvuru inceleme kontrol listesi",
+    labelEn: "Club application review checklist",
+  },
+  [TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL]: {
+    kind: "boolean",
+    defaultValue: false,
+    flagType: "entitlement",
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Onay için zorunlu kontrol listesi kilidi",
+    labelEn: "Require checklist completion before approval",
+  },
+  [TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS]: {
+    kind: "integer",
+    defaultValue: 14,
+    min: 1,
+    max: 60,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Başvuru ret itiraz süresi (gün)",
+    labelEn: "Application rejection appeal period (days)",
   },
   [TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD]: {
     kind: "integer",
@@ -159,10 +199,13 @@ export function isTenantSettingKey(key: string): key is TenantSettingKey {
 export function parseTenantSettingValue(
   key: TenantSettingKey,
   raw: unknown
-): number | string[] | boolean | null {
+): number | string[] | boolean | ApplicationReviewChecklistItemDef[] | null {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
     return parseApprovalChain(raw);
+  }
+  if (def.kind === "checklist") {
+    return parseReviewChecklist(raw);
   }
   if (def.kind === "boolean") {
     return typeof raw === "boolean" ? raw : null;
@@ -175,13 +218,16 @@ export function parseTenantSettingValue(
 
 export function tenantSettingDefaultEquals(
   key: TenantSettingKey,
-  value: number | string[] | boolean
+  value: number | string[] | boolean | ApplicationReviewChecklistItemDef[]
 ): boolean {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
     const defaults = def.defaultValue;
     const candidate = value as string[];
     return defaults.length === candidate.length && defaults.every((v, i) => v === candidate[i]);
+  }
+  if (def.kind === "checklist") {
+    return reviewChecklistEquals(def.defaultValue, value as ApplicationReviewChecklistItemDef[]);
   }
   return value === def.defaultValue;
 }
@@ -192,6 +238,9 @@ export interface ResolvedTenantSettings {
   universityPinnedAnnouncementsMax: number;
   universityAnnouncementPublishPerHour: number;
   clubApplicationApprovalChain: string[];
+  clubApplicationReviewChecklist: ApplicationReviewChecklistItemDef[];
+  clubApplicationRequireChecklistForApproval: boolean;
+  clubApplicationAppealPeriodDays: number;
   clubFormationSupportThreshold: number;
   clubFormationProposalExpiryDays: number;
   universityExportEnabled: boolean;
@@ -207,6 +256,12 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
     universityAnnouncementPublishPerHour:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR].defaultValue as number,
     clubApplicationApprovalChain: [...DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN],
+    clubApplicationReviewChecklist: [...DEFAULT_APPLICATION_REVIEW_CHECKLIST],
+    clubApplicationRequireChecklistForApproval:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL]
+        .defaultValue as boolean,
+    clubApplicationAppealPeriodDays:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS].defaultValue as number,
     clubFormationSupportThreshold:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD].defaultValue as number,
     clubFormationProposalExpiryDays:
@@ -219,7 +274,9 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
 }
 
 export function mergeOverridesIntoResolved(
-  overrides: Partial<Record<TenantSettingKey, number | string[] | boolean>>
+  overrides: Partial<
+    Record<TenantSettingKey, number | string[] | boolean | ApplicationReviewChecklistItemDef[]>
+  >
 ): ResolvedTenantSettings {
   const defaults = buildDefaultResolvedSettings();
   return {
@@ -235,6 +292,16 @@ export function mergeOverridesIntoResolved(
     clubApplicationApprovalChain:
       (overrides[TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN] as string[] | undefined) ??
       defaults.clubApplicationApprovalChain,
+    clubApplicationReviewChecklist:
+      (overrides[TenantSettingKey.CLUB_APPLICATION_REVIEW_CHECKLIST] as
+        | ApplicationReviewChecklistItemDef[]
+        | undefined) ?? defaults.clubApplicationReviewChecklist,
+    clubApplicationRequireChecklistForApproval:
+      (overrides[TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL] as boolean | undefined) ??
+      defaults.clubApplicationRequireChecklistForApproval,
+    clubApplicationAppealPeriodDays:
+      (overrides[TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS] as number | undefined) ??
+      defaults.clubApplicationAppealPeriodDays,
     clubFormationSupportThreshold:
       (overrides[TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD] as number | undefined) ??
       defaults.clubFormationSupportThreshold,
@@ -253,7 +320,7 @@ export function mergeOverridesIntoResolved(
 export function getResolvedSettingValue(
   resolved: ResolvedTenantSettings,
   key: TenantSettingKey
-): number | string[] | boolean {
+): number | string[] | boolean | ApplicationReviewChecklistItemDef[] {
   switch (key) {
     case TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX:
       return resolved.clubPinnedAnnouncementsMax;
@@ -263,6 +330,12 @@ export function getResolvedSettingValue(
       return resolved.universityAnnouncementPublishPerHour;
     case TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN:
       return resolved.clubApplicationApprovalChain;
+    case TenantSettingKey.CLUB_APPLICATION_REVIEW_CHECKLIST:
+      return resolved.clubApplicationReviewChecklist;
+    case TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL:
+      return resolved.clubApplicationRequireChecklistForApproval;
+    case TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS:
+      return resolved.clubApplicationAppealPeriodDays;
     case TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD:
       return resolved.clubFormationSupportThreshold;
     case TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS:

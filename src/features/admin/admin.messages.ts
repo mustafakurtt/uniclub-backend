@@ -31,6 +31,12 @@ export const adminMessages = defineCatalog({
     "admin.memberNotFound": "Bu kullanıcı kulübün üyesi değil.",
     "admin.announcementNotFound": "Duyuru bulunamadı.",
     "admin.galleryImageNotFound": "Görsel bulunamadı.",
+    "admin.checklistNotEditable": "Kontrol listesi yalnızca bekleyen veya revizyon aşamasındaki başvurularda düzenlenebilir.",
+    "admin.checklistItemUnknown": "Kontrol listesinde böyle bir madde yok.",
+    "admin.checklistRequiredIncomplete": "Onay için zorunlu kontrol listesi maddeleri tamamlanmalıdır.",
+    "admin.appealNotFound": "Bekleyen itiraz bulunamadı.",
+    "admin.appealReviewForbidden": "Bu itirazı inceleme yetkiniz yok.",
+    "admin.appealSameReviewerForbidden": "Ret kararını veren kişi itirazı inceleyemez; başka bir yetkili atanmalıdır.",
     // başarı
     "admin.accessibleUniversitiesListed": "Erişilebilir üniversiteler listelendi.",
     "admin.usersListed": "Kullanıcılar listelendi.",
@@ -61,6 +67,9 @@ export const adminMessages = defineCatalog({
     "admin.memberRemoved": "Üye kulüpten çıkarıldı.",
     "admin.announcementRemoved": "Duyuru kaldırıldı.",
     "admin.galleryImageRemoved": "Görsel kaldırıldı.",
+    "admin.checklistFound": "Kontrol listesi bulundu.",
+    "admin.checklistUpdated": "Kontrol listesi güncellendi.",
+    "admin.appealReviewed": "İtiraz incelendi.",
   },
   en: {
     // error
@@ -82,6 +91,12 @@ export const adminMessages = defineCatalog({
     "admin.memberNotFound": "This user is not a member of this club.",
     "admin.announcementNotFound": "Announcement not found.",
     "admin.galleryImageNotFound": "Image not found.",
+    "admin.checklistNotEditable": "Checklist can only be edited for pending or revision-requested applications.",
+    "admin.checklistItemUnknown": "Unknown checklist item.",
+    "admin.checklistRequiredIncomplete": "Required checklist items must be completed before approval.",
+    "admin.appealNotFound": "No pending appeal found.",
+    "admin.appealReviewForbidden": "You are not authorized to review this appeal.",
+    "admin.appealSameReviewerForbidden": "The person who rejected the application cannot review the appeal when another reviewer is available.",
     // success
     "admin.accessibleUniversitiesListed": "Accessible universities listed.",
     "admin.usersListed": "Users listed.",
@@ -112,6 +127,9 @@ export const adminMessages = defineCatalog({
     "admin.memberRemoved": "Member removed from club.",
     "admin.announcementRemoved": "Announcement removed.",
     "admin.galleryImageRemoved": "Image removed.",
+    "admin.checklistFound": "Checklist found.",
+    "admin.checklistUpdated": "Checklist updated.",
+    "admin.appealReviewed": "Appeal reviewed.",
   },
 });
 

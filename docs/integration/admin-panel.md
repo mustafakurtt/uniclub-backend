@@ -240,6 +240,9 @@ verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılı
 | PATCH | `/universities/:uid/club-applications/:id/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/universities/:uid/club-applications/:id/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) — öğrenci düzeltip yeniden gönderir |
 | GET | `/universities/:uid/club-applications/:id/history` | `application.view` | Olay geçmişi (append-only `club_application_events`) |
+| GET | `/universities/:uid/club-applications/:id/checklist` | `application.view` | İnceleme kontrol listesi (tenant kataloğu + işaret durumu) |
+| PATCH | `/universities/:uid/club-applications/:id/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle (`checked`, opsiyonel `note`) — audit'e düşer |
+| PATCH | `/universities/:uid/club-applications/:id/appeal/review` | `application.view` | Bekleyen itirazı incele (`decision`: `upheld` \| `dismissed`, `note` zorunlu) |
 | GET | `/universities/:uid/formation-proposals?status=` | `application.view` | Kuruluş önerileri (destek toplama / gönderilmiş / süresi dolmuş) |
 | GET | `/universities/:uid/formation-proposals/:id` | `application.view` | Öneri detayı + **destekçi listesi** (denetim) |
 
@@ -252,6 +255,8 @@ verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılı
 - Aksi → `pending` (ara kademe onayında da `pending` kalır)
 
 **Revizyon ve yeniden gönderim:** Karar verici onay/ret yerine revizyon isteyebilir. Öğrenci **aynı başvuru kaydını** düzenleyip `PATCH /api/clubs/applications/:id/resubmit` ile yeniden gönderir. Zincir **kaldığı yerden** devam eder — önceki kademe onayları korunur; yalnızca revizyon istenen kademe `pending`'e döner. Aynı kademede birden çok revizyon turu olabilir; her tur `club_application_events` tablosunda saklanır (`unique(applicationId, step)` yalnızca güncel durum satırını sınırlar).
+
+**Kontrol listesi ve itiraz:** SKS uzmanı tenant kataloğundaki maddeleri `GET/PATCH .../checklist` ile işaretler (audit'e düşer). `club.application.require_checklist_for_approval` açıksa zorunlu maddeler işaretlenmeden onay 400 döner (varsayılan **kapalı**). Reddedilen başvuruda öğrenci `rejectionReason` görür; `POST /api/clubs/applications/:id/appeal` ile **bir kez** itiraz edebilir (`club.application.appeal_period_days` içinde). İtiraz `PATCH .../appeal/review` ile incelenir — `upheld` → `pending`, `dismissed` → kapalı.
 
 **Geçmiş sözleşmesi** — `GET .../history` → `data`:
 

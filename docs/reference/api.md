@@ -356,6 +356,7 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 
 Body şemaları:
 - `POST /applications`, `PATCH /applications/:id/resubmit`: `{ proposedName (3-256), description? (max 2000) }`
+- `POST /applications/:id/appeal`: `{ note (10-2000) }` — reddedilen başvuruya **bir kez** itiraz
 - `POST /:clubId/join`, `DELETE .../leave`: body almaz.
 - `PATCH .../join-requests/:userId`: `{ "decision": "approved" | "rejected" }`
 - `PATCH .../members/:userId/role`: `{ "role": "member" | "officer" }` — `president` atanamaz (devir ayrı endpoint).
@@ -426,6 +427,9 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
+| GET | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist` | `application.view` | İnceleme kontrol listesi |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/appeal/review` | `application.view` | İtiraz incele (`decision`: upheld/dismissed) |
 | GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
 | GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
 

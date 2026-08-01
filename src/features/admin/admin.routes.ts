@@ -22,11 +22,14 @@ import {
   approveApplicationSchema,
   rejectApplicationSchema,
   requestRevisionApplicationSchema,
+  patchChecklistItemSchema,
+  reviewAppealSchema,
   updateClubSchema,
   updateUserDepartmentSchema,
   adminClubPaginatedListQuerySchema,
 } from "./admin.schema";
 import { adminService } from "./admin.service";
+import { clubApplicationReviewService } from "../clubs/club-application-review.service";
 import { dashboardService } from "../dashboard/dashboard.service";
 
 export const adminRoutes = new Hono<{ Variables: RbacVariables }>();
@@ -194,7 +197,58 @@ adminRoutes.get(
   }
 );
 
-// 6d. KURULUŞ ÖNERİLERİ (destek toplama aşaması)
+// 6d. İNCELEME KONTROL LİSTESİ
+adminRoutes.get(
+  "/universities/:universityId/club-applications/:applicationId/checklist",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, applicationId } = c.req.param();
+    const checklist = await clubApplicationReviewService.getChecklist(universityId, applicationId);
+    return ok(c, checklist, "admin.checklistFound");
+  }
+);
+
+adminRoutes.patch(
+  "/universities/:universityId/club-applications/:applicationId/checklist/:itemKey",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  validate("json", patchChecklistItemSchema),
+  async (c) => {
+    const { universityId, applicationId, itemKey } = c.req.param();
+    const actor = c.get("user");
+    const { checked, note } = c.req.valid("json");
+    const checklist = await clubApplicationReviewService.updateChecklistItem(
+      universityId,
+      applicationId,
+      itemKey,
+      actor.userId,
+      checked,
+      note
+    );
+    return ok(c, checklist, "admin.checklistUpdated");
+  }
+);
+
+// 6e. İTİRAZ İNCELEMESİ
+adminRoutes.patch(
+  "/universities/:universityId/club-applications/:applicationId/appeal/review",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  validate("json", reviewAppealSchema),
+  async (c) => {
+    const { universityId, applicationId } = c.req.param();
+    const actor = c.get("user");
+    const { decision, note } = c.req.valid("json");
+    const result = await clubApplicationReviewService.reviewAppeal(
+      universityId,
+      applicationId,
+      actor.userId,
+      decision,
+      note
+    );
+    return ok(c, result, "admin.appealReviewed");
+  }
+);
+
+// 6f. KURULUŞ ÖNERİLERİ (destek toplama aşaması)
 adminRoutes.get(
   "/universities/:universityId/formation-proposals",
   ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),

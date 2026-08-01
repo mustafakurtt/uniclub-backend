@@ -47,14 +47,27 @@ Authorization: Bearer <token>
     "editor": "platform",
     ...
   },
-  "club.application.approval_chain": {
-    "value": ["club_approver"],
-    "default": ["club_approver"],
-    "kind": "role_chain",
-    "allowedRoles": ["club_approver", "advisor", "student_affairs", "university_admin", ...],
+  "club.application.approval_chain": { ... },
+  "club.application.review_checklist": {
+    "value": [ { "key": "documents_complete", "label": "...", "required": true }, ... ],
+    "kind": "checklist",
     "editor": "tenant",
-    "labelTr": "Kulüp başvuru onay zinciri (kademe → rol)",
-    "labelEn": "Club application approval chain (step → role)"
+    ...
+  },
+  "club.application.require_checklist_for_approval": {
+    "value": false,
+    "default": false,
+    "kind": "boolean",
+    "flagType": "entitlement",
+    ...
+  },
+  "club.application.appeal_period_days": {
+    "value": 14,
+    "default": 14,
+    "min": 1,
+    "max": 60,
+    "kind": "integer",
+    ...
   }
 }
 ```
