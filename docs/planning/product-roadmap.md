@@ -754,6 +754,38 @@ kolaylaştırmak.
 
 Kaydedilmiş ama olgunlaşmamış; şu an planlanmıyor.
 
+### Türkiye geneli keşif — "dünya sekmesi"
+
+Ürün yeterince büyürse: bir dünya/küre ikonlu sekme, **Türkiye'deki tüm
+üniversitelerde ne olup bittiğini** gösteren ortak bir keşif akışı. Paylaşmak
+isteyen kurumlar ve kulüpler etkinliklerini bu ortak vitrine düşürebilir;
+öğrenciler başka kampüslerde neler olduğunu görüp ilham alabilir.
+
+**Mimari olarak neden dikkat çekici:** Bugüne kadar kurduğumuz her şey
+`universityId` ile tenant'a kilitli — bileşik FK'ler, `enforceTenantScope`,
+kamuya açık yüzeyde bile tenant sınırı. Bu fikir, o sınırı **okuma yönünde
+bilinçli olarak aşan ilk özellik** olur.
+
+Doğru kurgu, izolasyonu gevşetmek **değil**, açık bir paylaşım bayrağı eklemek:
+bir içerik ancak sahibi "kendi tenant'ımın dışında da görünsün" dediğinde ortak
+akışa düşer. Varsayılan kapalı; izolasyon kuralı yerinde kalır, üstüne opt-in
+bir yayın kanalı gelir.
+
+**Üzerine kurulacağı temel hazır:** T10'daki kamuya açık yüzey zaten hesapsız
+erişim, kişisel veri içermeyen public DTO ve IP bazlı koruma sağlıyor. Ortak
+akış bunun çok-tenant'lı hâli olur.
+
+**Önkoşullar ve riskler:**
+
+- Anlamlı olması için yeterli sayıda aktif kurum gerekiyor — tek pilotla boş bir
+  sekme olur.
+- Opt-in kimde: kurum mu, kulüp mü, etkinlik başına mı? (Muhtemelen kurum izin
+  verir, kulüp seçer.)
+- Moderasyon yükü: başka kurumun içeriği sizin yüzeyinizde görünür. Kim
+  sorumlu, uygunsuz içerik nasıl kaldırılır?
+- KVKK: kurumlar arası geçen alanların yeniden değerlendirilmesi (T5.4).
+- Kötüye kullanım ve spam; sıralama/öne çıkarma kuralları.
+
 ### Öğrencinin gelir elde edebileceği yapı
 
 Fikir aşamasında. Muhtemel yönler: sponsorlu etkinliklerde görev alma, ücretli
