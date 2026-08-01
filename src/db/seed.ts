@@ -7,7 +7,8 @@ import { provisionRbacCatalog } from "./rbac-catalog";
 import {
   DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN,
   buildApprovalInsertRows,
-  type ApprovalChainRoleToken,
+  parseApprovalChainSteps,
+  type ApprovalChainStep,
 } from "../features/clubs/club-application-chain.core";
 import { TenantSettingKey } from "../features/tenant-settings/tenant-settings.catalog";
 import { invalidateTenantSettingsCache } from "../features/tenant-settings/tenant-settings.cache";
@@ -172,10 +173,10 @@ async function main(): Promise<() => Promise<void>> {
       return inserted.id;
     }
 
-    const approvalChainsByUniversity: Record<string, ApprovalChainRoleToken[]> = {};
+    const approvalChainsByUniversity: Record<string, ApprovalChainStep[]> = {};
 
-    function getApprovalChain(universityId: string): ApprovalChainRoleToken[] {
-      return approvalChainsByUniversity[universityId] ?? DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN;
+    function getApprovalChain(universityId: string): ApprovalChainStep[] {
+      return approvalChainsByUniversity[universityId] ?? parseApprovalChainSteps(DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN)!;
     }
 
     /** Kulüp başvurusu + tenant onay zinciri adımlarını birlikte oluşturur. */
@@ -226,6 +227,8 @@ async function main(): Promise<() => Promise<void>> {
           return {
             applicationId: inserted.id,
             step: row.step,
+            stepKind: row.stepKind,
+            committeeId: row.committeeId,
             approverRole: row.approverRole,
             status,
             approverId,
@@ -533,7 +536,7 @@ async function main(): Promise<() => Promise<void>> {
       value: ["advisor", "student_affairs"],
       updatedBy: okan,
     });
-    approvalChainsByUniversity[ege.id] = ["advisor", "student_affairs"];
+    approvalChainsByUniversity[ege.id] = parseApprovalChainSteps(["advisor", "student_affairs"])!;
 
     console.log("   🏕️ Ege kulüpleri ve üyelikleri...");
 

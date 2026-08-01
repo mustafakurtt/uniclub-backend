@@ -16,6 +16,7 @@ import { clubApplicationReviewService } from "../clubs/club-application-review.s
 import { membershipHistoryService } from "../membership-history/membership-history.service";
 import { clubAdvisorsService } from "../club-advisors/club-advisors.service";
 import { auditService } from "../audit/audit.service";
+import { clubApplicationCommitteeService } from "../clubs/club-application-committee.service";
 import { announcementEffects } from "../announcements/announcements.cache";
 import { galleryEffects } from "../gallery/gallery.cache";
 
@@ -190,6 +191,8 @@ export const adminService = {
       applicant: applicant ? toSafeUser(applicant) : null,
       approvals: approvals.map((approval) => ({
         step: approval.step,
+        stepKind: approval.stepKind,
+        committeeId: approval.committeeId,
         approverRole: approval.approverRole,
         status: approval.status,
         note: approval.status === "rejected" || approval.status === "revision_requested"
@@ -244,6 +247,9 @@ export const adminService = {
     await clubApplicationReviewService.assertChecklistAllowsApproval(universityId, applicationId);
     const result = await adminRepository.decideClubApplication(universityId, applicationId, actorUserId, "approved", note ?? null);
     await notifyApplicationDecisionIfFinal(result);
+    if (result.application.status === "pending") {
+      await clubApplicationCommitteeService.notifyIfCurrentStepIsCommittee(universityId, applicationId);
+    }
     if (result.application.status === "approved" && result.club) {
       await membershipHistoryService.recordJoined(
         result.club.id,
@@ -295,6 +301,43 @@ export const adminService = {
       await notifyApplicationRevisionRequested(result, trimmed, lastRevision.step);
     }
     return result;
+  },
+
+  async castCommitteeVote(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    data: { vote: "approve" | "reject"; reason?: string }
+  ) {
+    if (data.vote === "approve") {
+      await clubApplicationReviewService.assertChecklistAllowsApproval(universityId, applicationId);
+    }
+
+    const voteResult = await clubApplicationCommitteeService.castVote(
+      universityId,
+      applicationId,
+      actorUserId,
+      data
+    );
+
+    if (voteResult.finalized && voteResult.result) {
+      await notifyApplicationDecisionIfFinal(voteResult.result);
+      if (
+        voteResult.result.application.status === "approved" &&
+        voteResult.result.club
+      ) {
+        await membershipHistoryService.recordJoined(
+          voteResult.result.club.id,
+          voteResult.result.application.applicantId,
+          universityId,
+          "president",
+          actorUserId
+        );
+        await clubEffects.clubApproved.emit(universityId);
+      }
+    }
+
+    return voteResult;
   },
 
   async getClubApplicationHistory(universityId: string, applicationId: string) {

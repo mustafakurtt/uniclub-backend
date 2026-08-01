@@ -7,8 +7,9 @@ import {
   type TenantSettingKey,
   isTenantSettingKey,
   TENANT_SETTING_CATALOG,
+  type TenantSettingStoredValue,
 } from "./tenant-settings.catalog";
-import { parseApprovalChain } from "../clubs/club-application-chain.core";
+import { parseApprovalChainSteps } from "../clubs/club-application-chain.core";
 import { parseReviewChecklist } from "../clubs/application-review-checklist.core";
 import { tenantSettingsRepository } from "./tenant-settings.repository";
 
@@ -55,9 +56,7 @@ export async function invalidateTenantSettingsCache(universityId: string): Promi
 
 async function loadResolvedFromDb(universityId: string): Promise<ResolvedTenantSettings> {
   const rows = await tenantSettingsRepository.listOverrides(universityId);
-  const overrides: Partial<
-    Record<TenantSettingKey, number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[]>
-  > = {};
+  const overrides: Partial<Record<TenantSettingKey, TenantSettingStoredValue>> = {};
   for (const row of rows) {
     if (!isTenantSettingKey(row.key)) continue;
     const def = TENANT_SETTING_CATALOG[row.key];
@@ -66,7 +65,7 @@ async function loadResolvedFromDb(universityId: string): Promise<ResolvedTenantS
     } else if (def.kind === "boolean" && typeof row.value === "boolean") {
       overrides[row.key] = row.value;
     } else if (def.kind === "role_chain") {
-      const chain = parseApprovalChain(row.value);
+      const chain = parseApprovalChainSteps(row.value);
       if (chain) overrides[row.key] = chain;
     } else if (def.kind === "checklist") {
       const checklist = parseReviewChecklist(row.value);

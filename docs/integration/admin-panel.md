@@ -230,7 +230,14 @@ Onay **çok kademeli zincir** ile çalışır. Kademe sayısı ve her kademedeki
 verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılır
 (bkz. [tenant-settings.md](tenant-settings.md)). Varsayılan: tek kademe
 `["club_approver"]` — `club.approve` yetkisini taşıyanlar (ör. `university_admin`,
-`student_affairs`).
+`student_affairs`). Kademe tipi `committee_majority` ise karar **kurul oylaması**
+ile verilir (`PATCH .../committee-vote`); doğrudan `approve`/`reject` bu kademede
+`400` döner. Kurul üyeleri tenant'ta kalıcı `approval_committees` kaydıyla tanımlanır.
+
+**Kurul salt çoğunluğu:** Gerekli oy sayısı **üye tam sayısının** yarısından fazlasıdır
+(`floor(n/2)+1`); yalnızca oy verenlerin sayısı üzerinden hesaplanmaz. Oy vermeyen
+veya çekimser üye fiilen onayı engeller (çoğunluğa ulaşılamaz). Karar kesinleşene
+kadar üye oyunu değiştirebilir (upsert). Her oy `audit_logs`'a düşer.
 
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
@@ -239,6 +246,7 @@ verici rol tenant ayarı `club.application.approval_chain` ile yapılandırılı
 | PATCH | `/universities/:uid/club-applications/:id/approve` | `application.view` | Sıradaki kademeyi onayla — **tüm kademeler** onaylandığında gerçek kulüp oluşur |
 | PATCH | `/universities/:uid/club-applications/:id/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/universities/:uid/club-applications/:id/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) — öğrenci düzeltip yeniden gönderir |
+| PATCH | `/universities/:uid/club-applications/:id/committee-vote` | `application.view` | Kurul kademesi oy (`vote`: `approve` \| `reject`; ret için `reason` zorunlu) |
 | GET | `/universities/:uid/club-applications/:id/history` | `application.view` | Olay geçmişi (append-only `club_application_events`) |
 | GET | `/universities/:uid/club-applications/:id/checklist` | `application.view` | İnceleme kontrol listesi (tenant kataloğu + işaret durumu) |
 | PATCH | `/universities/:uid/club-applications/:id/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle (`checked`, opsiyonel `note`) — audit'e düşer |

@@ -22,6 +22,8 @@ export const NotificationType = {
   ACCOUNT_PASSWORD_RESET: "account.passwordReset",
   /** Kulüp kurma başvurusu karara bağlandı (onay/red). data: { applicationId, status, clubId? } */
   CLUB_APPLICATION_DECIDED: "club.application.decided",
+  /** Kulüp başvurusu kurul oylaması bekliyor. data: { applicationId, committeeId, step } */
+  CLUB_APPLICATION_COMMITTEE_PENDING: "club.application.committee_pending",
   /** Başvuruda revizyon talebi — öğrenci düzeltip yeniden göndermeli. data: { applicationId, step } */
   CLUB_APPLICATION_REVISION_REQUESTED: "club.application.revision_requested",
   /** Kuruluş önerisi destek eşiğini aştı — başvuru onay zincirine düştü. data: { proposalId, applicationId } */
@@ -82,6 +84,11 @@ export const NotificationTypeMeta: Record<
     optOutable: false,
     labelTr: "Kulüp başvurusu revizyon talebi",
     labelEn: "Club application revision request",
+  },
+  [NotificationType.CLUB_APPLICATION_COMMITTEE_PENDING]: {
+    optOutable: false,
+    labelTr: "Kulüp başvurusu kurul oylaması",
+    labelEn: "Club application committee vote",
   },
   [NotificationType.CLUB_FORMATION_THRESHOLD_REACHED]: {
     optOutable: false,

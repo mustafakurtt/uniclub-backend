@@ -442,14 +442,19 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/committee-vote` | `application.view` | Kurul kademesi oy (`vote`, ops. `reason`) |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist` | `application.view` | İnceleme kontrol listesi |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/appeal/review` | `application.view` | İtiraz incele (`decision`: upheld/dismissed) |
 | GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
 | GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
+| GET | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Onay kurullarını listele |
+| GET | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.settings.manage` | Kurul detayı |
+| POST | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Kurul oluştur (`name`, `memberUserIds`) |
+| PATCH | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.settings.manage` | Kurul güncelle |
 
-Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Özet `application.status` adımlardan türetilir; bildirim yalnızca nihai `approved`/`rejected` kararında. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
+Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Eski format: rol dizisi (`["advisor","student_affairs"]`). Yeni format: adım nesneleri — `role_sequential` veya `committee_majority` (+ `committeeId`). Kurul kademesinde `committee-vote`; salt çoğunluk üye sayısı üzerinden. Özet `application.status` adımlardan türetilir; nihai karar bildirimi yalnızca `approved`/`rejected`. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |
 | GET | `/api/admin/universities/:universityId/clubs/:clubId` | `club.view` | Kulüp detayı + `counts` özeti |
 | PATCH | `/api/admin/universities/:universityId/clubs/:clubId/status` | `club.update` | Kulüp durumunu güncelle |

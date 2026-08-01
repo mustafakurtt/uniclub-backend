@@ -27,12 +27,16 @@ import {
   updateClubSchema,
   updateUserDepartmentSchema,
   adminClubPaginatedListQuerySchema,
+  committeeVoteSchema,
 } from "./admin.schema";
 import { adminService } from "./admin.service";
 import { clubApplicationReviewService } from "../clubs/club-application-review.service";
 import { dashboardService } from "../dashboard/dashboard.service";
+import { approvalCommitteesRoutes } from "../approval-committees/approval-committees.routes";
 
 export const adminRoutes = new Hono<{ Variables: RbacVariables }>();
+
+adminRoutes.route("/", approvalCommitteesRoutes);
 
 // Not: rotalar bilinçli olarak try/catch İÇERMEZ — servis katmanı HttpError
 // fırlatır, `app.onError` (core/http/error-handler) tek noktadan çevirir.
@@ -183,6 +187,25 @@ adminRoutes.patch(
       note
     );
     return ok(c, result, "admin.applicationRevisionRequested");
+  }
+);
+
+// 6b2. KURUL OY (committee_majority kademesi)
+adminRoutes.patch(
+  "/universities/:universityId/club-applications/:applicationId/committee-vote",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  validate("json", committeeVoteSchema),
+  async (c) => {
+    const { universityId, applicationId } = c.req.param();
+    const actor = c.get("user");
+    const body = c.req.valid("json");
+    const result = await adminService.castCommitteeVote(
+      universityId,
+      applicationId,
+      actor.userId,
+      body
+    );
+    return ok(c, result, "admin.committeeVoteRecorded");
   }
 );
 

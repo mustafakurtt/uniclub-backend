@@ -9,6 +9,9 @@ import {
   APPROVAL_CHAIN_MAX_STEPS,
   APPROVAL_CHAIN_ROLE_TOKENS,
   parseApprovalChain,
+  parseApprovalChainSteps,
+  approvalChainStepsEqual,
+  type ApprovalChainStep,
 } from "../clubs/club-application-chain.core";
 import {
   DEFAULT_APPLICATION_REVIEW_CHECKLIST,
@@ -229,13 +232,20 @@ export function isTenantSettingKey(key: string): key is TenantSettingKey {
   return key in TENANT_SETTING_CATALOG;
 }
 
+export type TenantSettingStoredValue =
+  | number
+  | string[]
+  | boolean
+  | ApplicationReviewChecklistItemDef[]
+  | ApprovalChainStep[];
+
 export function parseTenantSettingValue(
   key: TenantSettingKey,
   raw: unknown
-): number | string[] | boolean | ApplicationReviewChecklistItemDef[] | null {
+): TenantSettingStoredValue | null {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
-    return parseApprovalChain(raw);
+    return parseApprovalChainSteps(raw);
   }
   if (def.kind === "checklist") {
     return parseReviewChecklist(raw);
@@ -251,13 +261,14 @@ export function parseTenantSettingValue(
 
 export function tenantSettingDefaultEquals(
   key: TenantSettingKey,
-  value: number | string[] | boolean | ApplicationReviewChecklistItemDef[]
+  value: TenantSettingStoredValue
 ): boolean {
   const def = TENANT_SETTING_CATALOG[key];
   if (def.kind === "role_chain") {
-    const defaults = def.defaultValue;
-    const candidate = value as string[];
-    return defaults.length === candidate.length && defaults.every((v, i) => v === candidate[i]);
+    const defaults = parseApprovalChainSteps(def.defaultValue);
+    const candidate = value as ApprovalChainStep[];
+    if (!defaults) return false;
+    return approvalChainStepsEqual(defaults, candidate);
   }
   if (def.kind === "checklist") {
     return reviewChecklistEquals(def.defaultValue, value as ApplicationReviewChecklistItemDef[]);
@@ -270,7 +281,7 @@ export interface ResolvedTenantSettings {
   clubPinnedAnnouncementsMax: number;
   universityPinnedAnnouncementsMax: number;
   universityAnnouncementPublishPerHour: number;
-  clubApplicationApprovalChain: string[];
+  clubApplicationApprovalChain: ApprovalChainStep[];
   clubApplicationReviewChecklist: ApplicationReviewChecklistItemDef[];
   clubApplicationRequireChecklistForApproval: boolean;
   clubApplicationAppealPeriodDays: number;
@@ -291,7 +302,7 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_PINNED_ANNOUNCEMENTS_MAX].defaultValue as number,
     universityAnnouncementPublishPerHour:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR].defaultValue as number,
-    clubApplicationApprovalChain: [...DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN],
+    clubApplicationApprovalChain: parseApprovalChainSteps(DEFAULT_CLUB_APPLICATION_APPROVAL_CHAIN)!,
     clubApplicationReviewChecklist: [...DEFAULT_APPLICATION_REVIEW_CHECKLIST],
     clubApplicationRequireChecklistForApproval:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL]
@@ -316,9 +327,7 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
 }
 
 export function mergeOverridesIntoResolved(
-  overrides: Partial<
-    Record<TenantSettingKey, number | string[] | boolean | ApplicationReviewChecklistItemDef[]>
-  >
+  overrides: Partial<Record<TenantSettingKey, TenantSettingStoredValue>>
 ): ResolvedTenantSettings {
   const defaults = buildDefaultResolvedSettings();
   return {
@@ -332,7 +341,7 @@ export function mergeOverridesIntoResolved(
       (overrides[TenantSettingKey.UNIVERSITY_ANNOUNCEMENT_PUBLISH_PER_HOUR] as number | undefined) ??
       defaults.universityAnnouncementPublishPerHour,
     clubApplicationApprovalChain:
-      (overrides[TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN] as string[] | undefined) ??
+      (overrides[TenantSettingKey.CLUB_APPLICATION_APPROVAL_CHAIN] as ApprovalChainStep[] | undefined) ??
       defaults.clubApplicationApprovalChain,
     clubApplicationReviewChecklist:
       (overrides[TenantSettingKey.CLUB_APPLICATION_REVIEW_CHECKLIST] as
@@ -371,7 +380,7 @@ export function mergeOverridesIntoResolved(
 export function getResolvedSettingValue(
   resolved: ResolvedTenantSettings,
   key: TenantSettingKey
-): number | string[] | boolean | ApplicationReviewChecklistItemDef[] {
+): TenantSettingStoredValue {
   switch (key) {
     case TenantSettingKey.CLUB_PINNED_ANNOUNCEMENTS_MAX:
       return resolved.clubPinnedAnnouncementsMax;

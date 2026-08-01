@@ -15,6 +15,7 @@ import { clubsCache, clubEffects } from "./clubs.cache";
 import { findRevisionRequestedStep } from "./club-application-chain.core";
 import { clubApplicationReviewService } from "./club-application-review.service";
 import { membershipHistoryService } from "../membership-history/membership-history.service";
+import { clubApplicationCommitteeService } from "./club-application-committee.service";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -91,6 +92,7 @@ export const clubsService = {
     }
 
     const application = await clubsRepository.createApplication(universityId, applicantId, data);
+    await clubApplicationCommitteeService.notifyIfCurrentStepIsCommittee(universityId, application.id);
     return { ...application, kind: "application" as const };
   },
 
@@ -171,6 +173,10 @@ export const clubsService = {
           applicationId: result.application.id,
         },
       });
+      await clubApplicationCommitteeService.notifyIfCurrentStepIsCommittee(
+        universityId,
+        result.application.id
+      );
     }
 
     return {

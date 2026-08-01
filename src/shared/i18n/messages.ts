@@ -43,6 +43,10 @@ import {
   generalMeetingsMessages,
   type GeneralMeetingsMessageKey,
 } from "../../features/general-meetings/general-meetings.messages";
+import {
+  approvalCommitteeMessages,
+  type ApprovalCommitteeMessageKey,
+} from "../../features/approval-committees/approval-committees.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -74,7 +78,8 @@ export const messages = mergeCatalogs(
   academicTermMessages,
   membershipHistoryMessages,
   clubAdvisorMessages,
-  generalMeetingsMessages
+  generalMeetingsMessages,
+  approvalCommitteeMessages
 );
 
 /**
@@ -106,4 +111,5 @@ export type MessageKey =
   | AcademicTermMessageKey
   | MembershipHistoryMessageKey
   | ClubAdvisorMessageKey
-  | GeneralMeetingsMessageKey;
+  | GeneralMeetingsMessageKey
+  | ApprovalCommitteeMessageKey;

@@ -17,8 +17,11 @@ import {
   deriveApplicationStatus,
   findCurrentApprovalStep,
   assertActorCanDecideCurrentStep,
+  isCommitteeMajorityStep,
+  type ApplicationApprovalRow,
 } from "../clubs/club-application-chain";
-import { notFound, badRequest } from "../../shared/utils/errors";
+import { approvalCommitteesRepository } from "../approval-committees/approval-committees.repository";
+import { notFound, badRequest, forbidden } from "../../shared/utils/errors";
 import {
   User,
   Club,
@@ -31,6 +34,33 @@ const MAX_SLUG_ATTEMPTS = 5;
 
 type ApplicationStepDecision = "approved" | "rejected" | "revision_requested";
 type ApplicationEventType = ApplicationStepDecision | "resubmitted";
+
+type ApplicationWithApprovals = {
+  id: string;
+  universityId: string;
+  applicantId: string;
+  proposedName: string;
+  description: string | null;
+  status: "pending" | "approved" | "rejected" | "revision_requested";
+  approvals: Array<{
+    id: string;
+    step: number;
+    approverRole: string | null;
+    stepKind: "role_sequential" | "committee_majority";
+    committeeId: string | null;
+    status: ApplicationApprovalRow["status"];
+  }>;
+};
+
+function mapApprovalRows(approvals: ApplicationWithApprovals["approvals"]): ApplicationApprovalRow[] {
+  return approvals.map((a) => ({
+    step: a.step,
+    approverRole: a.approverRole,
+    stepKind: a.stepKind,
+    committeeId: a.committeeId,
+    status: a.status,
+  }));
+}
 
 async function insertApplicationEvent(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -55,38 +85,20 @@ async function insertApplicationEvent(
   });
 }
 
-async function applyApplicationStepDecision(
+async function finalizeApplicationStepInTransaction(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   universityId: string,
   applicationId: string,
-  actorUserId: string,
+  application: ApplicationWithApprovals,
+  approvalRowId: string,
   decision: ApplicationStepDecision,
+  actorUserId: string,
   note: string | null
 ): Promise<DecideClubApplicationResult> {
-  const application = await tx.query.clubApplications.findFirst({
-    where: { id: applicationId, universityId },
-    with: { approvals: { orderBy: { step: "asc" } } },
-  });
-
-  if (!application) {
-    throw notFound("admin.applicationNotFound");
-  }
-
-  if (application.status !== "pending") {
-    throw badRequest("admin.applicationAlreadyDecided");
-  }
-
-  const currentStep = findCurrentApprovalStep(application.approvals);
-  if (!currentStep) {
-    throw badRequest("admin.applicationAlreadyDecided");
-  }
-
-  const approvalRow = application.approvals.find((a) => a.step === currentStep.step);
+  const approvalRow = application.approvals.find((a) => a.id === approvalRowId);
   if (!approvalRow) {
     throw badRequest("admin.applicationAlreadyDecided");
   }
-
-  await assertActorCanDecideCurrentStep(actorUserId, application.approvals, approvalRow);
 
   await tx
     .update(schema.clubApplicationApprovals)
@@ -96,7 +108,7 @@ async function applyApplicationStepDecision(
       reviewedAt: new Date(),
       note,
     })
-    .where(eq(schema.clubApplicationApprovals.id, approvalRow.id));
+    .where(eq(schema.clubApplicationApprovals.id, approvalRowId));
 
   await insertApplicationEvent(tx, {
     applicationId,
@@ -107,12 +119,12 @@ async function applyApplicationStepDecision(
   });
 
   const approvalsAfter = application.approvals.map((a) =>
-    a.id === approvalRow.id
-      ? { ...a, status: decision, approverRole: a.approverRole }
+    a.id === approvalRowId
+      ? { ...a, status: decision }
       : a
   );
 
-  const derivedStatus = deriveApplicationStatus(approvalsAfter);
+  const derivedStatus = deriveApplicationStatus(mapApprovalRows(approvalsAfter));
 
   const [updatedApplication] = await tx
     .update(schema.clubApplications)
@@ -163,6 +175,70 @@ async function applyApplicationStepDecision(
   });
 
   return { application: updatedApplication, club };
+}
+
+async function applyApplicationStepDecision(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  universityId: string,
+  applicationId: string,
+  actorUserId: string,
+  decision: ApplicationStepDecision,
+  note: string | null
+): Promise<DecideClubApplicationResult> {
+  const application = await tx.query.clubApplications.findFirst({
+    where: { id: applicationId, universityId },
+    with: { approvals: { orderBy: { step: "asc" } } },
+  });
+
+  if (!application) {
+    throw notFound("admin.applicationNotFound");
+  }
+
+  if (application.status !== "pending") {
+    throw badRequest("admin.applicationAlreadyDecided");
+  }
+
+  const approvalRows = mapApprovalRows(application.approvals);
+  const currentStep = findCurrentApprovalStep(approvalRows);
+  if (!currentStep) {
+    throw badRequest("admin.applicationAlreadyDecided");
+  }
+
+  const approvalRow = application.approvals.find((a) => a.step === currentStep.step);
+  if (!approvalRow) {
+    throw badRequest("admin.applicationAlreadyDecided");
+  }
+
+  if (isCommitteeMajorityStep(currentStep)) {
+    if (decision === "revision_requested") {
+      if (!approvalRow.committeeId) {
+        throw badRequest("admin.applicationAlreadyDecided");
+      }
+      const isMember = await approvalCommitteesRepository.isActiveMember(
+        approvalRow.committeeId,
+        universityId,
+        actorUserId
+      );
+      if (!isMember) {
+        throw forbidden("admin.approvalStepForbidden");
+      }
+    } else {
+      throw badRequest("admin.committeeStepUseVoteEndpoint");
+    }
+  } else {
+    await assertActorCanDecideCurrentStep(actorUserId, approvalRows, currentStep);
+  }
+
+  return await finalizeApplicationStepInTransaction(
+    tx,
+    universityId,
+    applicationId,
+    application as ApplicationWithApprovals,
+    approvalRow.id,
+    decision,
+    actorUserId,
+    note
+  );
 }
 
 /**
@@ -318,6 +394,28 @@ export const adminRepository = {
   ): Promise<DecideClubApplicationResult> {
     return await db.transaction(async (tx) =>
       applyApplicationStepDecision(tx, universityId, applicationId, actorUserId, "revision_requested", note)
+    );
+  },
+
+  finalizeApplicationStepInTransaction(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    universityId: string,
+    applicationId: string,
+    application: ApplicationWithApprovals,
+    approvalRowId: string,
+    decision: ApplicationStepDecision,
+    actorUserId: string,
+    note: string | null
+  ) {
+    return finalizeApplicationStepInTransaction(
+      tx,
+      universityId,
+      applicationId,
+      application,
+      approvalRowId,
+      decision,
+      actorUserId,
+      note
     );
   },
 

@@ -3,6 +3,7 @@ import * as t from "drizzle-orm/pg-core";
 import { timestamps } from "../../core/db/base.entity";
 import { universities } from "./university";
 import { users } from "./users";
+import { approvalCommittees, clubApplicationCommitteeVoteEnum } from "./approval-committees";
 import { compositeForeignKey } from "./helpers";
 
 // ═══════════════════════════════════════════════
@@ -36,6 +37,11 @@ export const clubApplicationAppealStatusEnum = pgEnum("club_application_appeal_s
   "pending",
   "upheld",
   "dismissed",
+]);
+
+export const applicationApprovalStepKindEnum = pgEnum("application_approval_step_kind", [
+  "role_sequential",
+  "committee_majority",
 ]);
 
 export const clubApplications = table("club_applications", {
@@ -73,6 +79,8 @@ export const clubApplicationApprovals = table("club_application_approvals", {
     .notNull(),
 
   step: t.integer().notNull(),
+  stepKind: applicationApprovalStepKindEnum("step_kind").default("role_sequential").notNull(),
+  committeeId: t.uuid("committee_id").references(() => approvalCommittees.id, { onDelete: "restrict" }),
   // Karar verici belirteci — tenant zincirindeki rol veya `club_approver` (club.approve yetkisi).
   approverRole: t.varchar("approver_role", { length: 100 }),
   approverId: t.uuid("approver_id").references(() => users.id, { onDelete: "set null" }),
@@ -171,3 +179,45 @@ export const clubApplicationAppeals = table("club_application_appeals", {
   }).onDelete("restrict"),
   t.uniqueIndex("club_application_appeals_application_idx").on(cols.applicationId),
 ]);
+
+/**
+ * Kurul kademesi oyları — karar kesinleşene kadar üye oyunu değiştirebilir (upsert).
+ */
+export const clubApplicationCommitteeVotes = table(
+  "club_application_committee_votes",
+  {
+    id: t.uuid().primaryKey().defaultRandom(),
+    applicationId: t
+      .uuid("application_id")
+      .references(() => clubApplications.id, { onDelete: "cascade" })
+      .notNull(),
+    universityId: t.uuid("university_id").notNull(),
+    approvalStep: t.integer("approval_step").notNull(),
+    committeeId: t
+      .uuid("committee_id")
+      .references(() => approvalCommittees.id, { onDelete: "restrict" })
+      .notNull(),
+    voterUserId: t.uuid("voter_user_id").notNull(),
+    vote: clubApplicationCommitteeVoteEnum("vote").notNull(),
+    reason: t.text(),
+    ...timestamps,
+  },
+  (cols) => [
+    t.uniqueIndex("club_app_committee_votes_pair_idx").on(
+      cols.applicationId,
+      cols.approvalStep,
+      cols.voterUserId
+    ),
+    compositeForeignKey({
+      columns: [cols.applicationId, cols.universityId],
+      foreignColumns: [clubApplications.id, clubApplications.universityId],
+      name: "club_app_committee_votes_application_tenant_fkey",
+    }).onDelete("cascade"),
+    compositeForeignKey({
+      columns: [cols.voterUserId, cols.universityId],
+      foreignColumns: [users.id, users.universityId],
+      name: "club_app_committee_votes_voter_tenant_fkey",
+    }).onDelete("restrict"),
+    t.index("club_app_committee_votes_application_step_idx").on(cols.applicationId, cols.approvalStep),
+  ]
+);

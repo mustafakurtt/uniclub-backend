@@ -11,6 +11,7 @@ export default defineConfig({
     "./src/db/schema/clubs.ts",
     "./src/db/schema/announcements.ts",
     "./src/db/schema/notifications.ts",
+    "./src/db/schema/approval-committees.ts",
     "./src/db/schema/applications.ts",
     "./src/db/schema/club-formation.ts",
     "./src/db/schema/audit.ts",
@@ -23,6 +24,7 @@ export default defineConfig({
     "./src/db/schema/membership-events.ts",
     "./src/db/schema/advisor-invitations.ts",
     "./src/db/schema/general-meetings.ts",
+    "./src/db/schema/approval-committees.ts",
   ],
   out: "./src/db/migrations",     // SQL dosyalarının üretileceği yer
   dialect: "postgresql",          // Veritabanı türü

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { tenantSettings } from "../../db/schema";
-import type { TenantSettingKey } from "./tenant-settings.catalog";
+import type { TenantSettingKey, TenantSettingStoredValue } from "./tenant-settings.catalog";
 
 export type TenantSettingRow = typeof tenantSettings.$inferSelect;
 
@@ -13,7 +13,7 @@ class TenantSettingsRepository {
   async upsertOverride(
     universityId: string,
     key: TenantSettingKey,
-    value: number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[],
+    value: TenantSettingStoredValue,
     updatedBy: string
   ): Promise<void> {
     await db

@@ -128,10 +128,14 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `university.export.enabled` | `false` | boolean, `flagType: entitlement` | platform |
 | `university.export.pdf.enabled` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-01` | platform |
 
-`club.application.approval_chain` — JSON dizi: her eleman bir kademenin karar verici rolü.
-`club_approver` özel token: `club.approve` yetkisini taşıyanlar. Örnek iki kademe:
-`["advisor", "student_affairs"]` (seed'de Ege Bilim). Varsayılan tek kademe mevcut
-tenant'larda davranışı değiştirmez.
+`club.application.approval_chain` — JSON dizi (1–3 kademe). **Geriye dönük uyum:**
+her eleman yalnızca rol string'i olabilir (`["advisor", "student_affairs"]`). **Yeni
+format:** adım nesnesi:
+- `{ "type": "role_sequential", "role": "student_affairs" }`
+- `{ "type": "committee_majority", "committeeId": "uuid" }` — tenant'ta tanımlı kalıcı kurul
+
+`club_approver` özel token: `club.approve` yetkisini taşıyanlar. Kurul referansı
+`approval_committees` tablosundaki aktif kurula işaret etmelidir.
 
 ---
 

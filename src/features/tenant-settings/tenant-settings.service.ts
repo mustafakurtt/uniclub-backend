@@ -12,14 +12,16 @@ import {
   isTenantSettingKey,
   parseTenantSettingValue,
   tenantSettingDefaultEquals,
+  type TenantSettingStoredValue,
 } from "./tenant-settings.catalog";
+import type { ApprovalChainStep } from "../clubs/club-application-chain.core";
 import { tenantSettingsRepository } from "./tenant-settings.repository";
 import { getTenantSettings, setTenantSettingsCache } from "./tenant-settings.cache";
 import type { PatchTenantSettingsDTO } from "./tenant-settings.schema";
 
 export interface TenantSettingView {
-  value: number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[];
-  default: number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[];
+  value: TenantSettingStoredValue;
+  default: TenantSettingStoredValue;
   kind: "integer" | "role_chain" | "boolean" | "checklist";
   min?: number;
   max?: number;
@@ -103,12 +105,7 @@ export const tenantSettingsService = {
     }
 
     const overrides = await tenantSettingsRepository.listOverrides(universityId);
-    const overrideMap: Partial<
-      Record<
-        TenantSettingKey,
-        number | string[] | boolean | import("../clubs/application-review-checklist.core").ApplicationReviewChecklistItemDef[]
-      >
-    > = {};
+    const overrideMap: Partial<Record<TenantSettingKey, TenantSettingStoredValue>> = {};
     for (const row of overrides) {
       if (!isTenantSettingKey(row.key)) continue;
       const def = TENANT_SETTING_CATALOG[row.key];
@@ -118,8 +115,8 @@ export const tenantSettingsService = {
         overrideMap[row.key] = row.value;
       } else if (def.kind === "role_chain") {
         const chain = parseTenantSettingValue(row.key, row.value);
-        if (Array.isArray(chain) && typeof chain[0] === "string") {
-          overrideMap[row.key] = chain;
+        if (Array.isArray(chain) && chain.length > 0) {
+          overrideMap[row.key] = chain as ApprovalChainStep[];
         }
       } else if (def.kind === "checklist") {
         const checklist = parseTenantSettingValue(row.key, row.value);
