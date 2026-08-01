@@ -343,12 +343,17 @@ bağlı içeriği (üye/danışman/link/duyuru/galeri) tek transaction'da temizl
 
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
-| GET | `/universities/:uid/clubs/:clubId/advisors` | `club.view` | Danışman listesi (`user` gömülü) |
-| POST | `/universities/:uid/clubs/:clubId/advisors` | `club.advisor.manage` | `{ userId }` |
-| DELETE | `/universities/:uid/clubs/:clubId/advisors/:userId` | `club.advisor.manage` | Kaldır |
+| GET | `/universities/:uid/clubs/:clubId/advisors` | `club.view` | Aktif danışman listesi |
+| POST | `/universities/:uid/clubs/:clubId/advisors` | `club.advisor.manage` | Danışman **daveti** (`{ userId, message? }`) |
+| GET | `/universities/:uid/clubs/:clubId/advisor-invitations` | `club.advisor.manage` | Bekleyen davetler |
+| DELETE | `/universities/:uid/clubs/:clubId/advisor-invitations/:invitationId` | `club.advisor.manage` | Daveti iptal |
+| DELETE | `/universities/:uid/clubs/:clubId/advisors/:userId` | `club.advisor.manage` | Zorla kaldır |
 
-Danışman adayı **`advisor` rolünde** olmalı, aksi halde
-`400 "Danışman olarak yalnızca 'advisor' rolündeki personel atanabilir."` ve aynı
+Davet kabul edilene kadar kulüpte danışman yok. Danışman yanıt uçları `users` self-service'te
+(`GET/PATCH /api/users/me/advisor-invitations`, `POST .../advised-clubs/:clubId/withdraw`).
+Süre: `club.advisor.invitation_expiry_days` (varsayılan 14 gün).
+
+Danışman adayı **`advisor` rolünde** olmalı (staff domain — akademik ve idari personel).
 tenant'ta olmalı.
 
 ### 5.5. Üyeler & İçerik Moderasyonu (tenant override)
