@@ -1,0 +1,2 @@
+CREATE INDEX "poster_qr_scans_qr_code_id_scanned_at_idx" ON "poster_qr_scans" ("qr_code_id","scanned_at");--> statement-breakpoint
+ALTER TABLE "poster_qr_codes" DROP CONSTRAINT "poster_qr_codes_target_activity_id_activities_id_fkey", ADD CONSTRAINT "poster_qr_codes_target_activity_id_activities_id_fkey" FOREIGN KEY ("target_activity_id") REFERENCES "activities"("id") ON DELETE CASCADE;

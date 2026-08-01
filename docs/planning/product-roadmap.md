@@ -363,13 +363,14 @@ navigasyonu, ekran okuyucu. Frontend izinde (FE) gereksinim olarak taşınır.
 - Bölüm/sınıf bazlı katılım (kim katılmıyor?)
 - Dönemsel karşılaştırma
 
-### T6.2 İçerik ve etkinlik performansı
+### T6.2 İçerik ve etkinlik performansı — **QR dilimi (v1)**
 
 Kullanıcı isteği (paylaşım sonrası ölçüm):
 
 - Duyuru erişimi, okunma, tıklama
 - Etkinlik: görüntülenme → RSVP → gerçek katılım hunisi
 - Kanal bazlı etkinlik (hangi bildirim kanalı işe yarıyor)
+- **Afiş QR (2026-08-01):** kod/hedef bazlı tarama özeti, kaynak karşılaştırması, tenant `timezone` ile gün/saat gruplama
 
 ### T6.3 Kullanıcı 360 görünümü ★
 
@@ -651,7 +652,7 @@ gördüğü acıyı (dağınık takip) tek ekranda çözer.
 - T9 → **C2** (timezone/locale/branding) — zamanlanmış yayının önkoşulu
 - T2.1 **zamanlanmış yayın**, T2.6 paylaşım ekranı (sade hâli)
 - T9 → **G OpenAPI** (kendi frontend'imizin sözleşmesi)
-- T6.2'nin minimum hâli: QR kaynak bazlı tarama sayısı
+- T6.2'nin minimum hâli: **afiş QR tarama analitiği** (kaynak karşılaştırması + gün/saat)
 
 **Kapsam dışı bırakılanlar** (M1'i şişirmemek için): onay hiyerarşisi, resmî
 çıktılar, turnuva, transkript, analitik derinliği.

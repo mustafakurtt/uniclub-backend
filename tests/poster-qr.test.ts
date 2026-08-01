@@ -164,3 +164,70 @@ describe("Afiş QR (T10.1)", () => {
     ).toBe(403);
   });
 });
+
+describe("Afiş QR analitiği (T6.2)", () => {
+  let mustafa: string;
+  let elif: string;
+  let techClubId: string;
+  let antalyaUniId: string;
+
+  beforeAll(async () => {
+    [mustafa, elif] = await Promise.all([
+      login("mustafa.kurt@std.antalya.edu.tr"),
+      login("elif.demir@antalya.edu.tr"),
+    ]);
+    antalyaUniId = (await me(mustafa)).universityId as string;
+    const clubs = await data<Array<{ id: string; slug: string }>>(await get("/api/clubs", mustafa));
+    techClubId = clubs.find((c) => c.slug === TECH_CLUB_SLUG)!.id;
+  });
+
+  it("kod bazlı özet + aynı hedefin kaynak karşılaştırması (tenant timezone)", async () => {
+    const a = await data<{ id: string; code: string }>(
+      await reqAuth("POST", `/api/clubs/${techClubId}/poster-qr`, mustafa, {
+        sourceLabel: "kantin",
+        targetType: "club",
+        targetClubId: techClubId,
+      })
+    );
+    const b = await data<{ id: string; code: string }>(
+      await reqAuth("POST", `/api/clubs/${techClubId}/poster-qr`, mustafa, {
+        sourceLabel: "A blok",
+        targetType: "club",
+        targetClubId: techClubId,
+      })
+    );
+
+    expect((await get(`/api/public/qr/${a.code}`)).status).toBe(200);
+    expect((await get(`/api/public/qr/${a.code}`)).status).toBe(200);
+    expect((await get(`/api/public/qr/${b.code}`)).status).toBe(200);
+
+    const codeAnalytics = await data<{
+      totalScans: number;
+      byDay: Array<{ day: string; count: number }>;
+      byHour: Array<{ hour: number; count: number }>;
+    }>(await get(`/api/clubs/${techClubId}/poster-qr/${a.id}/analytics`, mustafa));
+
+    expect(codeAnalytics.totalScans).toBe(2);
+    expect(codeAnalytics.byDay.some((d) => d.count === 2)).toBe(true);
+    expect(codeAnalytics.byHour.length).toBeGreaterThan(0);
+
+    const overview = await data<{
+      timezone: string;
+      targets: Array<{
+        targetClubId: string;
+        sources: Array<{ qrId: string; scanCount: number }>;
+      }>;
+    }>(await get(`/api/clubs/${techClubId}/poster-qr/analytics`, mustafa));
+
+    expect(overview.timezone).toBeTruthy();
+    const target = overview.targets.find((t) => t.targetClubId === techClubId);
+    expect(target?.sources.find((s) => s.qrId === a.id)?.scanCount).toBe(2);
+    expect(target?.sources.find((s) => s.qrId === b.id)?.scanCount).toBe(1);
+  });
+
+  it("kurum seviyesi analitik university_admin ile erişilebilir", async () => {
+    expect(
+      (await get(`/api/universities/${antalyaUniId}/poster-qr/analytics`, elif)).status
+    ).toBe(200);
+  });
+});

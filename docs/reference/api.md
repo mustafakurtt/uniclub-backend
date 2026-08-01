@@ -647,9 +647,13 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 | GET/POST | `/api/clubs/:clubId/poster-qr` | host staff | Kulüp kapsamı QR oluştur/listele |
 | PATCH | `/api/clubs/:clubId/poster-qr/:qrId` | host staff | Hedef/süre/etiket güncelle |
 | POST | `/api/clubs/:clubId/poster-qr/:qrId/cancel` | host staff | İptal |
+| GET | `/api/clubs/:clubId/poster-qr/analytics` | host staff | Kaynak karşılaştırması (hedef bazlı) |
+| GET | `/api/clubs/:clubId/poster-qr/:qrId/analytics` | host staff | Kod bazlı tarama özeti (gün/saat, tenant TZ) |
 | GET/POST | `/api/universities/:universityId/poster-qr` | `poster_qr.university.manage` | Okul geneli QR |
 | PATCH | `/api/universities/:universityId/poster-qr/:qrId` | aynı | Güncelle |
 | POST | `/api/universities/:universityId/poster-qr/:qrId/cancel` | aynı | İptal |
+| GET | `/api/universities/:universityId/poster-qr/analytics` | aynı | Kurum geneli kaynak karşılaştırması |
+| GET | `/api/universities/:universityId/poster-qr/:qrId/analytics` | aynı | Kod bazlı özet |
 
 
 ---

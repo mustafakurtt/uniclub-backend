@@ -15,6 +15,7 @@ export const posterQrMessages = defineCatalog({
     "posterQr.expired": "Bu QR kampanyası sona erdi.",
     "posterQr.cancelledStatus": "Bu QR kodu iptal edildi.",
     "posterQr.notYetActive": "Bu QR kampanyası henüz başlamadı.",
+    "posterQr.analyticsReady": "QR tarama analitiği getirildi.",
   },
   en: {
     "posterQr.notFound": "QR code not found.",
@@ -30,6 +31,7 @@ export const posterQrMessages = defineCatalog({
     "posterQr.expired": "This QR campaign has ended.",
     "posterQr.cancelledStatus": "This QR code has been cancelled.",
     "posterQr.notYetActive": "This QR campaign has not started yet.",
+    "posterQr.analyticsReady": "QR scan analytics retrieved.",
   },
 });
 

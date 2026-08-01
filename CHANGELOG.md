@@ -18,6 +18,7 @@ sürüm numaraları [Semantic Versioning](https://semver.org/) ile uyumludur.
 - **Zamanlanmış yayın mutabakatı:** açılış + 3 dk periyodik Postgres→BullMQ tarama; Redis iş kaybında yeniden kuyruk / gecikmiş yayın.
 - **Kamuya açık okuma (T10.3/T10.5):** `/api/public/universities/:slug/clubs/:clubSlug` ve `.../activities/:id`; public DTO; IP hız sınırı.
 - **QR kod sistemi (T10.1):** afiş QR (`poster_qr_codes`, kamuya açık çözümleme, kaynak etiketi, tarama sayacı) + dönen yoklama QR (Redis token, self check-in).
+- **QR tarama analitiği (T6.2 dilimi):** kod/hedef bazlı özet uçları, tenant timezone ile gün/saat gruplama.
 - **Locale cache:** kullanıcı tercihi ve tenant `defaultLocale` ayrı cache anahtarları (`i18n:locale`, TTL 600s); profil/tenant güncellemesinde invalidate.
 - **Core:** taşınabilir hız sınırı fabrikası (`core/ratelimit`), sağlık/hazırlık mekanizması geliştirmeleri.
 - **Operasyon:** açılışta migration açığı kontrolü.
