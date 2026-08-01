@@ -355,6 +355,7 @@ export const adminRepository = {
         advisorCount: sql<number>`(
           select cast(count(*) as int) from ${clubAdvisors}
           where ${clubAdvisors.clubId} = ${clubId}
+            and ${clubAdvisors.leftAt} is null
         )`,
         upcomingActivities: sql<number>`(
           select cast(count(distinct a.id) as int)
@@ -467,14 +468,14 @@ export const adminRepository = {
 
   async findAdvisorsByClub(clubId: string) {
     return await db.query.clubAdvisors.findMany({
-      where: { clubId },
+      where: { clubId, leftAt: { isNull: true } },
       with: { user: true },
     });
   },
 
   async findAdvisor(clubId: string, userId: string) {
     return await db.query.clubAdvisors.findFirst({
-      where: { clubId, userId },
+      where: { clubId, userId, leftAt: { isNull: true } },
     });
   },
 

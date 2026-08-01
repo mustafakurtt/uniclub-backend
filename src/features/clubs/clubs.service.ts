@@ -34,9 +34,13 @@ export const clubsService = {
     if (!club || club.universityId !== universityId) {
       throw notFound("club.notFound");
     }
+    const { clubAdvisors, ...rest } = club;
     return {
-      ...club,
-      advisors: club.advisors.map(toSafeUser),
+      ...rest,
+      advisors: clubAdvisors
+        .filter((a) => a.user)
+        .map((a) => toSafeUser(a.user!)),
+      advisorVacant: clubAdvisors.length === 0,
       clubMembers: club.clubMembers
         .filter((m) => m.user)
         .map((m) => ({ ...m, user: toSafeUser(m.user!) })),

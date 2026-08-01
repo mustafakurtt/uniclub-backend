@@ -198,7 +198,7 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
       return true;
     }
     const advisor = await db.query.clubAdvisors.findFirst({
-      where: { clubId, userId },
+      where: { clubId, userId, leftAt: { isNull: true } },
       columns: { userId: true },
     });
     return !!advisor;

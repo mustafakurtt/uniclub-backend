@@ -40,6 +40,10 @@ export const NotificationType = {
   ACTIVITY_CANCELLED: "activity.cancelled",
   /** Kulüp bir etkinliğe co-host olarak davet edildi. data: { activityId, hostClubId, clubId } */
   ACTIVITY_COHOST_INVITED: "activity.coHostInvited",
+  /** Kulüp danışmanlığı daveti. data: { clubId, invitationId } */
+  CLUB_ADVISOR_INVITED: "club.advisor.invited",
+  /** Danışman daveti yanıtı veya çekilme. data: { clubId, decision } */
+  CLUB_ADVISOR_RESPONDED: "club.advisor.responded",
 } as const;
 
 export type NotificationTypeKey = (typeof NotificationType)[keyof typeof NotificationType];
@@ -118,6 +122,16 @@ export const NotificationTypeMeta: Record<
     optOutable: true,
     labelTr: "Co-host daveti",
     labelEn: "Co-host invitation",
+  },
+  [NotificationType.CLUB_ADVISOR_INVITED]: {
+    optOutable: false,
+    labelTr: "Danışmanlık daveti",
+    labelEn: "Advisor invitation",
+  },
+  [NotificationType.CLUB_ADVISOR_RESPONDED]: {
+    optOutable: false,
+    labelTr: "Danışman daveti yanıtı",
+    labelEn: "Advisor invitation response",
   },
 };
 

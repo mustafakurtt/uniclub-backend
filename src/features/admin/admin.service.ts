@@ -14,6 +14,8 @@ import { notFound, badRequest } from "../../shared/utils/errors";
 import { clubEffects } from "../clubs/clubs.cache";
 import { clubApplicationReviewService } from "../clubs/club-application-review.service";
 import { membershipHistoryService } from "../membership-history/membership-history.service";
+import { clubAdvisorsService } from "../club-advisors/club-advisors.service";
+import { auditService } from "../audit/audit.service";
 import { announcementEffects } from "../announcements/announcements.cache";
 import { galleryEffects } from "../gallery/gallery.cache";
 
@@ -395,36 +397,63 @@ export const adminService = {
   },
 
   /**
-   * Danışman ataması, sadece hedef kullanıcı AYNI üniversiteye aitse yapılabilir
-   * (kendi öğretim üyesi olmayan biri bir kulübe danışman atanamaz).
+   * Danışman daveti — kabul edilene kadar kulüpte danışman sayılmaz.
    */
-  async addAdvisor(universityId: string, clubId: string, userId: string) {
+  async inviteAdvisor(
+    universityId: string,
+    clubId: string,
+    invitedBy: string,
+    data: { userId: string; message?: string }
+  ) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
       throw notFound("admin.clubNotFound");
     }
-    const user = await adminRepository.findUserInUniversity(universityId, userId);
+    const user = await adminRepository.findUserInUniversity(universityId, data.userId);
     if (!user) {
       throw notFound("admin.userNotFound");
     }
-    // Danışman, öğrenci değil personel olmalı: sistemdeki "advisor" rolüne sahip
-    // olması şartı (staff maili ile kaydolanlara bu rol otomatik atanır).
-    const isAdvisorEligible = await adminRepository.userHasRole(userId, "advisor");
-    if (!isAdvisorEligible) {
-      throw badRequest("admin.advisorNotEligible");
+
+    const invitation = await clubAdvisorsService.inviteAdvisor(
+      universityId,
+      clubId,
+      invitedBy,
+      data,
+      (userId) => adminRepository.userHasRole(userId, "advisor")
+    );
+    await clubEffects.detailChanged.emit(clubId);
+    return invitation;
+  },
+
+  async listAdvisorInvitations(universityId: string, clubId: string) {
+    const club = await adminRepository.findClubInUniversity(universityId, clubId);
+    if (!club) {
+      throw notFound("admin.clubNotFound");
     }
-    const existing = await adminRepository.findAdvisor(clubId, userId);
-    if (existing) {
-      throw badRequest("admin.advisorAlreadyAssigned");
+    return await clubAdvisorsService.listClubInvitations(universityId, clubId);
+  },
+
+  async cancelAdvisorInvitation(
+    universityId: string,
+    clubId: string,
+    invitationId: string,
+    actorId: string
+  ) {
+    const club = await adminRepository.findClubInUniversity(universityId, clubId);
+    if (!club) {
+      throw notFound("admin.clubNotFound");
     }
-    // universityId KULÜP kaydından okunur — bileşik FK (club_advisors) danışmanın
-    // kulüple aynı tenant'ta olmasını DB seviyesinde zorunlu kılar.
-    const result = await adminRepository.addAdvisor(clubId, userId, club.universityId);
-    await clubEffects.detailChanged.emit(clubId); // danışmanlar profile gömülü
+    const result = await clubAdvisorsService.cancelInvitation(universityId, clubId, invitationId, actorId);
+    await clubEffects.detailChanged.emit(clubId);
     return result;
   },
 
-  async removeAdvisor(universityId: string, clubId: string, userId: string) {
+  /** Eski uç uyumluluğu — doğrudan atama yerine davet gönderir. */
+  async addAdvisor(universityId: string, clubId: string, userId: string, invitedBy: string) {
+    return await this.inviteAdvisor(universityId, clubId, invitedBy, { userId });
+  },
+
+  async removeAdvisor(universityId: string, clubId: string, userId: string, actorId: string) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
       throw notFound("admin.clubNotFound");
@@ -434,6 +463,17 @@ export const adminService = {
       throw badRequest("admin.advisorNotAssigned");
     }
     await adminRepository.removeAdvisor(clubId, userId);
+    await auditService.record({
+      universityId,
+      actorId,
+      action: "club.advisor.removed",
+      method: "DELETE",
+      path: `/api/admin/universities/${universityId}/clubs/${clubId}/advisors/${userId}`,
+      status: 200,
+      targetType: "club",
+      targetId: clubId,
+      metadata: { userId },
+    });
     await clubEffects.detailChanged.emit(clubId);
   },
 

@@ -45,6 +45,8 @@ export const TenantSettingKey = {
   /** 0 = destek toplama kapalı (doğrudan başvuru). >0 = minimum destek sayısı. */
   CLUB_FORMATION_SUPPORT_THRESHOLD: "club.formation.support_threshold",
   CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS: "club.formation.proposal_expiry_days",
+  /** Danışman davetinin geçerlilik süresi (gün). */
+  CLUB_ADVISOR_INVITATION_EXPIRY_DAYS: "club.advisor.invitation_expiry_days",
   /** Kurumsal rapor dışa aktarma (T4.5) — entitlement bayrağı; varsayılan kapalı. */
   UNIVERSITY_EXPORT_ENABLED: "university.export.enabled",
   /** PDF resmî belgeler (T4.5 v2) — release bayrağı; pilot sonrası kaldırılacak. */
@@ -171,6 +173,15 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Kuruluş önerisi destek süresi (gün)",
     labelEn: "Formation proposal support window (days)",
   },
+  [TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS]: {
+    kind: "integer",
+    defaultValue: 14,
+    min: 3,
+    max: 60,
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Danışman davet geçerlilik süresi (gün)",
+    labelEn: "Advisor invitation validity (days)",
+  },
   [TenantSettingKey.UNIVERSITY_EXPORT_ENABLED]: {
     kind: "boolean",
     defaultValue: false,
@@ -243,6 +254,7 @@ export interface ResolvedTenantSettings {
   clubApplicationAppealPeriodDays: number;
   clubFormationSupportThreshold: number;
   clubFormationProposalExpiryDays: number;
+  clubAdvisorInvitationExpiryDays: number;
   universityExportEnabled: boolean;
   universityExportPdfEnabled: boolean;
 }
@@ -266,6 +278,8 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD].defaultValue as number,
     clubFormationProposalExpiryDays:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS].defaultValue as number,
+    clubAdvisorInvitationExpiryDays:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS].defaultValue as number,
     universityExportEnabled:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED].defaultValue as boolean,
     universityExportPdfEnabled:
@@ -308,6 +322,9 @@ export function mergeOverridesIntoResolved(
     clubFormationProposalExpiryDays:
       (overrides[TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS] as number | undefined) ??
       defaults.clubFormationProposalExpiryDays,
+    clubAdvisorInvitationExpiryDays:
+      (overrides[TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS] as number | undefined) ??
+      defaults.clubAdvisorInvitationExpiryDays,
     universityExportEnabled:
       (overrides[TenantSettingKey.UNIVERSITY_EXPORT_ENABLED] as boolean | undefined) ??
       defaults.universityExportEnabled,
@@ -340,6 +357,8 @@ export function getResolvedSettingValue(
       return resolved.clubFormationSupportThreshold;
     case TenantSettingKey.CLUB_FORMATION_PROPOSAL_EXPIRY_DAYS:
       return resolved.clubFormationProposalExpiryDays;
+    case TenantSettingKey.CLUB_ADVISOR_INVITATION_EXPIRY_DAYS:
+      return resolved.clubAdvisorInvitationExpiryDays;
     case TenantSettingKey.UNIVERSITY_EXPORT_ENABLED:
       return resolved.universityExportEnabled;
     case TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED:

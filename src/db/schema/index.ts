@@ -15,3 +15,4 @@ export * from "./tenant-settings";
 export * from "./poster-qr";
 export * from "./academic-terms";
 export * from "./membership-events";
+export * from "./advisor-invitations";

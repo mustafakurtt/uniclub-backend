@@ -53,9 +53,12 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     return this.query!.findFirst({
       where: { id: clubId, universityId },
       with: {
-        advisors: true,
+        clubAdvisors: {
+          where: { leftAt: { isNull: true } },
+          with: { user: true },
+        },
         clubMembers: {
-          where: { status: "approved" },
+          where: { status: "approved", leftAt: { isNull: true } },
           with: { user: true },
         },
         contactLinks: true,
@@ -73,9 +76,12 @@ class ClubsRepository extends BaseRepository<typeof clubs, typeof db.query.clubs
     return this.query!.findFirst({
       where: { id: clubId },
       with: {
-        advisors: true,
+        clubAdvisors: {
+          where: { leftAt: { isNull: true } },
+          with: { user: true },
+        },
         clubMembers: {
-          where: { status: "approved" },
+          where: { status: "approved", leftAt: { isNull: true } },
           with: { user: true },
         },
         contactLinks: true,

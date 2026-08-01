@@ -62,6 +62,7 @@ export type ReviewAppealDTO = z.infer<typeof reviewAppealSchema>;
 
 export const addAdvisorSchema = z.object({
   userId: z.string().uuid(),
+  message: z.string().max(2000).optional(),
 });
 export type AddAdvisorDTO = z.infer<typeof addAdvisorSchema>;
 

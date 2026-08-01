@@ -4,6 +4,9 @@ import { data, get, login, me, reqAuth } from "./helpers";
 import { db } from "../src/db";
 import { clubs } from "../src/db/schema";
 
+const patch = (path: string, token: string, body?: unknown) =>
+  reqAuth("PATCH", path, token, body);
+
 describe("kulüpler (/api/clubs)", () => {
   let mustafa: string;
   let can: string;
@@ -95,17 +98,22 @@ describe("kulüpler (/api/clubs)", () => {
     ).toBe(403);
   });
 
-  it("danışman atama/kaldırma (admin)", async () => {
+  it("danışman davet ve kaldırma (admin)", async () => {
     const theatre = await db.query.clubs.findFirst({ where: { slug: "tiyatro" } });
     if (!theatre) throw new Error("seed'de tiyatro kulübü yok");
 
+    const inviteRes = await reqAuth(
+      "POST",
+      `/api/admin/universities/${antalyaUni}/clubs/${theatre.id}/advisors`,
+      elif,
+      { userId: (await me(ahmetHoca)).userId }
+    );
+    expect(inviteRes.status).toBe(201);
+    const invitationId = (await inviteRes.json()).data.id as string;
+
     expect(
-      (
-        await reqAuth("POST", `/api/admin/universities/${antalyaUni}/clubs/${theatre.id}/advisors`, elif, {
-          userId: (await me(ahmetHoca)).userId,
-        })
-      ).status
-    ).toBe(201);
+      (await patch(`/api/users/me/advisor-invitations/${invitationId}/accept`, ahmetHoca)).status
+    ).toBe(200);
 
     expect(
       (

@@ -35,6 +35,10 @@ import {
   membershipHistoryMessages,
   type MembershipHistoryMessageKey,
 } from "../../features/membership-history/membership-history.messages";
+import {
+  clubAdvisorMessages,
+  type ClubAdvisorMessageKey,
+} from "../../features/club-advisors/club-advisors.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -64,7 +68,8 @@ export const messages = mergeCatalogs(
   posterQrMessages,
   exportsMessages,
   academicTermMessages,
-  membershipHistoryMessages
+  membershipHistoryMessages,
+  clubAdvisorMessages
 );
 
 /**
@@ -94,4 +99,5 @@ export type MessageKey =
   | PosterQrMessageKey
   | ExportsMessageKey
   | AcademicTermMessageKey
-  | MembershipHistoryMessageKey;
+  | MembershipHistoryMessageKey
+  | ClubAdvisorMessageKey;

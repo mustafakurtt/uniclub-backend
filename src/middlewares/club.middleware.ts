@@ -39,7 +39,7 @@ const loadApprovedMembership = async (clubId: string, userId: string) => {
 
 const isClubAdvisor = async (clubId: string, userId: string) => {
   const advisor = await db.query.clubAdvisors.findFirst({
-    where: { clubId, userId },
+    where: { clubId, userId, leftAt: { isNull: true } },
   });
   return !!advisor;
 };

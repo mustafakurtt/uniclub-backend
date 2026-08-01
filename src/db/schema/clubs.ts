@@ -41,6 +41,9 @@ export const clubAdvisors = table("club_advisors", {
   userId: t.uuid("user_id").notNull(),
   // Tek kolonluk FK'ler yerine BİLEŞİK FK kullanılıyor (bkz. clubMembers).
   universityId: t.uuid("university_id").notNull(),
+  /** Danışmanlıktan çekilme — NULL = aktif danışman. */
+  leftAt: t.timestamp("left_at", { withTimezone: true }),
+  leaveReason: t.text("leave_reason"),
   ...timestamps,
 }, (cols) => [
   t.primaryKey({ columns: [cols.clubId, cols.userId] }),

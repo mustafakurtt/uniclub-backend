@@ -164,7 +164,7 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
     });
     if (membership && (membership.role === "officer" || membership.role === "president")) return true;
     const advisor = await db.query.clubAdvisors.findFirst({
-      where: { clubId, userId },
+      where: { clubId, userId, leftAt: { isNull: true } },
       columns: { userId: true },
     });
     return !!advisor;
@@ -222,7 +222,7 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
       columns: { userId: true },
     });
     const advisors = await db.query.clubAdvisors.findMany({
-      where: { clubId },
+      where: { clubId, leftAt: { isNull: true } },
       columns: { userId: true },
     });
     return [...new Set([...officers.map((o) => o.userId), ...advisors.map((a) => a.userId)])];

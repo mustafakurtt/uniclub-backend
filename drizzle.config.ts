@@ -21,6 +21,7 @@ export default defineConfig({
     "./src/db/schema/poster-qr.ts",
     "./src/db/schema/academic-terms.ts",
     "./src/db/schema/membership-events.ts",
+    "./src/db/schema/advisor-invitations.ts",
   ],
   out: "./src/db/migrations",     // SQL dosyalarının üretileceği yer
   dialect: "postgresql",          // Veritabanı türü
