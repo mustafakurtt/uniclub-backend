@@ -1,10 +1,14 @@
 # Antalya Bilim Üniversitesi — Öğrenci Toplulukları Yönergesi: Bulgular
 
-**Kaynak:** `ogrenci-toplulukları-yonergesi.pdf` (Form No SK-FR-0013, yayın 03.05.2018;
-belgede 17.11.2021 tarihli 0072 revizyon izi var) + 9 resmî form.
-**Çıkarım tarihi:** 2026-08-01. Metin, PDF'in `ToUnicode` haritaları çözülerek
-çıkarıldı; bazı büyük harfler (Ü, Ö, İ) kayıp olabilir — **madde numaraları ve
-sayılar güvenilir**, uzun alıntılar için PDF'e bakın.
+**Kaynak:** `ogrenci-toplulukları-yonergesi.pdf` + 9 resmî form.
+**Çıkarım tarihi:** 2026-08-01. Tam metin: `yonerge-metin.txt` (pdfjs-dist ile
+çıkarıldı, Türkçe karakterler eksiksiz).
+
+> **Düzeltme (ilk çıkarımdan sonra):** Sayfa altındaki `ÜY-FR-0013`, bu belgeye ait
+> bir numara **değil** — Antalya'nın **tüm iç yönergelerinde** kullanılan sayfa
+> şablonunun form numarası (aynısı Yaz Okulu Yönergesi'nde de var). Belgenin kendi
+> kodu ayrı bir `UY-YO-NNNN` numarasıdır. Ayrıca yönergede **"itiraz" kelimesi hiç
+> geçmiyor** — temiz metinle doğrulandı.
 
 > ⚠️ Bu **tek bir üniversite**. Aşağıdaki bulgular mimariyi değiştirmeden önce
 > en az 5-6 yönerge daha ile karşılaştırılmalı. Amaç neyin **ortak** (koda girer)
