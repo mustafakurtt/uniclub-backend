@@ -1,4 +1,4 @@
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 import { db } from "./index";
 import * as schema from "./schema";
 import { UniversityPermission, UNIVERSITY_PERMISSION_CATALOG } from "../features/university/university.permissions";
@@ -152,8 +152,11 @@ export async function provisionRbacCatalog(tx: DbExecutor): Promise<Record<strin
     }
   }
 
-  // 2. Yetkiler — key UNIQUE, çakışanları atla.
-  await tx.insert(schema.permissions).values(PERMISSION_CATALOG).onConflictDoNothing();
+  // 2. Yetkiler — key UNIQUE; açıklama katalogda değişirse DB'yi güncelle.
+  await tx.insert(schema.permissions).values(PERMISSION_CATALOG).onConflictDoUpdate({
+    target: schema.permissions.key,
+    set: { description: sql`excluded.description` },
+  });
   const allPermissions = await tx.select({ id: schema.permissions.id, key: schema.permissions.key }).from(schema.permissions);
   const permissionIdByKey: Record<string, string> = {};
   for (const p of allPermissions) permissionIdByKey[p.key] = p.id;

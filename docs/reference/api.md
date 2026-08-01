@@ -421,6 +421,7 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/integration/moderation.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
 | GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü; `revision_requested` ayrı kuyruk) |
+| GET | `/api/admin/universities/:universityId/club-applications/:applicationId` | `application.view` | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
@@ -430,6 +431,7 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 
 Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Özet `application.status` adımlardan türetilir; bildirim yalnızca nihai `approved`/`rejected` kararında. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |
+| GET | `/api/admin/universities/:universityId/clubs/:clubId` | `club.view` | Kulüp detayı + `counts` özeti |
 | PATCH | `/api/admin/universities/:universityId/clubs/:clubId/status` | `club.update` | Kulüp durumunu güncelle |
 | PATCH | `/api/admin/universities/:universityId/clubs/:clubId` | `club.update` | Kulüp bilgilerini güncelle (ad, açıklama, logo, kapak, joinPolicy) |
 | DELETE | `/api/admin/universities/:universityId/clubs/:clubId` | `club.delete` | Kulübü **kalıcı sil** (önce archived/rejected olmalı) |

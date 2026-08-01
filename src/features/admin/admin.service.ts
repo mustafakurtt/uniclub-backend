@@ -57,6 +57,29 @@ async function notifyApplicationRevisionRequested(
   });
 }
 
+function parseKeysetCursor(cursor?: string): Date | undefined {
+  if (!cursor) return undefined;
+  const cursorDate = new Date(cursor);
+  if (Number.isNaN(cursorDate.getTime())) {
+    throw badRequest("validation.failed");
+  }
+  return cursorDate;
+}
+
+function paginateByCreatedAt<T extends { createdAt: Date }>(rows: T[], limit: number) {
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? items[items.length - 1].createdAt.toISOString() : null;
+  return { items, nextCursor };
+}
+
+function paginateByStartsAt<T extends { startsAt: Date }>(rows: T[], limit: number) {
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? items[items.length - 1].startsAt.toISOString() : null;
+  return { items, nextCursor };
+}
+
 export const adminService = {
   /**
    * Aktörün YÖNETİM bağlamında görebileceği üniversiteler.
@@ -143,6 +166,28 @@ export const adminService = {
       ...application,
       applicant: application.applicant ? toSafeUser(application.applicant) : null,
     }));
+  },
+
+  async getClubApplication(universityId: string, applicationId: string) {
+    const application = await adminRepository.findClubApplicationDetail(universityId, applicationId);
+    if (!application) {
+      throw notFound("admin.applicationNotFound");
+    }
+    const revisionRequestCount = await adminRepository.countClubApplicationRevisionRequests(applicationId);
+    const { applicant, approvals, ...rest } = application;
+    return {
+      ...rest,
+      applicant: applicant ? toSafeUser(applicant) : null,
+      approvals: approvals.map((approval) => ({
+        step: approval.step,
+        approverRole: approval.approverRole,
+        status: approval.status,
+        note: approval.note,
+        reviewedAt: approval.reviewedAt,
+        approver: approval.approver ? toSafeUser(approval.approver) : null,
+      })),
+      revisionRequestCount,
+    };
   },
 
   async listFormationProposals(
@@ -258,6 +303,23 @@ export const adminService = {
     return await adminRepository.findClubsByUniversity(universityId, status);
   },
 
+  async getClub(universityId: string, clubId: string) {
+    const row = await adminRepository.findClubDetailWithCounts(universityId, clubId);
+    if (!row) {
+      throw notFound("admin.clubNotFound");
+    }
+    const { club, memberCount, pendingJoinRequests, advisorCount, upcomingActivities } = row;
+    return {
+      ...club,
+      counts: {
+        members: memberCount,
+        pendingJoinRequests,
+        upcomingActivities,
+        advisors: advisorCount,
+      },
+    };
+  },
+
   async updateClubStatus(universityId: string, clubId: string, data: UpdateClubStatusDTO) {
     const club = await adminRepository.findClubInUniversity(universityId, clubId);
     if (!club) {
@@ -370,6 +432,64 @@ export const adminService = {
     return members
       .filter((m) => m.user)
       .map((m) => ({ ...m, user: toSafeUser(m.user!) }));
+  },
+
+  async listClubAnnouncements(
+    universityId: string,
+    clubId: string,
+    limit: number,
+    cursor?: string
+  ) {
+    const club = await adminRepository.findClubInUniversity(universityId, clubId);
+    if (!club) {
+      throw notFound("admin.clubNotFound");
+    }
+    const cursorDate = parseKeysetCursor(cursor);
+    const rows = await adminRepository.listClubAnnouncementsForAdmin(clubId, limit, cursorDate);
+    const { items, nextCursor } = paginateByCreatedAt(rows, limit);
+    return {
+      items: items
+        .filter((a) => a.author)
+        .map((a) => ({ ...a, author: toSafeUser(a.author!) })),
+      nextCursor,
+    };
+  },
+
+  async listClubGallery(
+    universityId: string,
+    clubId: string,
+    limit: number,
+    cursor?: string
+  ) {
+    const club = await adminRepository.findClubInUniversity(universityId, clubId);
+    if (!club) {
+      throw notFound("admin.clubNotFound");
+    }
+    const cursorDate = parseKeysetCursor(cursor);
+    const rows = await adminRepository.listClubGalleryForAdmin(clubId, limit, cursorDate);
+    const { items, nextCursor } = paginateByCreatedAt(rows, limit);
+    return {
+      items: items
+        .filter((img) => img.uploader)
+        .map((img) => ({ ...img, uploader: toSafeUser(img.uploader!) })),
+      nextCursor,
+    };
+  },
+
+  async listClubActivities(
+    universityId: string,
+    clubId: string,
+    limit: number,
+    cursor?: string
+  ) {
+    const club = await adminRepository.findClubInUniversity(universityId, clubId);
+    if (!club) {
+      throw notFound("admin.clubNotFound");
+    }
+    const cursorDate = parseKeysetCursor(cursor);
+    const rows = await adminRepository.listClubActivitiesForAdmin(clubId, limit, cursorDate);
+    const { items, nextCursor } = paginateByStartsAt(rows, limit);
+    return { items, nextCursor };
   },
 
   async removeClubMember(universityId: string, clubId: string, userId: string) {

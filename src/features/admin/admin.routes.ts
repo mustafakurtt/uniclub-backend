@@ -24,6 +24,7 @@ import {
   requestRevisionApplicationSchema,
   updateClubSchema,
   updateUserDepartmentSchema,
+  adminClubPaginatedListQuerySchema,
 } from "./admin.schema";
 import { adminService } from "./admin.service";
 import { dashboardService } from "../dashboard/dashboard.service";
@@ -124,6 +125,17 @@ adminRoutes.get(
   }
 );
 
+// 4B. TEK BİR KULÜP BAŞVURUSU (detay — applicant + onay zinciri + revizyon sayacı)
+adminRoutes.get(
+  "/universities/:universityId/club-applications/:applicationId",
+  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, applicationId } = c.req.param();
+    const application = await adminService.getClubApplication(universityId, applicationId);
+    return ok(c, application, "admin.applicationFound");
+  }
+);
+
 // 5. KULÜP BAŞVURUSUNU ONAYLAMA (gerçek bir kulüp oluşturur)
 adminRoutes.patch(
   "/universities/:universityId/club-applications/:applicationId/approve",
@@ -218,6 +230,17 @@ adminRoutes.get(
   }
 );
 
+// 7B. TEK KULÜP DETAYI (özet sayaçlarla)
+adminRoutes.get(
+  "/universities/:universityId/clubs/:clubId",
+  ...guard(ClubPermission.VIEW, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, clubId } = c.req.param();
+    const club = await adminService.getClub(universityId, clubId);
+    return ok(c, club, "admin.clubFound");
+  }
+);
+
 // 8. KULÜP DURUMUNU GÜNCELLEME
 adminRoutes.patch(
   "/universities/:universityId/clubs/:clubId/status",
@@ -307,6 +330,45 @@ adminRoutes.get(
     const { universityId, clubId } = c.req.param();
     const members = await adminService.listClubMembers(universityId, clubId);
     return ok(c, members, "admin.membersListed");
+  }
+);
+
+// 13B. KULÜP DUYURULARI (admin listesi — taslaklar dahil, keyset sayfalama)
+adminRoutes.get(
+  "/universities/:universityId/clubs/:clubId/announcements",
+  ...guard(ClubPermission.VIEW, { tenantScoped: true }),
+  validate("query", adminClubPaginatedListQuerySchema),
+  async (c) => {
+    const { universityId, clubId } = c.req.param();
+    const { limit, cursor } = c.req.valid("query");
+    const result = await adminService.listClubAnnouncements(universityId, clubId, limit, cursor);
+    return ok(c, result, "admin.announcementsListed");
+  }
+);
+
+// 13C. KULÜP GALERİSİ (admin listesi, keyset sayfalama)
+adminRoutes.get(
+  "/universities/:universityId/clubs/:clubId/gallery",
+  ...guard(ClubPermission.VIEW, { tenantScoped: true }),
+  validate("query", adminClubPaginatedListQuerySchema),
+  async (c) => {
+    const { universityId, clubId } = c.req.param();
+    const { limit, cursor } = c.req.valid("query");
+    const result = await adminService.listClubGallery(universityId, clubId, limit, cursor);
+    return ok(c, result, "admin.galleryListed");
+  }
+);
+
+// 13D. KULÜP ETKİNLİKLERİ (admin listesi — taslaklar dahil, keyset sayfalama)
+adminRoutes.get(
+  "/universities/:universityId/clubs/:clubId/activities",
+  ...guard(ClubPermission.VIEW, { tenantScoped: true }),
+  validate("query", adminClubPaginatedListQuerySchema),
+  async (c) => {
+    const { universityId, clubId } = c.req.param();
+    const { limit, cursor } = c.req.valid("query");
+    const result = await adminService.listClubActivities(universityId, clubId, limit, cursor);
+    return ok(c, result, "admin.activitiesListed");
   }
 );
 
