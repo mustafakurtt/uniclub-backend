@@ -10,8 +10,9 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 A production-minded **multi-tenant SaaS backend** where a single deployment
-serves many universities — students, advisors, clubs, join requests,
-announcements and galleries — each tenant isolated by `universityId`. Built to
+serves many universities — students, advisors, clubs, join requests, events,
+announcements and galleries — each tenant isolated by `universityId`, plus a
+separate SaaS control plane for operating the tenants themselves. Built to
 explore real backend concerns: layered architecture, a portable RBAC engine,
 realtime delivery, background jobs, auditing and structured logging.
 
@@ -36,9 +37,30 @@ realtime delivery, background jobs, auditing and structured logging.
   RBAC + `guard()`, cache, redis, i18n, mail, metrics, graceful shutdown) — every
   project-specific detail injected via a `createX`/`configureX` seam, decoupled
   from the schema-bound `src/shared/`.
+- **SaaS control plane** — a separate `/api/platform` surface for tenant
+  lifecycle (trial/active/past_due/suspended), atomic onboarding and operator
+  accounts. Suspending a tenant cuts access on the *next* request across every
+  surface, guarded and unguarded alike. Platform permissions can never be
+  granted to a tenant role.
+- **Session security** — token-less admin provisioning: operators invite tenant
+  admins with a single-use, hashed, expiring token and never learn their
+  password. Session revocation rides on the authz snapshot already read each
+  request (`tokenVersion`), so a password change drops other devices with **no
+  extra Redis call and no deny-list**.
+- **Publishing pipeline** — announcements and events carry a draft/published
+  lifecycle, visibility scoping and **scheduled publishing** interpreted in the
+  tenant's own timezone. The trigger lives in Redis but Postgres is the source
+  of truth: a reconciliation sweep re-queues anything the queue lost, so a
+  scheduled post can never silently fail to publish.
+- **Public surface** — unauthenticated club and event pages plus poster QR
+  resolution, for people who don't have an account yet (prospective students,
+  open-day visitors). Serves an explicit public DTO — no member lists, no
+  attendee data, no personal names.
 - **Realtime notifications** — persisted **and** pushed over Bun-native
   WebSockets, authenticated with a single-use Redis ticket (no token in the
-  query string), fanned out across instances via Redis Pub/Sub.
+  query string), fanned out across instances via Redis Pub/Sub. Delivery is
+  batched, queued past a threshold, and filtered by per-type/per-club user
+  preferences — mandatory notices can never be muted.
 - **Background jobs** — email verification via BullMQ + nodemailer, captured
   locally by Mailpit; retries with exponential backoff.
 - **Append-only audit trail** — every mutating request (including denied 403s)
@@ -91,9 +113,13 @@ src/
 │                 auth · rbac/guard · cache · redis · i18n · mail · metrics · shutdown
 ├─ db/            schema.ts (source of truth), relations, migrations, seed
 ├─ features/      auth · users · university · admin · clubs · announcements ·
-│                 gallery · notifications · audit · moderation  (routes/service/repo/…)
-├─ middlewares/   error · rate-limit · request-logger · verified/active-user
-├─ shared/        rbac cache/repo · cache · mail · redis · ws · logger · metrics · i18n · utils
+│                 activities · gallery · media · dashboard · notifications ·
+│                 audit · moderation · platform · public · poster-qr ·
+│                 tenant-settings  (routes/service/repo/…)
+├─ middlewares/   error · rate-limit · request-logger · verified/active-user ·
+│                 optional-auth · app-locale
+├─ shared/        rbac cache/repo · cache · mail · redis · ws · publishing ·
+│                 i18n · logger · metrics · utils
 └─ index.ts       app wiring + Bun.serve (import.meta.main) + graceful shutdown
 ```
 
@@ -142,12 +168,15 @@ Verification emails land in the Mailpit inbox at **http://localhost:8025**.
 | --- | --- |
 | `bun run dev` | Dev server with hot reload |
 | `bun run typecheck` | `tsc --noEmit` (run in CI) |
+| `bun run docs:check` | Doc link, API-coverage and constant-drift checks (run in CI) |
 | `bun run test:all` | Provision the isolated test DB, then run the test suite |
 | `bun run test` | `bun test` — integration tests (run in CI) |
 | `bun run db:generate` | Generate a SQL migration from `schema.ts` |
 | `bun run db:migrate` | Apply pending migrations |
+| `bun run db:reset` | Drop, regenerate, migrate and seed in one shot |
 | `bun run db:push` | Push schema without a migration file |
 | `bun run db:seed` | Seed universities, roles and sample data |
+| `bun run db:bootstrap` | Provision the RBAC catalog + first `super_admin` (production) |
 | `bun run db:sync-permissions` | Backfill permission keys into an existing DB |
 
 ## Testing
@@ -163,17 +192,23 @@ and never touch dev data.
 bun run test:all   # provision the isolated test DB, then run the suite
 ```
 
-Covered today: health/readiness, registration (email-domain → tenant inference,
-unknown-domain and duplicate rejection), login (JWT issue, wrong-password and
-suspended-account rejection), and the RBAC matrix — `401` without a token, `403`
-without the permission, `403` when a tenant admin reaches into another
-university, and `200` for `super_admin` across tenants (scope bypass).
+**385 tests** across auth (registration, login timing, email verification,
+self-service reset, session revocation), the RBAC matrix and multi-tenant
+isolation, clubs and memberships, activities and RSVP, announcements and their
+publish lifecycle, notification preferences and fan-out, the platform control
+plane, tenant settings, scheduled publishing and its reconciliation sweep, the
+public surface, and QR resolution and check-in.
+
+The suite shares one seeded database, so isolation rules matter — see
+[`tests/README.md`](tests/README.md). Order dependence is a real failure mode
+here: verify with more than one file ordering before trusting a green run.
 
 ## Environment
 
 Validated at startup via `src/config/env.ts` (Zod) — the app **fails fast** with
 a clear message on any invalid/missing var. Required: `PORT`, `NODE_ENV`,
-`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`. Mail (`SMTP_*`, `MAIL_FROM`, `APP_URL`),
+`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (min 32 chars; common placeholder
+values are rejected outright). Mail (`SMTP_*`, `MAIL_FROM`, `APP_URL`),
 rate-limit, logging (`LOG_LEVEL`, `LOG_FILE`) and security (`CORS_ORIGINS` — set in
 production — `MAX_BODY_BYTES`) vars have dev defaults. See
 [`.env.example`](.env.example).
@@ -193,11 +228,22 @@ docker compose -f docker-compose.prod.yml up -d --build
 All secrets come from the environment; `docker-compose.prod.yml` contains no
 values and fails fast if a required variable is missing.
 
-CI builds the image, applies migrations to a clean database, boots the container
-and waits for `/health` before anything is deployed. `develop` deploys to the
-`development` environment automatically; `main` deploys to `production` behind a
-required manual approval. Backups, migration rules and incident response are
-documented in **[docs/operations/runbook.md](docs/operations/runbook.md)**.
+**CI never deploys.** On every push it builds the production image, applies
+migrations from a separate migrator image to a clean database, boots the
+container with `NODE_ENV=production` and waits for `/health` — proving a release
+candidate actually starts, not just compiles.
+
+Production **pulls**: the deploy agent on the production host reads GitHub, finds
+the latest release, verifies its CI was green and deploys itself
+([`scripts/deploy-agent.sh`](scripts/deploy-agent.sh)). GitHub never connects
+inward — on a public repo a self-hosted runner would hand fork PRs a code
+execution surface. Migrations run as their own step before the app starts, and a
+failed deploy rolls back to the previous image.
+
+The app also refuses to start in production if migrations are pending, so a
+missed migration fails loudly at boot instead of silently at the first query.
+Backups, migration rules and incident response are documented in
+**[docs/operations/runbook.md](docs/operations/runbook.md)**.
 
 ## API & docs
 

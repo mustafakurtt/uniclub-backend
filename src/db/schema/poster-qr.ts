@@ -30,7 +30,7 @@ export const posterQrCodes = table(
     sourceLabel: t.varchar("source_label", { length: 128 }).notNull(),
     targetType: posterQrTargetTypeEnum("target_type").notNull(),
     targetClubId: t.uuid("target_club_id").references(() => clubs.id, { onDelete: "restrict" }),
-    targetActivityId: t.uuid("target_activity_id").references(() => activities.id, { onDelete: "restrict" }),
+    targetActivityId: t.uuid("target_activity_id").references(() => activities.id, { onDelete: "cascade" }),
     validFrom: t.timestamp("valid_from", { withTimezone: true }),
     validUntil: t.timestamp("valid_until", { withTimezone: true }),
     scanCount: t.integer("scan_count").default(0).notNull(),
@@ -47,12 +47,18 @@ export const posterQrCodes = table(
 );
 
 /** Tarama zaman dağılımı — append-only. */
-export const posterQrScans = table("poster_qr_scans", {
-  id: t.uuid().primaryKey().defaultRandom(),
-  qrCodeId: t
-    .uuid("qr_code_id")
-    .references(() => posterQrCodes.id, { onDelete: "cascade" })
-    .notNull(),
-  scannedAt: t.timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
-  ...createdAtColumn,
-});
+export const posterQrScans = table(
+  "poster_qr_scans",
+  {
+    id: t.uuid().primaryKey().defaultRandom(),
+    qrCodeId: t
+      .uuid("qr_code_id")
+      .references(() => posterQrCodes.id, { onDelete: "cascade" })
+      .notNull(),
+    scannedAt: t.timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
+    ...createdAtColumn,
+  },
+  (cols) => [
+    t.index("poster_qr_scans_qr_code_id_scanned_at_idx").on(cols.qrCodeId, cols.scannedAt),
+  ]
+);

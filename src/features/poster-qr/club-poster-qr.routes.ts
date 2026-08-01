@@ -18,6 +18,28 @@ clubPosterQrRoutes.get("/", authMiddleware, requireClubStaff, async (c) => {
   return ok(c, list, "posterQr.listed");
 });
 
+clubPosterQrRoutes.get("/analytics", authMiddleware, requireClubStaff, async (c) => {
+  const clubId = c.req.param("clubId")!;
+  const user = c.get("user");
+  const analytics = await posterQrService.getOverviewAnalyticsForClub(
+    clubId,
+    requireTenant(user.universityId)
+  );
+  return ok(c, analytics, "posterQr.analyticsReady");
+});
+
+clubPosterQrRoutes.get("/:qrId/analytics", authMiddleware, requireClubStaff, async (c) => {
+  const clubId = c.req.param("clubId")!;
+  const qrId = c.req.param("qrId")!;
+  const user = c.get("user");
+  const analytics = await posterQrService.getCodeAnalyticsForClub(
+    clubId,
+    requireTenant(user.universityId),
+    qrId
+  );
+  return ok(c, analytics, "posterQr.analyticsReady");
+});
+
 clubPosterQrRoutes.post(
   "/",
   authMiddleware,

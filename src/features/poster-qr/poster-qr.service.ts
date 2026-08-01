@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { posterQrRepository } from "./poster-qr.repository";
+import { posterQrAnalyticsRepository } from "./poster-qr-analytics.repository";
 import { posterQrCache, posterQrEffects } from "./poster-qr.cache";
 import { badRequest, forbidden, notFound } from "../../shared/utils/errors";
 import type {
@@ -101,6 +102,27 @@ async function assertActivityHostedByClub(clubId: string, activityId: string) {
   if (!link) {
     throw forbidden("activity.notAHostClub");
   }
+}
+
+async function resolveTimezone(universityId: string) {
+  const uni = await posterQrAnalyticsRepository.findUniversityTimezone(universityId);
+  return uni?.timezone ?? "Europe/Istanbul";
+}
+
+async function assertCodeAccessibleForClub(
+  clubId: string,
+  universityId: string,
+  row: NonNullable<Awaited<ReturnType<typeof posterQrRepository.findById>>>
+) {
+  if (row.universityId !== universityId) {
+    throw notFound("posterQr.notFound");
+  }
+  if (row.targetClubId === clubId) return;
+  if (row.targetActivityId) {
+    await assertActivityHostedByClub(clubId, row.targetActivityId);
+    return;
+  }
+  throw forbidden("posterQr.clubTargetMismatch");
 }
 
 export const posterQrService = {
@@ -235,6 +257,35 @@ export const posterQrService = {
 
   listForUniversity(universityId: string) {
     return posterQrRepository.listByUniversity(universityId).then((rows) => rows.map(toDto));
+  },
+
+  async getCodeAnalyticsForClub(clubId: string, universityId: string, qrId: string) {
+    const row = await posterQrRepository.findById(qrId);
+    if (!row) throw notFound("posterQr.notFound");
+    await assertCodeAccessibleForClub(clubId, universityId, row);
+    const timezone = await resolveTimezone(universityId);
+    return await posterQrAnalyticsRepository.buildCodeAnalytics(row, timezone);
+  },
+
+  async getOverviewAnalyticsForClub(clubId: string, universityId: string) {
+    const rows = await posterQrAnalyticsRepository.listCodesForClub(clubId);
+    const timezone = await resolveTimezone(universityId);
+    return await posterQrAnalyticsRepository.buildOverviewAnalytics(rows, timezone);
+  },
+
+  async getCodeAnalyticsForUniversity(universityId: string, qrId: string) {
+    const row = await posterQrRepository.findById(qrId);
+    if (!row || row.universityId !== universityId) {
+      throw notFound("posterQr.notFound");
+    }
+    const timezone = await resolveTimezone(universityId);
+    return await posterQrAnalyticsRepository.buildCodeAnalytics(row, timezone);
+  },
+
+  async getOverviewAnalyticsForUniversity(universityId: string) {
+    const rows = await posterQrAnalyticsRepository.listCodesForUniversity(universityId);
+    const timezone = await resolveTimezone(universityId);
+    return await posterQrAnalyticsRepository.buildOverviewAnalytics(rows, timezone);
   },
 
   async resolve(code: string): Promise<PosterQrResolveResult> {

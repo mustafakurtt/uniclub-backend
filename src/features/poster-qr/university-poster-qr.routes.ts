@@ -27,6 +27,26 @@ universityPosterQrRoutes.get(
   }
 );
 
+universityPosterQrRoutes.get(
+  "/:universityId/poster-qr/analytics",
+  ...guard(PosterQrPermission.UNIVERSITY_MANAGE, { tenantScoped: true }),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const analytics = await posterQrService.getOverviewAnalyticsForUniversity(universityId);
+    return ok(c, analytics, "posterQr.analyticsReady");
+  }
+);
+
+universityPosterQrRoutes.get(
+  "/:universityId/poster-qr/:qrId/analytics",
+  ...guard(PosterQrPermission.UNIVERSITY_MANAGE, { tenantScoped: true }),
+  async (c) => {
+    const { universityId, qrId } = c.req.param();
+    const analytics = await posterQrService.getCodeAnalyticsForUniversity(universityId, qrId);
+    return ok(c, analytics, "posterQr.analyticsReady");
+  }
+);
+
 universityPosterQrRoutes.post(
   "/:universityId/poster-qr",
   ...guard(PosterQrPermission.UNIVERSITY_MANAGE, { tenantScoped: true }),

@@ -40,6 +40,10 @@ sayfa rotasına yönlendir; diğer durumlarda kullanıcıya ayırt edilebilir me
 
 Yönetim uçları: `docs/reference/api.md` §15 (kulüp staff + `poster_qr.university.manage`).
 
+**Tarama analitiği (T6.2):** `GET .../poster-qr/analytics` (kaynak karşılaştırması) ve
+`GET .../poster-qr/:qrId/analytics` (kod bazlı gün/saat dağılımı). Gün sınırları tenant
+`timezone` ile (`universities.timezone`); ölçek için `poster_qr_scans` indeksli + `GROUP BY`.
+
 ## Ne görünür / ne görünmez
 
 | Görünür (public DTO) | Asla görünmez |

@@ -1,3 +1,5 @@
+> **Senkron kopya** — Kaynak: `../uniclub-backend/docs/reference/api.md` · Backend commit: `5e2646e`
+
 # University Club Backend — Frontend API Dokümanı
 
 Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tüm bilgileri içerir: base URL, auth akışı, yetki (RBAC) modeli ve her endpoint'in request/response şekli.
