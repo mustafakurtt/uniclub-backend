@@ -380,6 +380,54 @@ describe("Activities — draft/publish, check-in, co-host", () => {
     expect(after.find((a) => a.user.id === mustafaId)?.checkedInAt).toBeNull();
   });
 
+  // ── QR yoklama ─────────────────────────────────────────────────────────────
+  it("QR yoklama: geçerli token + RSVP'li kullanıcı işaretlenir; süresi geçmiş token reddedilir; ikinci okutma no-op; RSVP'siz reddedilir", async () => {
+    const startsAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const id = await created(
+      await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+        title: "QR Yoklama Testi",
+        startsAt,
+        publish: true,
+      })
+    );
+    await reqAuth("POST", `/api/activities/${id}/rsvp`, mustafa, { status: "going" });
+
+    // Pencere dışı (çok uzak gelecek) → staff QR bile alamaz
+    const farId = await created(
+      await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+        title: "QR Uzak Etkinlik",
+        startsAt: soon(9),
+        publish: true,
+      })
+    );
+    expect((await get(`/api/clubs/${techClubId}/activities/${farId}/check-in-qr`, mustafa)).status).toBe(400);
+
+    const qr = await data<{ token: string }>(
+      await get(`/api/clubs/${techClubId}/activities/${id}/check-in-qr`, mustafa)
+    );
+
+    // RSVP'siz sen → 403
+    expect(
+      (await reqAuth("POST", `/api/activities/${id}/check-in`, sen, { token: qr.token })).status
+    ).toBe(403);
+
+    const mustafaId = await meId(mustafa);
+    expect((await reqAuth("POST", `/api/activities/${id}/check-in`, mustafa, { token: qr.token })).status).toBe(200);
+
+    const attendees = await data<{ user: { id: string }; checkedInAt: string | null }[]>(
+      await get(`/api/clubs/${techClubId}/activities/${id}/attendees`, mustafa)
+    );
+    expect(attendees.find((a) => a.user.id === mustafaId)?.checkedInAt).toBeTruthy();
+
+    // İkinci okutma no-op (200, hata değil)
+    expect((await reqAuth("POST", `/api/activities/${id}/check-in`, mustafa, { token: qr.token })).status).toBe(200);
+
+    // Süresi geçmiş / yanlış token
+    expect(
+      (await reqAuth("POST", `/api/activities/${id}/check-in`, mustafa, { token: "invalid-token" })).status
+    ).toBe(400);
+  });
+
   // ── Co-host (aynı üniversite) ─────────────────────────────────────────────────
   it("co-host (aynı üni): davet invited → kabul accepted; kendine/çift davet + non-host reddedilir", async () => {
     const id = await created(

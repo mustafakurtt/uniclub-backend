@@ -573,6 +573,7 @@ etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva s
 | GET | `/api/activities/:activityId` | Detay (görünürlük/tenant/yayın kuralları uygulanır) |
 | POST | `/api/activities/:activityId/rsvp` | Katılım bildir — `{ status: "going"\|"interested" }` (vars. `going`, kapasite kontrollü) |
 | DELETE | `/api/activities/:activityId/rsvp` | Katılımı geri al (idempotent) |
+| POST | `/api/activities/:activityId/check-in` | QR yoklama — `{ token }`; RSVP + görünürlük; ikinci okutma no-op |
 
 **Kulüp-içi yönetim** — `/api/clubs/:clubId/activities` (kulüp alt-kaynağı; yazma = host staff):
 
@@ -585,6 +586,7 @@ etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva s
 | POST | `.../:activityId/cancel` | host staff (katılımcılara bildirim) |
 | GET | `.../:activityId/attendees` | host staff |
 | POST\|DELETE | `.../:activityId/attendees/:userId/check-in` | host staff (yoklama işaretle/geri al) |
+| GET | `.../:activityId/check-in-qr` | host staff (dönen yoklama QR token'ı, ~30s ömür) |
 | POST\|GET | `.../:activityId/co-hosts` | host staff (kulüp davet et `{clubId}` / listele) |
 | DELETE | `.../:activityId/co-hosts/:coClubId` | host staff (co-host kaldır) |
 | POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
@@ -634,8 +636,21 @@ Kimlik doğrulama **yok**. IP başına hız sınırı (120/dk). Tam sözleşme: 
 |---|---|---|
 | GET | `/api/public/universities/:universitySlug/clubs/:clubSlug` | Kulüp tanıtım + yaklaşan `university` etkinlikleri |
 | GET | `/api/public/universities/:universitySlug/activities/:activityId` | Yayınlanmış `university` etkinlik detayı |
+| GET | `/api/public/qr/:code` | Afiş QR çözümleme — `active` hedef veya `expired`/`cancelled`/`not_yet_active` (404 yalnızca bilinmeyen kod) |
 
 Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404**.
+
+#### Afiş QR yönetimi
+
+| Method | Path | Kim | Açıklama |
+|---|---|---|---|
+| GET/POST | `/api/clubs/:clubId/poster-qr` | host staff | Kulüp kapsamı QR oluştur/listele |
+| PATCH | `/api/clubs/:clubId/poster-qr/:qrId` | host staff | Hedef/süre/etiket güncelle |
+| POST | `/api/clubs/:clubId/poster-qr/:qrId/cancel` | host staff | İptal |
+| GET/POST | `/api/universities/:universityId/poster-qr` | `poster_qr.university.manage` | Okul geneli QR |
+| PATCH | `/api/universities/:universityId/poster-qr/:qrId` | aynı | Güncelle |
+| POST | `/api/universities/:universityId/poster-qr/:qrId/cancel` | aynı | İptal |
+
 
 ---
 

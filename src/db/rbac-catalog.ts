@@ -12,6 +12,7 @@ import { DashboardPermission, DASHBOARD_PERMISSION_CATALOG } from "../features/d
 import { AuditPermission, AUDIT_PERMISSION_CATALOG } from "../features/audit/audit.permissions";
 import { PlatformPermission, PLATFORM_PERMISSION_CATALOG } from "../features/platform/platform.permissions";
 import { TENANT_SETTINGS_PERMISSION_CATALOG, TenantSettingsPermission } from "../features/tenant-settings/tenant-settings.permissions";
+import { POSTER_QR_PERMISSION_CATALOG, PosterQrPermission } from "../features/poster-qr/poster-qr.permissions";
 import type { DbExecutor } from "./executor";
 
 /**
@@ -51,6 +52,7 @@ export const PERMISSION_CATALOG: { key: string; description: string }[] = [
   ...AUDIT_PERMISSION_CATALOG,
   ...PLATFORM_PERMISSION_CATALOG,
   ...TENANT_SETTINGS_PERMISSION_CATALOG,
+  ...POSTER_QR_PERMISSION_CATALOG,
   { key: AuthPermission.ROLE_MANAGE, description: "Rol ve yetki kataloğu yönetimi" },
   { key: AuthPermission.PERMISSION_MANAGE, description: "Yetki tanımlama" },
 ];
@@ -68,6 +70,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE, ClubPermission.DELETE,
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
     AnnouncementPermission.UNIVERSITY_MANAGE,
+    PosterQrPermission.UNIVERSITY_MANAGE,
     DashboardPermission.VIEW,
     UniversityPermission.UPDATE,
     UniversityPermission.FACULTY_CREATE, UniversityPermission.FACULTY_UPDATE, UniversityPermission.FACULTY_DELETE,
@@ -84,6 +87,7 @@ export const ROLE_BUNDLES: Record<string, string[]> = {
     ClubPermission.UPDATE, ClubPermission.ADVISOR_MANAGE, ClubPermission.MEMBER_MANAGE,
     AnnouncementPermission.MODERATE, GalleryPermission.MODERATE, ActivityPermission.MODERATE,
     AnnouncementPermission.UNIVERSITY_MANAGE,
+    PosterQrPermission.UNIVERSITY_MANAGE,
     DashboardPermission.VIEW,
   ],
   // Öğrenci İşleri / BİDB: akademik yapı + bölüm atama.

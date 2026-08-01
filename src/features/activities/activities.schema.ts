@@ -63,3 +63,8 @@ export const listActivitiesQuerySchema = z.object({
   search: z.string().min(1).max(256).optional(),
 });
 export type ListActivitiesQueryDTO = z.infer<typeof listActivitiesQuerySchema>;
+
+export const selfCheckInSchema = z.object({
+  token: z.string().min(1, "Yoklama token'ı gerekli."),
+});
+export type SelfCheckInDTO = z.infer<typeof selfCheckInSchema>;

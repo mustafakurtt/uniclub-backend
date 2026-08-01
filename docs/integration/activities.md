@@ -45,6 +45,7 @@ Tümü `Bearer` ister; tenant JWT'den çözülür (path'te `universityId` yoktur
 | GET | `/api/activities/:activityId` | Etkinlik detayı (görünürlük/tenant/yayın kuralları uygulanır) |
 | POST | `/api/activities/:activityId/rsvp` | Katılım bildir (`{ status: "going"\|"interested" }`, varsayılan `going`) |
 | DELETE | `/api/activities/:activityId/rsvp` | Katılımı geri al (idempotent) |
+| POST | `/api/activities/:activityId/check-in` | **QR yoklama:** body `{ token }` — RSVP + görünürlük kapısı; ikinci okutma no-op |
 
 **`scope`** (varsayılan `upcoming`): `upcoming` (başlangıç ≥ şimdi, artan) ·
 `past` (başlangıç < şimdi, azalan) · `all`. **`search`**: başlık `ILIKE`.
@@ -108,6 +109,7 @@ Announcements/gallery gibi kulüp alt-kaynağı. Listeleme her giriş yapmış k
 | GET | `/api/clubs/:clubId/activities/:activityId/attendees` | host staff | Katılımcı listesi (safe user + rsvp + `checkedInAt`) |
 | POST | `/api/clubs/:clubId/activities/:activityId/attendees/:userId/check-in` | host staff | **Yoklama:** katılımcıyı "geldi" işaretle |
 | DELETE | `/api/clubs/:clubId/activities/:activityId/attendees/:userId/check-in` | host staff | Yoklama işaretini geri al |
+| GET | `/api/clubs/:clubId/activities/:activityId/check-in-qr` | host staff | **Dönen yoklama QR** — `{ token, expiresAt }` (~30s ömür) |
 
 ### Co-host davet/kabul — `/api/clubs/:clubId/activities/:activityId/...`
 
@@ -179,4 +181,15 @@ Etkinlik akışı iki yeni bildirim tipi üretir (bkz. [notifications-and-limits
 ## Kapsam notu
 
 - **Leaderboard/turnuva skorlaması** ayrı bir domain olacaktır — `activity_attendees` yalnızca RSVP+yoklamadır, skor tutmaz.
+
+### QR yoklama (T10.1)
+
+Staff ekranında `GET .../check-in-qr` ile dönen kısa ömürlü token gösterilir; öğrenci
+`POST /api/activities/:activityId/check-in` ile kendi katılımını işaretler. Kurallar:
+
+- Yalnızca RSVP'si olan ve etkinliği görebilen kullanıcı (aynı `assertCanRsvp` kapısı).
+- Token ~30 saniye geçerli; paylaşılsa işe yaramaz.
+- Pencere: başlangıçtan **30 dk önce** — bitiş + **30 dk** (bitiş yoksa başlangıç + 2 saat varsayımı).
+- İkinci okutma hata değil (no-op, `checkedInAt` zaten dolu).
+- Staff elle işaretleme (`POST/DELETE .../attendees/:userId/check-in`) aynen devam eder.
 - `rsvp_status.waitlist` şema düzeyinde hazır; bekleme listesi mantığı (kontenjan dolunca sıraya alma) henüz uygulanmadı — dolu etkinlikte `going` reddedilir.

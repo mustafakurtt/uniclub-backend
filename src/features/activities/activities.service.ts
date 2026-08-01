@@ -10,6 +10,7 @@ import {
   enqueueScheduledPublish,
 } from "../../shared/publishing/scheduled-publish.queue";
 import { CreateActivityDTO, UpdateActivityDTO, ListActivitiesQueryDTO, RsvpDTO } from "./activities.schema";
+import { checkInQrCache } from "./check-in-qr.cache";
 import type { Activity } from "./activities.types";
 
 type ActivityDetail = NonNullable<Awaited<ReturnType<typeof activitiesRepository.findDetailById>>>;
@@ -470,6 +471,38 @@ export const activitiesService = {
   async resolveViewable(userId: string, universityId: string, activityId: string) {
     return await assertCanRsvp(userId, universityId, activityId);
   },
+
+  /** Staff ekranında gösterilen dönen yoklama QR token'ı. */
+  async getCheckInQr(hostClubId: string, activityId: string) {
+    const activity = await this.requireHostedActivity(hostClubId, activityId);
+    assertCheckInWindow(activity.startsAt, activity.endsAt);
+    return await checkInQrCache.getOrRotate(activityId);
+  },
+
+  /**
+   * Öğrenci kendi yoklamasını QR ile işaretler — RSVP + görünürlük kapısı,
+   * kısa ömürlü token doğrulaması; zaten işaretliyse no-op.
+   */
+  async selfCheckIn(userId: string, universityId: string, activityId: string, token: string) {
+    const detail = await assertCanRsvp(userId, universityId, activityId);
+    assertCheckInWindow(detail.startsAt, detail.endsAt);
+
+    const attendee = await activitiesRepository.findAttendee(activityId, userId);
+    if (!attendee) {
+      throw forbidden("attendee.notAttendee");
+    }
+
+    const valid = await checkInQrCache.validate(activityId, token);
+    if (!valid) {
+      throw badRequest("activity.checkInTokenInvalid");
+    }
+
+    if (attendee.checkedInAt) {
+      return attendee;
+    }
+
+    return await activitiesRepository.setCheckIn(activityId, userId, new Date());
+  },
 };
 
 // ── yardımcılar ────────────────────────────────────────────────────────────
@@ -481,6 +514,24 @@ function assertValidWindow(startsAt: Date, endsAt: Date | null | undefined) {
   }
   if (endsAt && endsAt.getTime() < startsAt.getTime()) {
     throw badRequest("activity.endBeforeStart");
+  }
+}
+
+/** Yoklama QR penceresi: başlangıçtan 30 dk önce — bitiş + 30 dk (bitiş yoksa +2h varsayım). */
+const CHECK_IN_WINDOW_BEFORE_MS = 30 * 60 * 1000;
+const CHECK_IN_WINDOW_AFTER_MS = 30 * 60 * 1000;
+const DEFAULT_EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
+
+function assertCheckInWindow(startsAt: Date, endsAt: Date | null) {
+  const now = Date.now();
+  const openAt = startsAt.getTime() - CHECK_IN_WINDOW_BEFORE_MS;
+  const eventEnd = endsAt ?? new Date(startsAt.getTime() + DEFAULT_EVENT_DURATION_MS);
+  const closeAt = eventEnd.getTime() + CHECK_IN_WINDOW_AFTER_MS;
+  if (now < openAt) {
+    throw badRequest("activity.checkInNotOpen");
+  }
+  if (now > closeAt) {
+    throw badRequest("activity.checkInClosed");
   }
 }
 

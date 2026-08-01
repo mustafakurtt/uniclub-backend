@@ -44,6 +44,10 @@ export const activitiesMessages = defineCatalog({
     "attendee.notAttendee": "Bu kullanıcı etkinliğe katılım bildirmemiş.",
     "attendee.checkedIn": "Katılım (yoklama) işaretlendi.",
     "attendee.checkInUndone": "Yoklama işareti kaldırıldı.",
+    "activity.checkInNotOpen": "Yoklama henüz açılmadı.",
+    "activity.checkInClosed": "Yoklama süresi doldu.",
+    "activity.checkInTokenInvalid": "Yoklama kodu geçersiz veya süresi doldu.",
+    "activity.checkInQrReady": "Yoklama QR kodu hazır.",
   },
   en: {
     // activity — error
@@ -80,6 +84,10 @@ export const activitiesMessages = defineCatalog({
     "attendee.notAttendee": "This user has not RSVP'd to the activity.",
     "attendee.checkedIn": "Attendance (check-in) marked.",
     "attendee.checkInUndone": "Check-in mark removed.",
+    "activity.checkInNotOpen": "Check-in is not open yet.",
+    "activity.checkInClosed": "Check-in window has closed.",
+    "activity.checkInTokenInvalid": "Check-in code is invalid or expired.",
+    "activity.checkInQrReady": "Check-in QR code is ready.",
   },
 });
 
