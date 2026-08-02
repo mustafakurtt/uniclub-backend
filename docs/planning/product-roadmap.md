@@ -970,6 +970,57 @@ bağlanmadığı belgelenmeli.
 **M3 sırasında araya giren işler:** M2.7 (arayüz cilası + T10.4 üniversiteler
 arası keşif) ve dashboard yeniden tasarımı. İkisi de kayda geçirildi.
 
+### M3.5 — Yüzey kapsaması ve belge akışı ★ — **araya girdi (2026-08-02)**
+
+**Not:** Yol haritasından üçüncü planlı sapma. Kullanıcı şunu fark etti:
+öğrenci menüsünde yalnızca dört öğe var (Ana Sayfa · Kulüpler · Etkinlikler ·
+Keşfet) ama backend çok daha fazlasını destekliyor. Menü sayısı sorun değil —
+**derinlik** sorun. Ve araştırmayla kanıtlanmış bir açık var.
+
+#### 1. Kuruluş başvurusunda BELGE YOK ★ — en somut açık
+
+`createApplicationSchema` bugün yalnızca `proposedName` ve `description`
+taşıyor. Oysa incelenen **üç yönergenin üçü de** belge zorunlu kılıyor:
+
+| Kurum | İstenen |
+| --- | --- |
+| Antalya Bilim | Tüzük, Yönetim Kurulu listesi, Üye listesi, **Danışman Muvafakatnamesi** |
+| Konya Teknik | Kurucu listesi (OTK-001), Tüzük (OTK-002), Danışman formu (OTK-003), yıllık faaliyet planı |
+| Akdeniz | Tüzük + **ıslak imzalı** kurucu formu (50 kişi) |
+
+**Altyapı zaten var:** `/api/uploads` çalışıyor. Eksik olan başvuruya
+bağlanması. Hangi belgelerin zorunlu olduğu **tenant ayarı** olmalı — kurumdan
+kuruma değişiyor (T4.1'deki kontrol listesi deseniyle aynı mantık).
+
+Not: Akdeniz ve Antalya hâlâ ıslak imza istiyor. Ürün ıslak imzayı ortadan
+kaldıramaz ama **imzalı belgenin taranmış hâlini** taşıyabilir — T1.1'in
+"imza yerine dijital destek" hedefiyle çelişmez, onu tamamlar.
+
+#### 2. Yüzey kapsama tablosu — önce ölç
+
+Backend'in her ucunu frontend'de bir ekranla eşleştiren tablo çıkarılacak.
+`docs/reference/api.md` uçları zaten listeliyor; karşısına **"hangi ekranda"**
+sütunu eklenecek. **Boş kalan satırlar eksik listesidir.**
+
+Sonra `docs:check`'e kapı: yeni uç eklenip yüzeyi yazılmazsa CI uyarsın.
+Bu projede üç kez öğrenildi — *zorlanmayan kural kural değildir*
+(bkz. `optOutable`, `sunsetAfter`, `--ignore-conflicts`).
+
+#### 3. Bilinen yüzey boşlukları
+
+- **Platform paneli (FE-4)** — `/api/platform` mount edilmiş (tenant yaşam
+  döngüsü, operatör hesapları, çapraz tenant destek); frontend'de **tek sayfa
+  yok**. SaaS'ın satış/operasyon tarafı görünmez.
+- **Bildirim tercihleri** — backend'de tip bazlı susturma ve opt-out mantığı
+  var; arayüzde yalnızca zil ikonu, tercih ekranı yok.
+- **Kulüp-içi yönetim derinliği** — genel kurul kaydı bugün yalnızca
+  `/admin/clubs/:clubId` altında, yani SKS'de. Oysa yönergede o toplantıyı
+  yapan **kulübün kendisi**; başkan kendi genel kurulunu kaydedemiyor.
+  Duyuru/etkinlik/galeri için kulüp tarafı yüzeyleri de **ölçülmedi**.
+
+**Sıra:** önce tablo (2), sonra tabloya göre öncelik. Belge akışı (1)
+tablodan bağımsız olarak zaten kesin — araştırmayla kanıtlı.
+
 ### M4 — Katılım ve tanınırlık
 
 - T3.3 **gönüllülük saati + etkinlik transkripti**
