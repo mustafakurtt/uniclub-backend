@@ -16,6 +16,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 - [Kimlik Doğrulama (Auth)](#kimlik-doğrulama-auth)
 - [Yetkilendirme Modeli (RBAC)](#yetkilendirme-modeli-rbac)
 - [Endpoint Referansı](#endpoint-referansı)
+  - [Yüzey kapsaması (frontend eşlemesi)](./api-surface-coverage.md)
   - [Auth](#1-auth--apiauth)
   - [Users (self-service)](#2-users--apiusers)
   - [University](#3-university--apiuniversities)
@@ -139,6 +140,10 @@ Sistemde **iki bağımsız yetki katmanı** vardır — birbirine karıştırıl
 ---
 
 ## Endpoint Referansı
+
+> **Yüzey kapsaması:** Her uca hangi frontend ekranının çağırdığını gösteren ölçüm tablosu
+> [api-surface-coverage.md](./api-surface-coverage.md) dosyasında. Yeni uç eklerken bu tabloyu
+> da güncelleyin — `docs:check` boş yüzey satırını reddeder.
 
 ### 1) Auth — `/api/auth`
 

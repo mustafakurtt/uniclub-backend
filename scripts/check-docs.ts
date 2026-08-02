@@ -18,6 +18,7 @@ import {
 const ROOT = resolve(import.meta.dir, "..");
 const DOCS = join(ROOT, "docs");
 const API_MD = join(DOCS, "reference", "api.md");
+const SURFACE_COVERAGE_MD = join(DOCS, "reference", "api-surface-coverage.md");
 const INDEX_TS = join(ROOT, "src", "index.ts");
 
 let failed = false;
@@ -319,6 +320,47 @@ for (const { key, sunsetAfter } of expiredReleaseFlags) {
 }
 if (expiredReleaseFlags.length === 0) {
   ok("süresi dolmuş release bayrağı yok");
+}
+
+// ── 7. API yüzey kapsaması — boş yüzey yasak ───────────────────────────────
+
+const surfaceMd = readFileSync(SURFACE_COVERAGE_MD, "utf8");
+const surfaceRowRe =
+  /^\| (GET|POST|PATCH|PUT|DELETE) \| `([^`]+)` \| (.+?) \|$/gm;
+
+let surfaceRowCount = 0;
+let emptySurfaceCount = 0;
+let invalidSurfaceCount = 0;
+
+function isValidSurface(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === "—") return true;
+  if (trimmed.startsWith("(dahili)")) return true;
+  return trimmed.includes("/");
+}
+
+let surfaceMatch: RegExpExecArray | null;
+surfaceRowRe.lastIndex = 0;
+while ((surfaceMatch = surfaceRowRe.exec(surfaceMd))) {
+  surfaceRowCount++;
+  const surface = surfaceMatch[3].trim();
+  if (!surface) {
+    emptySurfaceCount++;
+    fail(
+      `api-surface-coverage.md: boş yüzey — ${surfaceMatch[1]} ${surfaceMatch[2]}`
+    );
+  } else if (!isValidSurface(surface)) {
+    invalidSurfaceCount++;
+    fail(
+      `api-surface-coverage.md: geçersiz yüzey "${surface}" — ${surfaceMatch[1]} ${surfaceMatch[2]} (rota, — veya (dahili) gerekli)`
+    );
+  }
+}
+
+if (surfaceRowCount === 0) {
+  fail("api-surface-coverage.md içinde yüzey tablosu satırı bulunamadı");
+} else if (emptySurfaceCount === 0 && invalidSurfaceCount === 0) {
+  ok(`api-surface-coverage.md yüzey sütunu — ${surfaceRowCount} uç, boş satır yok`);
 }
 
 // ── Sonuç ───────────────────────────────────────────────────────────────────
