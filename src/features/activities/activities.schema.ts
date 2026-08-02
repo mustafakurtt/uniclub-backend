@@ -9,7 +9,7 @@ import { optionalScheduledPublishAtLocalField, nullableScheduledPublishAtLocalFi
  */
 
 // Yayınlanınca üyelere görünürlük: tenant geneli mi (keşif) yoksa yalnızca üyeler mi.
-const visibilityEnum = z.enum(["university", "members"]);
+const visibilityEnum = z.enum(["university", "members", "inter_university"]);
 
 // RSVP niyeti — "waitlist" kullanıcı tarafından seçilmez (kontenjan dolunca sistem
 // atar, v1'de reddedilir), o yüzden burada yalnızca going/interested kabul edilir.
@@ -68,3 +68,9 @@ export const selfCheckInSchema = z.object({
   token: z.string().min(1, "Yoklama token'ı gerekli."),
 });
 export type SelfCheckInDTO = z.infer<typeof selfCheckInSchema>;
+
+/** SKS moderasyonu — yalnızca görünürlük güncellemesi. */
+export const updateActivityVisibilitySchema = z.object({
+  visibility: visibilityEnum,
+});
+export type UpdateActivityVisibilityDTO = z.infer<typeof updateActivityVisibilitySchema>;

@@ -67,12 +67,13 @@ describe("kurul oy tally okuma", () => {
           committeeId: string;
           committeeName: string;
           memberCount: number;
-          threshold: number;
+          requiredApprovals: number;
           approveCount: number;
           rejectCount: number;
           notVotedCount: number;
           votes: Array<{ vote: string; voterUserId: string }>;
           myVote: { vote: string } | null;
+          notVotedMembers: Array<{ id: string; firstName: string }>;
         } | null;
       }>;
     }>(
@@ -85,12 +86,14 @@ describe("kurul oy tally okuma", () => {
     expect(tally.committeeId).toBe(committeeId);
     expect(tally.committeeName).toBe("Koordinasyon Kurulu");
     expect(tally.memberCount).toBe(5);
-    expect(tally.threshold).toBe(3);
+    expect(tally.requiredApprovals).toBe(3);
     expect(tally.approveCount).toBe(2);
     expect(tally.rejectCount).toBe(0);
     expect(tally.notVotedCount).toBe(3);
     expect(tally.votes.length).toBe(2);
     expect(tally.myVote).toBeTruthy();
+    expect(tally.notVotedMembers.length).toBe(3);
+    expect(tally.notVotedMembers.every((m) => m.firstName && m.id)).toBe(true);
   });
 
   it("ikinci GET → aynı tally (sayfa yenileme simülasyonu)", async () => {
@@ -128,9 +131,12 @@ describe("kurul oy tally okuma", () => {
     const tally = application.approvals.find((a) => a.committeeTally)?.committeeTally;
     expect(tally).toBeTruthy();
     expect(tally!.committeeName).toBe("Koordinasyon Kurulu");
+    expect(tally!.memberCount).toBe(5);
+    expect(tally!.requiredApprovals).toBe(3);
     expect(tally!.approveCount).toBe(2);
     expect("votes" in tally!).toBe(false);
     expect("myVote" in tally!).toBe(false);
+    expect("notVotedMembers" in tally!).toBe(false);
   });
 
   it("oy verildikten sonra detay tally güncellenir", async () => {

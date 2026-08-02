@@ -43,6 +43,8 @@ Proje tarafı (`src/middlewares/`) bunların **kurulumudur**, kopyası değil:
 `error.middleware.ts`, `rate-limit.middleware.ts`, `request-logger.middleware.ts`
 core fabrikalarını env/logger/i18n ile bağlar. `active-user`, `verified-user`,
 `club.middleware` ise bu projeye ait POLİTİKALARDIR — core'a girmezler.
+`committee-application.middleware` aynı desende: onay kurulu üyeliği üzerinden
+başvuru detayı/oy erişimi (`application.view` alternatifi; yeni global yetki yok).
 
 ---
 

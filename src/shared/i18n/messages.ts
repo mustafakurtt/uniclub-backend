@@ -27,6 +27,7 @@ import {
 import { publicMessages, type PublicMessageKey } from "../../features/public/public.messages";
 import { posterQrMessages, type PosterQrMessageKey } from "../../features/poster-qr/poster-qr.messages";
 import { exportsMessages, type ExportsMessageKey } from "../../features/exports/exports.messages";
+import { discoverMessages, type DiscoverMessageKey } from "../../features/discover/discover.messages";
 import {
   academicTermMessages,
   type AcademicTermMessageKey,
@@ -47,6 +48,10 @@ import {
   approvalCommitteeMessages,
   type ApprovalCommitteeMessageKey,
 } from "../../features/approval-committees/approval-committees.messages";
+import {
+  handoverMessages,
+  type HandoverMessageKey,
+} from "../../features/handover/handover.messages";
 
 /**
  * i18n KOMPOZİSYON KÖKÜ — burada mesaj metni YAZILMAZ, sadece feature/ortak
@@ -75,11 +80,13 @@ export const messages = mergeCatalogs(
   publicMessages,
   posterQrMessages,
   exportsMessages,
+  discoverMessages,
   academicTermMessages,
   membershipHistoryMessages,
   clubAdvisorMessages,
   generalMeetingsMessages,
-  approvalCommitteeMessages
+  approvalCommitteeMessages,
+  handoverMessages
 );
 
 /**
@@ -108,8 +115,10 @@ export type MessageKey =
   | PublicMessageKey
   | PosterQrMessageKey
   | ExportsMessageKey
+  | DiscoverMessageKey
   | AcademicTermMessageKey
   | MembershipHistoryMessageKey
   | ClubAdvisorMessageKey
   | GeneralMeetingsMessageKey
-  | ApprovalCommitteeMessageKey;
+  | ApprovalCommitteeMessageKey
+  | HandoverMessageKey;

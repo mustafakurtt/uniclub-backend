@@ -36,6 +36,29 @@ GET /api/audit/universities/:universityId
     &targetId=<id>       ("bu kayda kimler dokundu?")
 ```
 
+### Teftiş görünümü (T4.4)
+
+Kurum içi denetim paneli — ham kayıt yerine özet ve karar odaklı akış:
+
+```
+GET /api/admin/universities/:universityId/audit/summary
+    ?academicTermId=<uuid>     (D1 akademik dönem — önerilen)
+    &from=<ISO>&to=<ISO>       (alternatif veya dönem içinde daraltma)
+
+GET /api/admin/universities/:universityId/audit/decisions
+    ?academicTermId=<uuid> | from+to
+    &limit=50
+    &cursor=<opak>             (keyset: createdAt + id tie-break)
+    &actorId=<uuid>
+    &targetId=<id>
+```
+
+Özet `counts`: başvuru (gelen/onay/red/revizyon), kulüp (kurulan/kapanan), genel kurul,
+devir teslim, danışman daveti (kabul/ret), yapılan etkinlik. Karar listesi yalnızca onay,
+ret, revizyon, kurul oyu, danışman yanıtı, kulüp kapatma vb. satırları içerir — rutin
+`user.manage` veya profil `club.update` dahil değil. Anonimleştirilmiş aktörlerde ad
+gösterilmez.
+
 ### Mimari
 
 ```
@@ -53,8 +76,10 @@ guard(key) = [authMiddleware, attachAuthz, auditTrail(key), requirePermission(ke
 - Askıya alınmış kullanıcı `attachAuthz`'da kesildiği için (auditTrail'den önce)
   denetim izine düşmez; yetkisi olmayan kullanıcının denemesi (403) düşer.
 - **Kapsam dışı:** kulüp-içi yönetim (`club.middleware` — başkanın üye atması vb.)
-  `guard()`'dan geçmediği için otomatik denetlenmez. Gerekirse servislerden
-  `auditService.record(...)` elle çağrılabilir.
+  `guard()`'dan geçmediği için otomatik denetlenmez. **Devir teslim** (`POST .../handover-records`)
+  ve **başkanlık devri** de bu kapsamda — karar görünümünde yalnızca `audit_logs` kaynaklı
+  satırlar listelenir; özet sayımlarında devir teslim `club_handover_records` tablosundan gelir.
+  Gerekirse servislerden `auditService.record(...)` elle çağrılabilir.
 
 ### Mevcut veritabanına kurulum
 

@@ -13,6 +13,7 @@ import { formationProposalsRoutes } from "./routes/formation-proposals.routes";
 import { membershipRoutes } from "./routes/membership.routes";
 import { membershipHistoryRoutes } from "../membership-history/membership-history.routes";
 import { generalMeetingsRoutes } from "../general-meetings/general-meetings.routes";
+import { handoverRoutes } from "../handover/handover.routes";
 import { managementRoutes } from "./routes/management.routes";
 
 /**
@@ -52,5 +53,6 @@ clubsRoutes.route("/", formationProposalsRoutes);
 clubsRoutes.route("/", membershipRoutes);
 clubsRoutes.route("/", membershipHistoryRoutes);
 clubsRoutes.route("/", generalMeetingsRoutes);
+clubsRoutes.route("/", handoverRoutes);
 clubsRoutes.route("/", managementRoutes);
 clubsRoutes.route("/", browseRoutes);

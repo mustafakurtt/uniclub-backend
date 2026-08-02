@@ -5,6 +5,7 @@ import { validate } from "../../../shared/utils/validate";
 import { ok, created, done } from "../../../shared/utils/respond";
 import { createActivitySchema, updateActivitySchema, inviteCoHostSchema } from "../activities.schema";
 import { activitiesService } from "../activities.service";
+import { requireTenant } from "../../../shared/utils/tenant.util";
 
 /**
  * Kulübün etkinlik YÖNETİMİ — clubs.routes.ts içinde "/:clubId/activities" olarak
@@ -19,7 +20,7 @@ export const clubActivitiesRoutes = new Hono<{ Variables: ClubVariables }>();
 clubActivitiesRoutes.get("/", authMiddleware, async (c) => {
   const clubId = c.req.param("clubId")!;
   const user = c.get("user");
-  const activities = await activitiesService.listByClub(clubId, user.userId);
+  const activities = await activitiesService.listByClub(clubId, user.userId, requireTenant(user.universityId));
   return ok(c, activities, "activity.listed");
 });
 
@@ -47,8 +48,9 @@ clubActivitiesRoutes.patch(
   async (c) => {
     const clubId = c.req.param("clubId")!;
     const activityId = c.req.param("activityId")!;
+    const user = c.get("user");
     const body = c.req.valid("json");
-    const updated = await activitiesService.updateForClub(clubId, activityId, body);
+    const updated = await activitiesService.updateForClub(clubId, activityId, user.userId, body);
     return ok(c, updated, "activity.updated");
   }
 );

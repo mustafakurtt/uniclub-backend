@@ -25,8 +25,13 @@ import { clubs } from "./clubs";
 // da düşün (duyuruda `cancelled` kullanılmaz; servis draft/published ile sınırlı).
 export const activityStatusEnum = pgEnum("activity_status", ["draft", "published", "cancelled"]);
 // university = tenant'taki herkes görür+katılır (keşif); members = yalnızca host
-// kulübün onaylı üyeleri.
-export const activityVisibilityEnum = pgEnum("activity_visibility", ["university", "members"]);
+// kulübün onaylı üyeleri; inter_university = üniversiteler arası keşif ağında
+// (tenant bayrağı + açık seçim — varsayılan değil).
+export const activityVisibilityEnum = pgEnum("activity_visibility", [
+  "university",
+  "members",
+  "inter_university",
+]);
 
 export const activities = table("activities", {
   id: t.uuid().primaryKey().defaultRandom(),

@@ -239,16 +239,34 @@ ile verilir (`PATCH .../committee-vote`); doğrudan `approve`/`reject` bu kademe
 veya çekimser üye fiilen onayı engeller (çoğunluğa ulaşılamaz). Karar kesinleşene
 kadar üye oyunu değiştirebilir (upsert). Her oy `audit_logs`'a düşer.
 
-**Kurul oy tally (okuma):** `committee_majority` kademelerinde admin detay (`GET .../club-applications/:id`) ve öğrenci detay (`GET /api/clubs/applications/:id`) yanıtında `approvals[].committeeTally` gömülüdür. Admin/kurul üyesi (veya `application.view` yetkili, kurul üyesi olmasa bile) tam liste: bireysel oylar (`votes`: kim, yön, zaman, gerekçe) ve istek yapanın `myVote`. Öğrenci yalnızca özet — kurul adı, üye sayısı, eşik (`floor(n/2)+1`), onay/ret/oy vermeyen sayıları; kim oyladı bilgisi **sızmaz**. Tek kurul okuma: `GET .../approval-committees/:committeeId` — `application.view` (liste/oluşturma hâlâ `university.settings.manage`).
+**Kurul üyeliği erişimi:** `application.view` taşımayan kurul üyeleri (ör. `academic_affairs`) yalnızca **mevcut kademesi kendi kuruluna düşen** `pending` başvuruları görebilir ve oy verebilir — global rol yükseltmesi gerekmez. `club.middleware` deseni: üyelik tabanlı, tenant sınırlı. Detay ve `committee-vote` için `committee-application.middleware`; tam başvuru listesi (`GET .../club-applications`) hâlâ `application.view` gerektirir.
+
+**Oyumu bekleyen başvurular:** `GET .../club-applications/my-committee-pending` — üyenin kurullarında bekleyen ve henüz oy vermediği başvurular (`committeeStep`, `committeeName` gömülü). Bildirimden bağımsız kalıcı uç.
+
+**Kurul oy tally (okuma):** `committee_majority` kademelerinde admin detay (`GET .../club-applications/:id`) ve öğrenci detay (`GET /api/clubs/applications/:id`) yanıtında `approvals[].committeeTally` gömülüdür. Admin/kurul üyesi (veya `application.view` yetkili, kurul üyesi olmasa bile) tam liste: bireysel oylar (`votes`), `notVotedMembers` (oy vermeyen üyelerin adları), istek yapanın `myVote`. Öğrenci yalnızca özet — kurul adı, üye sayısı, `requiredApprovals` (eşik `floor(n/2)+1`), onay/ret/oy vermeyen **sayıları**; kim oyladı/oy vermedi bilgisi **sızmaz**. Tek kurul okuma: `GET .../approval-committees/:committeeId` — `application.view`.
+
+**Onay kurulu yönetimi** (`university.approval_committee.manage` — `university_admin` ve `student_affairs`):
+
+| Method | Path | Yetki | Açıklama |
+|---|---|---|---|
+| GET | `/universities/:uid/approval-committees` | `university.approval_committee.manage` | Kurulları listele |
+| GET | `/universities/:uid/approval-committees/:committeeId` | `application.view` | Kurul detayı (oylama arayüzü) |
+| POST | `/universities/:uid/approval-committees` | `university.approval_committee.manage` | Kurul oluştur |
+| PATCH | `/universities/:uid/approval-committees/:committeeId` | `university.approval_committee.manage` | Kurul güncelle |
+
+SKS kendi koordinasyon kurulunu `university.settings.manage` (yalnızca `university_admin`) olmadan yönetebilir. Tenant onay zinciri (`club.application.approval_chain`) hâlâ `university.settings.manage` altında — bkz. [tenant-settings.md](tenant-settings.md).
+
+**Devir teslim (T1.3):** Kulüp tarafında `POST/GET /api/clubs/:clubId/handover-records` — genel kurul kararına (`generalMeetingId`) bağlı dönemsel görev devri; `transfer-presidency` hızlı yol olarak kalır. PDF tutanak: `club-handover-minutes` export (`handoverId`). Detay: [clubs.md §7.8](clubs.md#78-devir-teslim--getpost-clubidhandover-records-t13), [exports.md](exports.md).
 
 | Method | Path | Yetki | Açıklama |
 |---|---|---|---|
 | GET | `/universities/:uid/club-applications?status=` | `application.view` | Başvuru listesi (`applicant` + `approvals` gömülü); `status=revision_requested` revizyon kuyruğu |
-| GET | `/universities/:uid/club-applications/:id` | `application.view` | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
+| GET | `/universities/:uid/club-applications/my-committee-pending` | kurul üyeliği (tenant) | Oy bekleyen kurul başvuruları — `application.view` gerekmez |
+| GET | `/universities/:uid/club-applications/:id` | `application.view` **veya** ilgili kurul kademesi üyeliği | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
 | PATCH | `/universities/:uid/club-applications/:id/approve` | `application.view` | Sıradaki kademeyi onayla — **tüm kademeler** onaylandığında gerçek kulüp oluşur |
 | PATCH | `/universities/:uid/club-applications/:id/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/universities/:uid/club-applications/:id/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) — öğrenci düzeltip yeniden gönderir |
-| PATCH | `/universities/:uid/club-applications/:id/committee-vote` | `application.view` | Kurul kademesi oy (`vote`: `approve` \| `reject`; ret için `reason` zorunlu) |
+| PATCH | `/universities/:uid/club-applications/:id/committee-vote` | `application.view` **veya** ilgili kurul kademesi üyeliği | Kurul kademesi oy (`vote`: `approve` \| `reject`; ret için `reason` zorunlu) |
 | GET | `/universities/:uid/club-applications/:id/history` | `application.view` | Olay geçmişi (append-only `club_application_events`) |
 | GET | `/universities/:uid/club-applications/:id/checklist` | `application.view` | İnceleme kontrol listesi (tenant kataloğu + işaret durumu) |
 | PATCH | `/universities/:uid/club-applications/:id/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle (`checked`, opsiyonel `note`) — audit'e düşer |
@@ -405,6 +423,17 @@ Başvuru detay sayfası (`/admin/applications/:applicationId`):
 | Olay geçmişi | `GET .../club-applications/:applicationId/history` |
 
 Liste uçları keyset sayfalar: `cursor` = son öğenin `createdAt` (duyuru/galeri) veya `startsAt` (etkinlik) ISO 8601; yanıt `{ items, nextCursor }`.
+
+### 5.7. T4.4 — Denetim / teftiş görünümü
+
+Kurumsal güvence için ham `audit_logs` listesinin üzerinde iki okuma yüzeyi:
+
+| Uç | Yetki | Açıklama |
+|---|---|---|
+| `GET /api/admin/universities/:uid/audit/summary?from=&to=` veya `academicTermId=` | `audit.view` | Dönem bazlı kurum faaliyet sayımları (başvuru, kulüp, GK, devir, danışman, etkinlik) |
+| `GET /api/admin/universities/:uid/audit/decisions?...` | `audit.view` | Yalnızca **karar niteliğindeki** denetim satırları (`actionLabel`, aktör, gerekçe); keyset `(createdAt, id)` |
+
+`academicTermId` verildiğinde dönem `startsAt`/`endsAt` ile sınırlanır; isteğe bağlı `from`/`to` bu aralığı daraltır. Anonimleştirilmiş aktörlerde `displayName` dönmüyor (`anonymized: true`). Ham kayıt akışı: `GET /api/audit/universities/:uid` (§5.6 tablosu).
 
 ---
 

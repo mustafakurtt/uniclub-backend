@@ -41,6 +41,7 @@ export const clubsRelations = (r: RelationHelpers) => ({
     }),
     activityClubs: r.many.activityClubs(),
     membershipEvents: r.many.clubMembershipEvents(),
+    handoverRecords: r.many.clubHandoverRecords(),
   },
   clubAdvisors: {
     club: r.one.clubs({ from: r.clubAdvisors.clubId, to: r.clubs.id }),

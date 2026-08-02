@@ -1,6 +1,7 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "../../db/schema";
+import { users } from "../../db/schema";
 import { approvalCommitteesRepository } from "../approval-committees/approval-committees.repository";
 import { adminRepository } from "../admin/admin.repository";
 import { auditService } from "../audit/audit.service";
@@ -19,7 +20,8 @@ export type CommitteeTallySummary = {
   committeeId: string;
   committeeName: string;
   memberCount: number;
-  threshold: number;
+  /** Salt çoğunluk eşiği: floor(n/2)+1 */
+  requiredApprovals: number;
   approveCount: number;
   rejectCount: number;
   notVotedCount: number;
@@ -36,6 +38,7 @@ export type CommitteeVoteRecord = {
 export type CommitteeTallyFull = CommitteeTallySummary & {
   votes: CommitteeVoteRecord[];
   myVote: CommitteeVoteRecord | null;
+  notVotedMembers: ReturnType<typeof toSafeUser>[];
 };
 
 export type CommitteeVoteInput = {
@@ -133,7 +136,7 @@ export const clubApplicationCommitteeService = {
       committeeId,
       universityId
     );
-    const threshold = computeCommitteeMajorityThreshold(memberCount);
+    const requiredApprovals = computeCommitteeMajorityThreshold(memberCount);
 
     const voteRows = await db.query.clubApplicationCommitteeVotes.findMany({
       where: {
@@ -154,7 +157,7 @@ export const clubApplicationCommitteeService = {
       committeeId,
       committeeName: committee.name,
       memberCount,
-      threshold,
+      requiredApprovals,
       approveCount,
       rejectCount,
       notVotedCount,
@@ -176,10 +179,27 @@ export const clubApplicationCommitteeService = {
       ? voteRows.find((v) => v.voterUserId === viewerUserId)
       : undefined;
 
+    const memberUserIds = await approvalCommitteesRepository.listMemberUserIds(
+      committeeId,
+      universityId
+    );
+    const votedIds = new Set(voteRows.map((v) => v.voterUserId));
+    const notVotedUserIds = memberUserIds.filter((id) => !votedIds.has(id)).sort();
+    const notVotedUsers =
+      notVotedUserIds.length > 0
+        ? await db.select().from(users).where(inArray(users.id, notVotedUserIds))
+        : [];
+    const notVotedById = new Map(notVotedUsers.map((u) => [u.id, u]));
+    const notVotedMembers = notVotedUserIds
+      .map((id) => notVotedById.get(id))
+      .filter((u): u is NonNullable<typeof u> => u != null)
+      .map((u) => toSafeUser(u));
+
     return {
       ...summary,
       votes: voteRows.map(mapVote),
       myVote: myVoteRow ? mapVote(myVoteRow) : null,
+      notVotedMembers,
     };
   },
 
@@ -301,22 +321,30 @@ export const clubApplicationCommitteeService = {
         current.committeeId,
         universityId
       );
-      const threshold = computeCommitteeMajorityThreshold(memberCount);
+      const requiredApprovals = computeCommitteeMajorityThreshold(memberCount);
       const approveCount = votes.filter((v) => v.vote === "approve").length;
       const rejectCount = votes.filter((v) => v.vote === "reject").length;
 
       let stepDecision: "approved" | "rejected" | null = null;
-      if (approveCount >= threshold) {
+      if (approveCount >= requiredApprovals) {
         stepDecision = "approved";
-      } else if (rejectCount >= threshold) {
+      } else if (rejectCount >= requiredApprovals) {
         stepDecision = "rejected";
       }
+
+      const tallySnapshot = {
+        memberCount,
+        requiredApprovals,
+        approveCount,
+        rejectCount,
+        votes: votes.length,
+      };
 
       if (!stepDecision) {
         return {
           finalized: false as const,
           application,
-          tally: { memberCount, threshold, approveCount, rejectCount, votes: votes.length },
+          tally: tallySnapshot,
         };
       }
 
@@ -335,7 +363,7 @@ export const clubApplicationCommitteeService = {
         finalized: true as const,
         decision: stepDecision,
         result: finalizeResult,
-        tally: { memberCount, threshold, approveCount, rejectCount, votes: votes.length },
+        tally: tallySnapshot,
       };
     });
 

@@ -31,6 +31,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Dashboard & Feed](#13-dashboard--feed--apifeed)
   - [Media (dosya yükleme)](#14-media--apiuploads)
   - [Public (kamuya açık okuma)](#15-public--apipublic)
+  - [Discover (üniversiteler arası keşif)](#16-discover--apidiscover)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -38,7 +39,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/public`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/public`, `/api/discover`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -366,6 +367,9 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | GET | `/api/clubs/:clubId/general-meetings` | **staff**: genel kurul kayıtları (`attendeeCount` liste yanıtında) |
 | GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff**: genel kurul detayı |
 | POST | `/api/clubs/:clubId/general-meetings` | officer/başkan: genel kurul + kurul seçimi kaydı |
+| GET | `/api/clubs/:clubId/handover-records` | **staff**: devir teslim kayıtları |
+| GET | `/api/clubs/:clubId/handover-records/:handoverId` | **staff**: devir teslim detayı |
+| POST | `/api/clubs/:clubId/handover-records` | officer/başkan: dönemsel devir teslim (`generalMeetingId`) |
 | PATCH | `/api/clubs/:clubId` | **yalnızca başkan** (profil düzenle; durum HARİÇ) |
 | POST | `/api/clubs/:clubId/contact-links` | officer/başkan |
 | PATCH | `/api/clubs/:clubId/contact-links/:linkId` | officer/başkan (yalnızca url) |
@@ -378,6 +382,7 @@ Body şemaları:
 - `PATCH .../join-requests/:userId`: `{ "decision": "approved" | "rejected" }`
 - `PATCH .../members/:userId/role`: `{ "role": "member" | "officer" }` — `president` atanamaz (devir ayrı endpoint).
 - `POST .../transfer-presidency`: `{ "newPresidentId": "uuid" }` (kulübün onaylı üyesi olmalı).
+- `POST .../handover-records`: `{ "generalMeetingId": "uuid", "handoverAt?": "datetime" }` — genel kurul kararına dayalı devir teslim.
 - `PATCH /:clubId`: en az bir alan → `{ name?, description?, logoUrl?, coverUrl?, joinPolicy? }` (`status` yok).
 - `POST .../contact-links`: `{ "platform": "whatsapp|instagram|discord|telegram|twitter|website|email|other", "url": "url (max 512)" }` — platform başına tek link.
 - `PATCH .../contact-links/:linkId`: `{ "url": "url (max 512)" }` (platform sabit).
@@ -422,6 +427,8 @@ Body şemaları:
 
 **POST** body: `{ "imageUrl": "url (max 512)", "caption": "string (max 256, opsiyonel)" }`
 
+`GET` yanıtında tenant `feed.social.preview` açıkken her görsele `commentCount`, `likeCount`, `recentComments` (demo; T2.7'de gerçek özellik). Bayrak kapalı → alanlar yok.
+
 > Not: `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Bu URL'yi **`POST /api/uploads`** ile (gerçek dosya yükleyip) üretebilirsiniz — bkz. [Media](#13-media--dosya-yükleme). Alternatif olarak harici bir servisin (S3/Cloudinary) URL'si de verilebilir.
 
 ---
@@ -436,24 +443,27 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | GET | `/api/admin/universities/:universityId/users/:userId` | `user.view` | Tek kullanıcı (roller, üyelikler, override'lar) |
 | GET | `/api/admin/universities/:universityId/users/:userId/effective-permissions` | `user.view` | Etkin roller + yetkiler |
 | PATCH | `/api/admin/universities/:universityId/users/:userId/department` | `user.manage` | Kullanıcının bölümünü güncelle |
+| GET | `/api/admin/universities/:universityId/audit/summary?from=&to=&academicTermId=` | `audit.view` | Kurum faaliyet özeti (dönem sayımları) |
+| GET | `/api/admin/universities/:universityId/audit/decisions?from=&to=&academicTermId=&limit=&cursor=&actorId=&targetId=` | `audit.view` | Karar odaklı denetim akışı (keyset `(createdAt,id)`) |
 
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/integration/moderation.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
 | GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü; `revision_requested` ayrı kuyruk) |
-| GET | `/api/admin/universities/:universityId/club-applications/:applicationId` | `application.view` | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
+| GET | `/api/admin/universities/:universityId/club-applications/my-committee-pending` | kurul üyeliği | Oy bekleyen kurul başvuruları (`application.view` gerekmez) |
+| GET | `/api/admin/universities/:universityId/club-applications/:applicationId` | `application.view` veya kurul kademesi üyeliği | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
-| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/committee-vote` | `application.view` | Kurul kademesi oy (`vote`, ops. `reason`) |
+| PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/committee-vote` | `application.view` veya kurul kademesi üyeliği | Kurul kademesi oy (`vote`, ops. `reason`) |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/history` | `application.view` | Başvuru olay geçmişi |
 | GET | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist` | `application.view` | İnceleme kontrol listesi |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/checklist/:itemKey` | `application.view` | Kontrol listesi madde işaretle |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/appeal/review` | `application.view` | İtiraz incele (`decision`: upheld/dismissed) |
 | GET | `/api/admin/universities/:universityId/formation-proposals?status=` | `application.view` | Kuruluş önerileri listesi |
 | GET | `/api/admin/universities/:universityId/formation-proposals/:id` | `application.view` | Öneri detayı (destekçi listesi gömülü) |
-| GET | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Onay kurullarını listele |
+| GET | `/api/admin/universities/:universityId/approval-committees` | `university.approval_committee.manage` | Onay kurullarını listele |
 | GET | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `application.view` | Kurul detayı (oylama arayüzü için) |
-| POST | `/api/admin/universities/:universityId/approval-committees` | `university.settings.manage` | Kurul oluştur (`name`, `memberUserIds`) |
-| PATCH | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.settings.manage` | Kurul güncelle |
+| POST | `/api/admin/universities/:universityId/approval-committees` | `university.approval_committee.manage` | Kurul oluştur (`name`, `memberUserIds`) |
+| PATCH | `/api/admin/universities/:universityId/approval-committees/:committeeId` | `university.approval_committee.manage` | Kurul güncelle |
 
 Çok kademeli onay zinciri tenant ayarı `club.application.approval_chain` ile yapılandırılır (varsayılan `["club_approver"]`). Eski format: rol dizisi (`["advisor","student_affairs"]`). Yeni format: adım nesneleri — `role_sequential` veya `committee_majority` (+ `committeeId`). Kurul kademesinde `committee-vote`; salt çoğunluk üye sayısı üzerinden. Özet `application.status` adımlardan türetilir; nihai karar bildirimi yalnızca `approved`/`rejected`. Sıra ihlali → `400`; yanlış rol → `403`. Bkz. `docs/integration/admin-panel.md` §5.2.
 | GET | `/api/admin/universities/:universityId/clubs?status=` | `club.update` | Kulüpleri listele |
@@ -614,11 +624,15 @@ Kilit tasarım: etkinlik ↔ kulüp **M:N** (`activity_clubs`, host/co_host). Bi
 tek bir `universityId`'si **yoktur** — tenant'ı katılan kulüplerden türetilir; co-hosted
 etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva senaryosu).
 
+`GET /api/activities` ve `GET /api/clubs/:clubId/activities` listelerinde tenant
+`feed.social.preview` açıkken kartlara `commentCount`, `likeCount`, `recentComments`
+gömülür (demo katman; yazma ucu yok).
+
 **Keşif + RSVP** (Bearer; tenant JWT'den):
 
 | Method | Path | Açıklama |
 |---|---|---|
-| GET | `/api/activities?scope=upcoming\|past\|all&search=` | Üniversite geneli yayınlanmış + `university` görünürlüklü etkinlikler |
+| GET | `/api/activities?scope=upcoming\|past\|all&search=` | Üniversite geneli yayınlanmış + `university` veya `inter_university` görünürlüklü etkinlikler |
 | GET | `/api/activities/:activityId` | Detay (görünürlük/tenant/yayın kuralları uygulanır) |
 | POST | `/api/activities/:activityId/rsvp` | Katılım bildir — `{ status: "going"\|"interested" }` (vars. `going`, kapasite kontrollü) |
 | DELETE | `/api/activities/:activityId/rsvp` | Katılımı geri al (idempotent) |
@@ -640,6 +654,7 @@ etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva s
 | DELETE | `.../:activityId/co-hosts/:coClubId` | host staff (co-host kaldır) |
 | POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
 | POST | `/api/admin/universities/:uid/activities/:activityId/cancel` | `activity.moderate` (tenant) | **Moderasyon:** tenant'taki herhangi bir kulübün etkinliğini iptal etme |
+| PATCH | `/api/admin/universities/:uid/clubs/:clubId/activities/:activityId` | `activity.moderate` (tenant) | Görünürlük güncelle — `{ visibility }` (`inter_university` dahil; SKS) |
 
 Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true), scheduledPublishAtLocal? ("YYYY-MM-DDTHH:mm", tenant yerel) }`; `PATCH` aynı alanlar opsiyonel + `scheduledPublishAtLocal: null` iptal (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
 
@@ -709,9 +724,22 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 | Method | Path | Açıklama |
 |---|---|---|
 | GET | `/api/universities/:universityId/exports` | Rapor kataloğu |
-| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (`clubs`, `club-members`, `activities`, PDF: `annual-activity-report`, `application-decision-minutes`, `general-meeting-minutes`) |
+| POST | `/api/universities/:universityId/exports/:reportId` | Rapor üret (`clubs`, `club-members`, `activities`, PDF: `annual-activity-report`, `application-decision-minutes`, `general-meeting-minutes`, `club-handover-minutes`) |
 
 Detay: [integration/exports.md](../integration/exports.md).
+
+---
+
+### 16) Discover — `/api/discover`
+
+Üniversiteler arası etkinlik keşfi (T10.4 — "dünya sekmesi" dilimi). Tam sözleşme:
+[`docs/integration/discover.md`](../integration/discover.md).
+
+| Method | Path | Kim | Açıklama |
+|---|---|---|---|
+| GET | `/api/discover/activities?limit=&cursor=&universityId=` | Bearer; tenant bayrağı açık | Ağdaki `inter_university` yaklaşan etkinlikler (keyset sayfalama) |
+
+Tenant bayrağı (`university.inter_university.enabled`) kapalıysa **404** (403 değil). Kendi üniversitenin host etkinlikleri listede **yok**.
 
 
 ---
@@ -722,7 +750,7 @@ Detay: [integration/exports.md](../integration/exports.md).
 |---|---|
 | `user.status` | `pending`, `active`, `suspended` |
 | `activity_status` | `draft`, `published`, `cancelled` |
-| `activity_visibility` | `university`, `members` |
+| `activity_visibility` | `university`, `members`, `inter_university` |
 | `activity_club_role` | `host`, `co_host` |
 | `activity_club_status` | `invited`, `accepted` |
 | `rsvp_status` | `going`, `interested`, `waitlist` |

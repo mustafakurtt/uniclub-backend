@@ -18,3 +18,5 @@ export * from "./membership-events";
 export * from "./advisor-invitations";
 export * from "./general-meetings";
 export * from "./approval-committees";
+export * from "./handover";
+export * from "./social-preview";

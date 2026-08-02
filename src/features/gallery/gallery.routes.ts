@@ -17,7 +17,8 @@ export const galleryRoutes = new Hono<{ Variables: ClubVariables }>();
 // 1. KULÜBÜN GALERİSİNİ LİSTELEME (herhangi bir giriş yapmış kullanıcı)
 galleryRoutes.get("/", authMiddleware, async (c) => {
   const clubId = c.req.param("clubId")!;
-  const images = await galleryService.listByClub(clubId);
+  const user = c.get("user");
+  const images = await galleryService.listByClub(clubId, requireTenant(user.universityId));
   return ok(c, images, "gallery.listed");
 });
 

@@ -21,14 +21,16 @@ kulüplerden türetilir.
 - **Yetki:** oluştur/güncelle/iptal/katılımcılar yalnızca **host kulübün** staff'ına
   (danışman/officer/başkan) açıktır. Co-host bir kulübün staff'ı etkinliği yönetemez.
 - **Görünürlük** (`visibility`): `university` (tenant'taki herkes görür + katılır) ·
-  `members` (yalnızca host/co_host kulüplerin onaylı üyeleri).
+  `members` (yalnızca host/co_host kulüplerin onaylı üyeleri) ·
+  `inter_university` (üniversiteler arası keşif ağında — **opt-in**; tenant bayrağı +
+  açık seçim gerekir; bkz. [discover.md](discover.md)).
 
 ## Enum'lar
 
 | Enum | Değerler |
 |---|---|
 | `activity_status` | `draft`, `published`, `cancelled` |
-| `activity_visibility` | `university`, `members` |
+| `activity_visibility` | `university`, `members`, `inter_university` |
 | `activity_club_role` | `host`, `co_host` |
 | `activity_club_status` | `invited`, `accepted` (co-host daveti; yalnızca `accepted` bağlar tenant/görünürlük belirler) |
 | `rsvp_status` | `going`, `interested`, `waitlist` (`waitlist` şimdilik kullanıcı seçemez) |
@@ -41,7 +43,7 @@ Tümü `Bearer` ister; tenant JWT'den çözülür (path'te `universityId` yoktur
 
 | Method | Path | Açıklama |
 |---|---|---|
-| GET | `/api/activities?scope=upcoming&search=` | Üniversite geneli **yayınlanmış + `university`** etkinlikler |
+| GET | `/api/activities?scope=upcoming&search=` | Üniversite geneli **yayınlanmış + `university` veya `inter_university`** etkinlikler |
 | GET | `/api/activities/:activityId` | Etkinlik detayı (görünürlük/tenant/yayın kuralları uygulanır) |
 | POST | `/api/activities/:activityId/rsvp` | Katılım bildir (`{ status: "going"\|"interested" }`, varsayılan `going`) |
 | DELETE | `/api/activities/:activityId/rsvp` | Katılımı geri al (idempotent) |
@@ -53,6 +55,12 @@ Tümü `Bearer` ister; tenant JWT'den çözülür (path'te `universityId` yoktur
 > **`members` görünürlüğündeki etkinlikler genel keşifte (`GET /api/activities`)
 > DÖNMEZ** — onlar kulübün kendi listesinde (`GET /api/clubs/:clubId/activities`)
 > yalnızca üyelere görünür.
+
+**Keşif ve kulüp listelerinde sosyal önizleme (demo)** — tenant `feed.social.preview`
+bayrağı açık olduğunda her etkinlik kartına `commentCount`, `likeCount`, `recentComments`
+(son 3 yorum) gömülür. Bu katman **salt okunur** demo verisidir; yazma ucu yoktur.
+Gerçek yorum/beğeni özelliği T2.7 kapsamındadır. Bayrak kapalı tenant'ta alanlar
+**hiç dönmez**.
 
 ### Detay yanıtı (`data`)
 ```jsonc

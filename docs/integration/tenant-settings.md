@@ -81,7 +81,7 @@ Authorization: Bearer <token>
 
 Tenant başına özellik aç/kapa (pilot yayın). `flagType`:
 
-- `entitlement` — kalıcı yetkilendirme (ör. `university.export.enabled`)
+- `entitlement` — kalıcı yetkilendirme (ör. `university.export.enabled`, `university.inter_university.enabled`)
 - `release` — geçici yayın bayrağı; katalogda `sunsetAfter` **zorunlu**
 
 Kapalı bayrakla korunan rotalar `requireFeature(key)` middleware'i ile **404** döner (403 değil). Yetki kontrolü (`guard`) bayraktan önce çalışır: yetkisiz kullanıcı bayrak açık olsa bile 403 alır.
@@ -127,6 +127,11 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `club.general_meeting.majority_percent` | `50` | 1–100 | tenant |
 | `university.export.enabled` | `false` | boolean, `flagType: entitlement` | platform |
 | `university.export.pdf.enabled` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-01` | platform |
+| `university.inter_university.enabled` | `false` | boolean, `flagType: entitlement` | tenant |
+| `feed.social.preview` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-02` | platform |
+
+`feed.social.preview` — akış kartlarında demo yorum/beğeni önizlemesi (salt okunur;
+T2.7 gerçek özellik geldiğinde kaldırılacak/değişecek). Seed'de yalnızca Antalya Bilim açık.
 
 `club.application.approval_chain` — JSON dizi (1–3 kademe). **Geriye dönük uyum:**
 her eleman yalnızca rol string'i olabilir (`["advisor", "student_affairs"]`). **Yeni

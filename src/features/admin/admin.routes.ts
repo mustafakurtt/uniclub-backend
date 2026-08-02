@@ -11,6 +11,7 @@ import { AnnouncementPermission } from "../announcements/announcements.permissio
 import { GalleryPermission } from "../gallery/gallery.permissions";
 import { ActivityPermission } from "../activities/activities.permissions";
 import { activitiesService } from "../activities/activities.service";
+import { updateActivityVisibilitySchema } from "../activities/activities.schema";
 import { DashboardPermission } from "../dashboard/dashboard.permissions";
 import {
   updateClubStatusSchema,
@@ -32,7 +33,17 @@ import {
 import { adminService } from "./admin.service";
 import { clubApplicationReviewService } from "../clubs/club-application-review.service";
 import { dashboardService } from "../dashboard/dashboard.service";
+import { AuditPermission } from "../audit/audit.permissions";
+import { auditInspectionService } from "../audit/audit-inspection.service";
+import {
+  auditPeriodQuerySchema,
+  auditDecisionListQuerySchema,
+} from "../audit/audit-inspection.schema";
 import { approvalCommitteesRoutes } from "../approval-committees/approval-committees.routes";
+import {
+  committeeApplicationGuard,
+  committeeTenantGuard,
+} from "../../middlewares/committee-application.middleware";
 
 export const adminRoutes = new Hono<{ Variables: RbacVariables }>();
 
@@ -64,6 +75,31 @@ adminRoutes.get(
     const { universityId } = c.req.param();
     const summary = await dashboardService.getAdminDashboard(universityId);
     return ok(c, summary, "dashboard.adminLoaded");
+  }
+);
+
+// 0C. DENETİM / Teftiş görünümü (T4.4) — kurum faaliyet özeti + karar odaklı akış
+adminRoutes.get(
+  "/universities/:universityId/audit/summary",
+  ...guard(AuditPermission.VIEW, { tenantScoped: true }),
+  validate("query", auditPeriodQuerySchema),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const query = c.req.valid("query");
+    const summary = await auditInspectionService.getSummary(universityId, query);
+    return ok(c, summary, "audit.summaryLoaded");
+  }
+);
+
+adminRoutes.get(
+  "/universities/:universityId/audit/decisions",
+  ...guard(AuditPermission.VIEW, { tenantScoped: true }),
+  validate("query", auditDecisionListQuerySchema),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const query = c.req.valid("query");
+    const result = await auditInspectionService.listDecisions(universityId, query);
+    return ok(c, result, "audit.decisionsListed");
   }
 );
 
@@ -132,10 +168,25 @@ adminRoutes.get(
   }
 );
 
+// 4A. OYUMU BEKLEYEN KURUL BAŞVURULARI (kurul üyeliği tabanlı — application.view gerekmez)
+adminRoutes.get(
+  "/universities/:universityId/club-applications/my-committee-pending",
+  ...committeeTenantGuard("club.application.committee_pending_list"),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const actor = c.get("user");
+    const applications = await adminService.listMyCommitteePendingApplications(
+      universityId,
+      actor.userId
+    );
+    return ok(c, applications, "admin.myCommitteePendingApplicationsListed");
+  }
+);
+
 // 4B. TEK BİR KULÜP BAŞVURUSU (detay — applicant + onay zinciri + revizyon sayacı)
 adminRoutes.get(
   "/universities/:universityId/club-applications/:applicationId",
-  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  ...committeeApplicationGuard(ClubPermission.APPLICATION_VIEW),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
     const actor = c.get("user");
@@ -198,7 +249,7 @@ adminRoutes.patch(
 // 6b2. KURUL OY (committee_majority kademesi)
 adminRoutes.patch(
   "/universities/:universityId/club-applications/:applicationId/committee-vote",
-  ...guard(ClubPermission.APPLICATION_VIEW, { tenantScoped: true }),
+  ...committeeApplicationGuard(ClubPermission.APPLICATION_VIEW),
   validate("json", committeeVoteSchema),
   async (c) => {
     const { universityId, applicationId } = c.req.param();
@@ -519,5 +570,23 @@ adminRoutes.post(
     const { universityId, activityId } = c.req.param();
     const cancelled = await activitiesService.moderateCancel(universityId, activityId);
     return ok(c, cancelled, "activity.cancelledOk");
+  }
+);
+
+// 18. ETKİNLİK GÖRÜNÜRLÜĞÜ — SKS moderasyonu (inter_university dahil)
+adminRoutes.patch(
+  "/universities/:universityId/clubs/:clubId/activities/:activityId",
+  ...guard(ActivityPermission.MODERATE, { tenantScoped: true }),
+  validate("json", updateActivityVisibilitySchema),
+  async (c) => {
+    const { universityId, clubId, activityId } = c.req.param();
+    const { visibility } = c.req.valid("json");
+    const updated = await activitiesService.updateVisibilityForModerator(
+      universityId,
+      clubId,
+      activityId,
+      visibility
+    );
+    return ok(c, updated, "activity.updated");
   }
 );

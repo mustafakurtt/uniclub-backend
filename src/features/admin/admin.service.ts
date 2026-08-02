@@ -17,6 +17,7 @@ import { membershipHistoryService } from "../membership-history/membership-histo
 import { clubAdvisorsService } from "../club-advisors/club-advisors.service";
 import { auditService } from "../audit/audit.service";
 import { clubApplicationCommitteeService } from "../clubs/club-application-committee.service";
+import { committeeApplicationAccessRepository } from "../approval-committees/committee-application-access.repository";
 import { announcementEffects } from "../announcements/announcements.cache";
 import { galleryEffects } from "../gallery/gallery.cache";
 
@@ -170,6 +171,24 @@ export const adminService = {
     return applications.map((application) => ({
       ...application,
       applicant: application.applicant ? toSafeUser(application.applicant) : null,
+    }));
+  },
+
+  async listMyCommitteePendingApplications(universityId: string, actorUserId: string) {
+    const rows = await committeeApplicationAccessRepository.listPendingApplicationsAwaitingUserVote(
+      universityId,
+      actorUserId
+    );
+    return rows.map((row) => ({
+      id: row.application.id,
+      proposedName: row.application.proposedName,
+      description: row.application.description,
+      status: row.application.status,
+      createdAt: row.application.createdAt,
+      applicant: row.application.applicant ? toSafeUser(row.application.applicant) : null,
+      committeeStep: row.currentStep,
+      committeeId: row.committeeId,
+      committeeName: row.committeeName,
     }));
   },
 

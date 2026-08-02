@@ -16,6 +16,7 @@ export default defineConfig({
     "./src/db/schema/club-formation.ts",
     "./src/db/schema/audit.ts",
     "./src/db/schema/activities.ts",
+    "./src/db/schema/social-preview.ts",
     "./src/db/schema/media.ts",
     "./src/db/schema/invitations.ts",
     "./src/db/schema/tenant-settings.ts",
@@ -24,6 +25,7 @@ export default defineConfig({
     "./src/db/schema/membership-events.ts",
     "./src/db/schema/advisor-invitations.ts",
     "./src/db/schema/general-meetings.ts",
+    "./src/db/schema/handover.ts",
     "./src/db/schema/approval-committees.ts",
   ],
   out: "./src/db/migrations",     // SQL dosyalarının üretileceği yer

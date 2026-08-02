@@ -1,0 +1,1 @@
+ALTER TYPE "activity_visibility" ADD VALUE 'inter_university';

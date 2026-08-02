@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, sql, getTableColumns, isNotNull, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql, getTableColumns, isNotNull, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import { activities, activityClubs, activityAttendees, clubs, clubMembers } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
@@ -170,6 +170,15 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
     return !!advisor;
   }
 
+  /** Officer veya başkan — inter_university görünürlük seçimi için (danışman dahil değil). */
+  async isClubOfficerOrPresident(clubId: string, userId: string): Promise<boolean> {
+    const membership = await db.query.clubMembers.findFirst({
+      where: { clubId, userId, status: "approved" },
+      columns: { role: true },
+    });
+    return membership?.role === "officer" || membership?.role === "president";
+  }
+
   // ── Co-host davet/kabul (activity_clubs.status) ──────────────────────────
   async clubExists(clubId: string): Promise<boolean> {
     const row = await db.query.clubs.findFirst({ where: { id: clubId }, columns: { id: true } });
@@ -241,7 +250,7 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
       eq(clubs.universityId, universityId),
       eq(activityClubs.status, "accepted"), // invited (bekleyen) co-host tenant'a etkinlik SAYMAZ
       eq(activities.status, "published"),
-      eq(activities.visibility, "university"),
+      inArray(activities.visibility, ["university", "inter_university"]),
     ];
     if (scope === "upcoming") filters.push(gte(activities.startsAt, now));
     if (scope === "past") filters.push(lt(activities.startsAt, now));
