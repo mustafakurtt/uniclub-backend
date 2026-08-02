@@ -71,7 +71,9 @@ describe("Activities", () => {
     expect(titles).toContain("React ile Web Atölyesi");
     expect(titles).toContain("Üniversitelerarası Hackathon 2026");
     expect(titles).not.toContain("Üyelere Özel Karanlık Oda Atölyesi"); // members
-    expect(list.every((a) => a.visibility === "university")).toBe(true);
+    expect(list.every((a) => a.visibility === "university" || a.visibility === "inter_university")).toBe(
+      true
+    );
   });
 
   it("⭐ cross-university: Ege öğrencisi co-host'u olduğu Hackathon'u görür, Antalya-only'yi GÖRMEZ", async () => {

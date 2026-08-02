@@ -25,6 +25,8 @@ export const activitiesMessages = defineCatalog({
     "activity.coHostSelf": "Bir kulüp kendi etkinliğine co-host olamaz.",
     "activity.coHostExists": "Bu kulüp zaten bu etkinliğe bağlı.",
     "activity.coHostInviteNotFound": "Bu kulüp için bekleyen bir co-host daveti yok.",
+    "activity.interUniversityDisabled": "Üniversiteler arası keşif bu kurumda etkin değil.",
+    "activity.interUniversityForbidden": "Bu görünürlük seviyesini yalnızca kulüp yetkilisi veya SKS seçebilir.",
     // activity — başarı
     "activity.listed": "Etkinlikler listelendi.",
     "activity.found": "Etkinlik bulundu.",
@@ -65,6 +67,8 @@ export const activitiesMessages = defineCatalog({
     "activity.coHostSelf": "A club cannot co-host its own activity.",
     "activity.coHostExists": "This club is already linked to the activity.",
     "activity.coHostInviteNotFound": "There is no pending co-host invitation for this club.",
+    "activity.interUniversityDisabled": "Inter-university discovery is not enabled for this institution.",
+    "activity.interUniversityForbidden": "Only club officers or student affairs staff can set this visibility level.",
     // activity — success
     "activity.listed": "Activities listed.",
     "activity.found": "Activity found.",

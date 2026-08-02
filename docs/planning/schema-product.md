@@ -57,7 +57,9 @@ Uygulandı (2026-07-31): `password_resets` tablosu + `POST /api/auth/forgot-pass
 
 ### 3.1 Etkinlikler
 
-**Durum:** Uygulandı (`/api/activities`). Kalan borç: yukarıdaki merge maddeleri.
+**Durum:** Uygulandı (`/api/activities`, `/api/discover/activities`). `activity_visibility` enum'una
+`inter_university` eklendi (opt-in; migration mevcut satırları değiştirmez). Kalan borç:
+yukarıdaki merge maddeleri.
 
 ### 3.2 Duyuru yaşam döngüsü
 

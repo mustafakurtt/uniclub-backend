@@ -31,6 +31,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
   - [Dashboard & Feed](#13-dashboard--feed--apifeed)
   - [Media (dosya yükleme)](#14-media--apiuploads)
   - [Public (kamuya açık okuma)](#15-public--apipublic)
+  - [Discover (üniversiteler arası keşif)](#16-discover--apidiscover)
 - [Enum Referansı](#enum-referansı)
 - [Bilinmesi Gereken Diğer Detaylar](#bilinmesi-gereken-diğer-detaylar)
 
@@ -38,7 +39,7 @@ Bu doküman, frontend ekibinin backend'i entegre ederken ihtiyaç duyacağı tü
 
 ## Genel Kurallar
 
-**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/public`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
+**Base URL:** `http://localhost:3000` (dev). Tüm feature route'ları `/api` altında mount edilir. Mount edilen route grupları: `/api/auth`, `/api/admin`, `/api/platform`, `/api/public`, `/api/discover`, `/api/universities`, `/api/users`, `/api/clubs`, `/api/activities`, `/api/feed`, `/api/uploads`, `/api/notifications`, `/api/audit`, `/api/moderation`. Ayrıca yüklenen dosyalar **`/uploads/:key`** (public, `/api` altında değil) altından servis edilir. (**`/api/super-admin` diye bir route grubu yoktur** — sistem yönetimi endpoint'leri `/api/auth`, `/api/platform`, `/api/universities` ve `/api/moderation` altındadır.)
 
 **Başarı zarfı** — her başarılı endpoint aynı şekli döner:
 
@@ -623,7 +624,7 @@ etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva s
 
 | Method | Path | Açıklama |
 |---|---|---|
-| GET | `/api/activities?scope=upcoming\|past\|all&search=` | Üniversite geneli yayınlanmış + `university` görünürlüklü etkinlikler |
+| GET | `/api/activities?scope=upcoming\|past\|all&search=` | Üniversite geneli yayınlanmış + `university` veya `inter_university` görünürlüklü etkinlikler |
 | GET | `/api/activities/:activityId` | Detay (görünürlük/tenant/yayın kuralları uygulanır) |
 | POST | `/api/activities/:activityId/rsvp` | Katılım bildir — `{ status: "going"\|"interested" }` (vars. `going`, kapasite kontrollü) |
 | DELETE | `/api/activities/:activityId/rsvp` | Katılımı geri al (idempotent) |
@@ -645,6 +646,7 @@ etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva s
 | DELETE | `.../:activityId/co-hosts/:coClubId` | host staff (co-host kaldır) |
 | POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
 | POST | `/api/admin/universities/:uid/activities/:activityId/cancel` | `activity.moderate` (tenant) | **Moderasyon:** tenant'taki herhangi bir kulübün etkinliğini iptal etme |
+| PATCH | `/api/admin/universities/:uid/clubs/:clubId/activities/:activityId` | `activity.moderate` (tenant) | Görünürlük güncelle — `{ visibility }` (`inter_university` dahil; SKS) |
 
 Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true), scheduledPublishAtLocal? ("YYYY-MM-DDTHH:mm", tenant yerel) }`; `PATCH` aynı alanlar opsiyonel + `scheduledPublishAtLocal: null` iptal (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.
 
@@ -718,6 +720,19 @@ Gizli kaynak (`draft`, `members`, zamanlanmış taslak, başka tenant) → **404
 
 Detay: [integration/exports.md](../integration/exports.md).
 
+---
+
+### 16) Discover — `/api/discover`
+
+Üniversiteler arası etkinlik keşfi (T10.4 — "dünya sekmesi" dilimi). Tam sözleşme:
+[`docs/integration/discover.md`](../integration/discover.md).
+
+| Method | Path | Kim | Açıklama |
+|---|---|---|---|
+| GET | `/api/discover/activities?limit=&cursor=&universityId=` | Bearer; tenant bayrağı açık | Ağdaki `inter_university` yaklaşan etkinlikler (keyset sayfalama) |
+
+Tenant bayrağı (`university.inter_university.enabled`) kapalıysa **404** (403 değil). Kendi üniversitenin host etkinlikleri listede **yok**.
+
 
 ---
 
@@ -727,7 +742,7 @@ Detay: [integration/exports.md](../integration/exports.md).
 |---|---|
 | `user.status` | `pending`, `active`, `suspended` |
 | `activity_status` | `draft`, `published`, `cancelled` |
-| `activity_visibility` | `university`, `members` |
+| `activity_visibility` | `university`, `members`, `inter_university` |
 | `activity_club_role` | `host`, `co_host` |
 | `activity_club_status` | `invited`, `accepted` |
 | `rsvp_status` | `going`, `interested`, `waitlist` |

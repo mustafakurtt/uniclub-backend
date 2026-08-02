@@ -258,7 +258,7 @@ async function main(): Promise<() => Promise<void>> {
       startsAt: Date;
       endsAt?: Date;
       capacity?: number;
-      visibility?: "university" | "members";
+      visibility?: "university" | "members" | "inter_university";
       status?: "draft" | "published" | "cancelled";
       attendees?: { userId: string; status?: "going" | "interested" | "waitlist" }[];
     }) {
@@ -378,6 +378,12 @@ async function main(): Promise<() => Promise<void>> {
     await tx.insert(schema.tenantSettings).values({
       universityId: antalya.id,
       key: TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED,
+      value: true,
+      updatedBy: antalyaSks,
+    });
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.UNIVERSITY_INTER_UNIVERSITY_ENABLED,
       value: true,
       updatedBy: antalyaSks,
     });
@@ -697,6 +703,13 @@ async function main(): Promise<() => Promise<void>> {
     });
     approvalChainsByUniversity[ege.id] = parseApprovalChainSteps(["advisor", "student_affairs"])!;
 
+    await tx.insert(schema.tenantSettings).values({
+      universityId: ege.id,
+      key: TenantSettingKey.UNIVERSITY_INTER_UNIVERSITY_ENABLED,
+      value: true,
+      updatedBy: egeSks,
+    });
+
     console.log("   🏕️ Ege kulüpleri ve üyelikleri...");
 
     // Antalya'daki kulüple AYNI slug — tenant izolasyonu testi (listelemeler karışmamalı)
@@ -881,6 +894,22 @@ async function main(): Promise<() => Promise<void>> {
       location: "A Blok Salon", startsAt: new Date(Date.now() - 15 * 60 * 1000),
       endsAt: new Date(Date.now() + 2 * 60 * 60 * 1000), capacity: 50,
       attendees: [{ userId: sen }, { userId: can }, { userId: emre }],
+    });
+
+    // 7) Üniversiteler arası keşif — Ege host, Antalya öğrencisi discover'da görür.
+    await createActivity({
+      hostClubId: egeTechClub.id, createdBy: cem,
+      title: "Ege Açık Teknoloji Buluşması",
+      description: "Üniversiteler arası keşif ağında listelenir.",
+      location: "Ege Merkez Amfi", startsAt: inDays(12), visibility: "inter_university",
+    });
+
+    // 8) Antalya host inter_university — Antalya öğrencisi discover'da GÖRMEZ (kendi tenant).
+    await createActivity({
+      hostClubId: techClub.id, createdBy: mustafa,
+      title: "Antalya Ağ Etkinliği (Keşifte Görünmez)",
+      description: "Kendi üniversitesi discover listesinde filtrelenir.",
+      location: "Antalya Kampüs", startsAt: inDays(16), visibility: "inter_university",
     });
   });
 

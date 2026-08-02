@@ -21,6 +21,7 @@ import { auditRoutes } from "./features/audit/audit.routes";
 import { moderationRoutes } from "./features/moderation/moderation.routes";
 import { platformRoutes } from "./features/platform/platform.routes";
 import { publicRoutes } from "./features/public/public.routes";
+import { discoverRoutes } from "./features/discover/discover.routes";
 import { registerAuditSink } from "./features/audit/audit.sink";
 import { errorHandler } from "./middlewares/error.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
@@ -193,6 +194,7 @@ app.route("/api/audit", auditRoutes);
 app.route("/api/moderation", moderationRoutes);
 app.route("/api/platform", platformRoutes);
 app.route("/api/public", publicRoutes);
+app.route("/api/discover", discoverRoutes);
 
 // Sunucuyu başlat + graceful shutdown — YALNIZCA bu dosya doğrudan entrypoint
 // iken (import.meta.main). Testler `app`'i import eder (import.meta.main false),

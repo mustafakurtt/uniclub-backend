@@ -11,7 +11,12 @@ import {
 } from "../../shared/publishing/scheduled-publish.queue";
 import { CreateActivityDTO, UpdateActivityDTO, ListActivitiesQueryDTO, RsvpDTO } from "./activities.schema";
 import { checkInQrCache } from "./check-in-qr.cache";
-import type { Activity } from "./activities.types";
+import type { Activity, ActivityVisibility } from "./activities.types";
+import { getTenantSettings } from "../tenant-settings/tenant-settings.cache";
+import {
+  TenantSettingKey,
+  isTenantFeatureEnabled,
+} from "../tenant-settings/tenant-settings.catalog";
 
 type ActivityDetail = NonNullable<Awaited<ReturnType<typeof activitiesRepository.findDetailById>>>;
 type AcceptedClubLink = ActivityDetail["activityClubs"][number];
@@ -110,6 +115,8 @@ export const activitiesService = {
       ? await resolveScheduledPublishAt(universityId, data.scheduledPublishAtLocal)
       : null;
 
+    await assertInterUniversityVisibilityAllowed(hostClubId, createdBy, data.visibility);
+
     // 2
     const status = data.publish && !scheduledAt ? "published" : "draft";
     const activity = await activitiesRepository.createWithHost(hostClubId, createdBy, {
@@ -190,7 +197,7 @@ export const activitiesService = {
    * Host kulübün etkinliği güncellemesi. İptal edilmiş etkinlik güncellenemez.
    * Tarih alanları geldiyse yeni pencere yine doğrulanır (mevcut değerle harmanlanarak).
    */
-  async updateForClub(hostClubId: string, activityId: string, data: UpdateActivityDTO) {
+  async updateForClub(hostClubId: string, activityId: string, actorId: string, data: UpdateActivityDTO) {
     const activity = await this.requireHostedActivity(hostClubId, activityId);
     if (activity.status === "cancelled") {
       throw badRequest("activity.alreadyCancelled");
@@ -218,6 +225,10 @@ export const activitiesService = {
         await enqueueScheduledPublish("activity", activityId, at);
         scheduledPublishAt = at;
       }
+    }
+
+    if (data.visibility !== undefined) {
+      await assertInterUniversityVisibilityAllowed(hostClubId, actorId, data.visibility);
     }
 
     const updated = await activitiesRepository.updateActivity(activityId, {
@@ -248,6 +259,28 @@ export const activitiesService = {
     await notifyAttendeesCancelled(activityId, activity);
     await this.invalidateCache(activityId);
     return cancelled;
+  },
+
+  /** SKS moderasyonu — görünürlük güncellemesi (activity.moderate). */
+  async updateVisibilityForModerator(
+    universityId: string,
+    hostClubId: string,
+    activityId: string,
+    visibility: ActivityVisibility
+  ) {
+    const activity = await this.requireHostedActivity(hostClubId, activityId);
+    if (activity.status === "cancelled") {
+      throw badRequest("activity.alreadyCancelled");
+    }
+    if (!(await activitiesRepository.isActivityInUniversity(activityId, universityId))) {
+      throw notFound("activity.notFound");
+    }
+
+    await assertInterUniversityVisibilityAllowed(hostClubId, "", visibility, { allowModerator: true });
+
+    const updated = await activitiesRepository.updateActivity(activityId, { visibility });
+    await this.invalidateCache(activityId);
+    return updated;
   },
 
   /** Host kulübün etkinliğinin katılımcı listesi (güvenli kullanıcı objeleriyle). */
@@ -507,13 +540,38 @@ export const activitiesService = {
 
 // ── yardımcılar ────────────────────────────────────────────────────────────
 
-/** Zaman penceresi doğrulaması (oluşturma/güncellemede ortak). */
 function assertValidWindow(startsAt: Date, endsAt: Date | null | undefined) {
   if (startsAt.getTime() < Date.now()) {
     throw badRequest("activity.startInPast");
   }
   if (endsAt && endsAt.getTime() < startsAt.getTime()) {
     throw badRequest("activity.endBeforeStart");
+  }
+}
+
+async function assertInterUniversityVisibilityAllowed(
+  hostClubId: string,
+  actorId: string,
+  visibility: ActivityVisibility | undefined,
+  options?: { allowModerator?: boolean }
+) {
+  if (visibility !== "inter_university") return;
+
+  const universityId = await activitiesRepository.getClubUniversityId(hostClubId);
+  if (!universityId) {
+    throw notFound("club.notFound");
+  }
+
+  const settings = await getTenantSettings(universityId);
+  if (!isTenantFeatureEnabled(settings, TenantSettingKey.UNIVERSITY_INTER_UNIVERSITY_ENABLED)) {
+    throw badRequest("activity.interUniversityDisabled");
+  }
+
+  if (options?.allowModerator) return;
+
+  const isOfficer = await activitiesRepository.isClubOfficerOrPresident(hostClubId, actorId);
+  if (!isOfficer) {
+    throw forbidden("activity.interUniversityForbidden");
   }
 }
 

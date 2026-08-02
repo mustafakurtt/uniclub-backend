@@ -11,6 +11,7 @@ import { AnnouncementPermission } from "../announcements/announcements.permissio
 import { GalleryPermission } from "../gallery/gallery.permissions";
 import { ActivityPermission } from "../activities/activities.permissions";
 import { activitiesService } from "../activities/activities.service";
+import { updateActivityVisibilitySchema } from "../activities/activities.schema";
 import { DashboardPermission } from "../dashboard/dashboard.permissions";
 import {
   updateClubStatusSchema,
@@ -538,5 +539,23 @@ adminRoutes.post(
     const { universityId, activityId } = c.req.param();
     const cancelled = await activitiesService.moderateCancel(universityId, activityId);
     return ok(c, cancelled, "activity.cancelledOk");
+  }
+);
+
+// 18. ETKİNLİK GÖRÜNÜRLÜĞÜ — SKS moderasyonu (inter_university dahil)
+adminRoutes.patch(
+  "/universities/:universityId/clubs/:clubId/activities/:activityId",
+  ...guard(ActivityPermission.MODERATE, { tenantScoped: true }),
+  validate("json", updateActivityVisibilitySchema),
+  async (c) => {
+    const { universityId, clubId, activityId } = c.req.param();
+    const { visibility } = c.req.valid("json");
+    const updated = await activitiesService.updateVisibilityForModerator(
+      universityId,
+      clubId,
+      activityId,
+      visibility
+    );
+    return ok(c, updated, "activity.updated");
   }
 );

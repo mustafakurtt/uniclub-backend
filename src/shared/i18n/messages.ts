@@ -27,6 +27,7 @@ import {
 import { publicMessages, type PublicMessageKey } from "../../features/public/public.messages";
 import { posterQrMessages, type PosterQrMessageKey } from "../../features/poster-qr/poster-qr.messages";
 import { exportsMessages, type ExportsMessageKey } from "../../features/exports/exports.messages";
+import { discoverMessages, type DiscoverMessageKey } from "../../features/discover/discover.messages";
 import {
   academicTermMessages,
   type AcademicTermMessageKey,
@@ -79,6 +80,7 @@ export const messages = mergeCatalogs(
   publicMessages,
   posterQrMessages,
   exportsMessages,
+  discoverMessages,
   academicTermMessages,
   membershipHistoryMessages,
   clubAdvisorMessages,
@@ -113,6 +115,7 @@ export type MessageKey =
   | PublicMessageKey
   | PosterQrMessageKey
   | ExportsMessageKey
+  | DiscoverMessageKey
   | AcademicTermMessageKey
   | MembershipHistoryMessageKey
   | ClubAdvisorMessageKey

@@ -47,8 +47,9 @@ clubActivitiesRoutes.patch(
   async (c) => {
     const clubId = c.req.param("clubId")!;
     const activityId = c.req.param("activityId")!;
+    const user = c.get("user");
     const body = c.req.valid("json");
-    const updated = await activitiesService.updateForClub(clubId, activityId, body);
+    const updated = await activitiesService.updateForClub(clubId, activityId, user.userId, body);
     return ok(c, updated, "activity.updated");
   }
 );
