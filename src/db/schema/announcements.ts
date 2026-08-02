@@ -35,6 +35,8 @@ export const announcements = table("announcements", {
   scheduledPublishAt: t.timestamp("scheduled_publish_at", { withTimezone: true }),
   pinned: t.boolean().notNull().default(false),
   visibility: activityVisibilityEnum().default("university").notNull(),
+  /** Yayınlanmış duyuruda başlık/içerik değişince set edilir; taslakta null kalır. */
+  editedAt: t.timestamp("edited_at", { withTimezone: true }),
 
   ...timestamps,
 }, (cols) => [

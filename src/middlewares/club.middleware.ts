@@ -88,6 +88,29 @@ export const requireClubMember = async (c: Context<{ Variables: ClubVariables }>
 };
 
 /**
+ * Onaylı kulüp üyesi (member/officer/president) VEYA atanmış danışman.
+ * Kurul künyesi gibi üye + danışman görünürlüğü için; staff değil (sıradan üye dahil).
+ */
+export const requireClubMemberOrAdvisor = async (c: Context<{ Variables: ClubVariables }>, next: Next) => {
+  const { clubId } = c.req.param();
+  const user = c.get("user");
+
+  const membership = await loadApprovedMembership(clubId, user.userId);
+  if (membership) {
+    c.set("clubMembership", membership);
+    c.set("clubAccess", { via: "member", role: membership.role, status: membership.status });
+    return next();
+  }
+
+  if (await isClubAdvisor(clubId, user.userId)) {
+    c.set("clubAccess", { via: "advisor" });
+    return next();
+  }
+
+  throw forbidden("club.notMember");
+};
+
+/**
  * Yapısal karar mercii: officer VEYA president (danışman DAHİL DEĞİL — üyelik
  * isteğini onaylamak, üye çıkarmak, iletişim linki yönetmek yürütme işidir).
  */

@@ -18,6 +18,8 @@ export const createAnnouncementSchema = z.object({
 export type CreateAnnouncementDTO = z.infer<typeof createAnnouncementSchema>;
 
 export const updateAnnouncementSchema = z.object({
+  title: z.string().min(3, "Başlık en az 3 karakter olmalıdır.").max(256).optional(),
+  content: z.string().min(1, "İçerik boş bırakılamaz.").max(5000).optional(),
   pinned: z.boolean().optional(),
   visibility: visibilityEnum.optional(),
   scheduledPublishAtLocal: nullableScheduledPublishAtLocalField,
@@ -36,6 +38,8 @@ export const createUniversityAnnouncementSchema = z.object({
 export type CreateUniversityAnnouncementDTO = z.infer<typeof createUniversityAnnouncementSchema>;
 
 export const updateUniversityAnnouncementSchema = z.object({
+  title: z.string().min(3, "Başlık en az 3 karakter olmalıdır.").max(256).optional(),
+  content: z.string().min(1, "İçerik boş bırakılamaz.").max(5000).optional(),
   pinned: z.boolean().optional(),
   scheduledPublishAtLocal: nullableScheduledPublishAtLocalField,
 }).refine((data) => Object.keys(data).length > 0, {

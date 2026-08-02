@@ -3,7 +3,7 @@ import { authMiddleware } from "../../core/auth/auth.middleware";
 import {
   requireClubOfficer,
   requireClubStaff,
-  requireClubMember,
+  requireClubMemberOrAdvisor,
   requireClubInTenant,
   ClubVariables,
 } from "../../middlewares/club.middleware";
@@ -22,7 +22,7 @@ generalMeetingsRoutes.get(
   "/:clubId/current-board",
   authMiddleware,
   requireClubInTenant,
-  requireClubMember,
+  requireClubMemberOrAdvisor,
   async (c) => {
     const user = c.get("user");
     const { clubId } = c.req.param();

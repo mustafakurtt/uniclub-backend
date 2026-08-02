@@ -1,4 +1,3 @@
-import { db } from "../../../db";
 import {
   OnboardTenantDTO,
   InviteTenantAdminDTO,
@@ -96,7 +95,7 @@ export const tenantsService = {
 
     const afterCommits: Array<() => Promise<void>> = [];
 
-    const result = await db.transaction(async (tx) => {
+    const result = await tenantsRepository.runTransaction(async (tx) => {
       const pkg = await universityService.createTenantPackage(
         {
           name: data.name,

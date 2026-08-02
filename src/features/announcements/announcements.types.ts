@@ -15,7 +15,10 @@ export interface CreateAnnouncementPayload {
 }
 
 export interface UpdateAnnouncementPayload {
+  title?: string;
+  content?: string;
   pinned?: boolean;
   visibility?: AnnouncementVisibility;
   scheduledPublishAt?: Date | null;
+  editedAt?: Date | null;
 }

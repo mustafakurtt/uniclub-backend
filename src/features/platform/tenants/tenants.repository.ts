@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../../db";
+import type { DbExecutor } from "../../../db/executor";
 import { clubs, clubApplications, universityDomains, users } from "../../../db/schema";
 
 /**
@@ -65,5 +66,9 @@ export const tenantsRepository = {
       .from(users)
       .where(and(eq(users.universityId, universityId), isNull(users.deletedAt)));
     return rows.map((r) => r.id);
+  },
+
+  async runTransaction<T>(fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
+    return db.transaction(fn);
   },
 };

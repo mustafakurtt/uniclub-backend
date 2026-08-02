@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { isNull } from "drizzle-orm";
-import { login, me, get, reqAuth } from "./helpers";
+import { login, me, get, reqAuth, data } from "./helpers";
 import { db } from "../src/db";
 import {
   clubBoardMemberships,
@@ -180,6 +180,18 @@ describe("genel kurul temeli", () => {
     const body = await (await get(currentBoardUrl, student)).json();
     expect(body.data.management.principal.length).toBe(5);
     expect(body.data.management.alternate.length).toBe(5);
+  });
+
+  it("danışman (üye değil) güncel kurulu görebilir", async () => {
+    const advisor = await login("leyla.hoca@egebilim.edu.tr");
+    const egeClubs = await data<Array<{ id: string; slug: string }>>(await get("/api/clubs", advisor));
+    const egeTechId = egeClubs.find((c) => c.slug === "yazilim-teknoloji")!.id;
+    const res = await get(`/api/clubs/${egeTechId}/current-board`, advisor);
+    expect(res.status).toBe(200);
+    const membership = await db.query.clubMembers.findFirst({
+      where: { clubId: egeTechId, userId: (await me(advisor)).userId as string },
+    });
+    expect(membership).toBeUndefined();
   });
 
   it("staff genel kurul listesinde attendeeCount görür", async () => {

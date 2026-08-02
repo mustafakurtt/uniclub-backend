@@ -1,0 +1,1 @@
+ALTER TABLE "announcements" ADD COLUMN "edited_at" timestamp with time zone;

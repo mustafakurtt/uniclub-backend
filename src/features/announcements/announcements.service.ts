@@ -227,12 +227,15 @@ export const announcementsService = {
     );
 
     const patch: UpdateAnnouncementPayload = {
+      title: data.title,
+      content: data.content,
       pinned: data.pinned,
       visibility: data.visibility,
     };
     if (scheduledAt !== undefined) {
       patch.scheduledPublishAt = scheduledAt;
     }
+    applyEditedAtIfPublished(existing, data, patch);
 
     const [updated] = await announcementsRepository.updateInClub(clubId, announcementId, patch);
     if (!updated) {
@@ -264,12 +267,21 @@ export const announcementsService = {
       data.scheduledPublishAtLocal
     );
 
-    const patch: { pinned?: boolean; scheduledPublishAt?: Date | null } = {
+    const patch: {
+      title?: string;
+      content?: string;
+      pinned?: boolean;
+      scheduledPublishAt?: Date | null;
+      editedAt?: Date | null;
+    } = {
+      title: data.title,
+      content: data.content,
       pinned: data.pinned,
     };
     if (scheduledAt !== undefined) {
       patch.scheduledPublishAt = scheduledAt;
     }
+    applyEditedAtIfPublished(existing, data, patch);
 
     const [updated] = await announcementsRepository.updateInUniversity(universityId, announcementId, patch);
     if (!updated) {
@@ -317,6 +329,18 @@ function filterForViewer(
       row.status === "published" &&
       (row.visibility === "university" || (row.visibility === "members" && viewer.isMember))
   );
+}
+
+function applyEditedAtIfPublished(
+  existing: Announcement,
+  data: { title?: string; content?: string },
+  patch: { editedAt?: Date | null }
+) {
+  const titleChanged = data.title !== undefined && data.title !== existing.title;
+  const contentChanged = data.content !== undefined && data.content !== existing.content;
+  if (existing.status === "published" && (titleChanged || contentChanged)) {
+    patch.editedAt = new Date();
+  }
 }
 
 async function assertPinnedCapacity(universityId: string, clubId: string) {

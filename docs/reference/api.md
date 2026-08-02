@@ -276,7 +276,7 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | GET | `/api/universities/:universityId/announcements` | Bearer | Tenant duyuruları (öğrenci: yalnızca yayınlanmış) |
 | POST | `/api/universities/:universityId/announcements` | `announcement.university.manage` | Oluştur / yayınla (saatte 5 hız sınırı) |
 | POST | `/api/universities/:universityId/announcements/:id/publish` | `announcement.university.manage` | Taslak yayınla |
-| PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sabitleme / zamanlanmış yayın güncelle |
+| PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Başlık/içerik, sabitleme, zamanlanmış yayın; yayınlanmışta içerik değişince `editedAt` |
 | DELETE | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Sil |
 
 **Tenant ayarları** (`university.settings.manage`, tenantScoped):
@@ -370,7 +370,7 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | PATCH | `/api/clubs/:clubId/members/:userId/role` | **yalnızca başkan** (member↔officer) |
 | POST | `/api/clubs/:clubId/transfer-presidency` | **yalnızca başkan** (eski başkan officer olur) |
 | GET | `/api/clubs/:clubId/membership-history` | **staff**: danışman/officer/başkan; sayfalanabilir, `?academicTermId=` |
-| GET | `/api/clubs/:clubId/current-board` | **onaylı üye**: güncel yönetim/denetleme kurulu (asil/yedek, unvan) |
+| GET | `/api/clubs/:clubId/current-board` | **onaylı üye veya danışman**: güncel yönetim/denetleme kurulu (asil/yedek, unvan) |
 | GET | `/api/clubs/:clubId/general-meetings` | **staff**: genel kurul kayıtları (`attendeeCount` liste yanıtında) |
 | GET | `/api/clubs/:clubId/general-meetings/:meetingId` | **staff**: genel kurul detayı |
 | POST | `/api/clubs/:clubId/general-meetings` | officer/başkan: genel kurul + kurul seçimi kaydı |
@@ -416,7 +416,7 @@ Body şemaları:
 | GET | `/api/clubs/:clubId/announcements` | Bearer | Kulübün duyurularını listele (görünürlük serviste) |
 | POST | `/api/clubs/:clubId/announcements` | staff (danışman/officer/president) | Duyuru oluştur |
 | POST | `/api/clubs/:clubId/announcements/:announcementId/publish` | staff | Taslak duyuruyu yayınla |
-| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff | Sabitleme / görünürlük / zamanlanmış yayın güncelle |
+| PATCH | `/api/clubs/:clubId/announcements/:announcementId` | staff | Başlık/içerik, sabitleme, görünürlük, zamanlanmış yayın; yayınlanmışta içerik değişince `editedAt` |
 | DELETE | `/api/clubs/:clubId/announcements/:announcementId` | staff (danışman/officer/president) | Duyuru sil |
 
 **POST** body: `{ "title": "string (3-256)", "content": "string (1-5000)", "visibility?": "university"|"members", "pinned?": bool, "publish?": bool (vars. true), "scheduledPublishAtLocal?": "YYYY-MM-DDTHH:mm" (tenant yerel) }`. Ayrıntı: [integration/announcements.md](../integration/announcements.md).

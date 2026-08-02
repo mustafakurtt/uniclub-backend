@@ -132,9 +132,12 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
 
   updateInClub(clubId: string, announcementId: string, data: UpdateAnnouncementPayload) {
     const patch: Partial<typeof announcements.$inferInsert> = { updatedAt: new Date() };
+    if (data.title !== undefined) patch.title = data.title;
+    if (data.content !== undefined) patch.content = data.content;
     if (data.pinned !== undefined) patch.pinned = data.pinned;
     if (data.visibility !== undefined) patch.visibility = data.visibility;
     if (data.scheduledPublishAt !== undefined) patch.scheduledPublishAt = data.scheduledPublishAt;
+    if (data.editedAt !== undefined) patch.editedAt = data.editedAt;
     return db
       .update(announcements)
       .set(patch)
@@ -207,11 +210,20 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
   updateInUniversity(
     universityId: string,
     announcementId: string,
-    data: { pinned?: boolean; scheduledPublishAt?: Date | null }
+    data: {
+      title?: string;
+      content?: string;
+      pinned?: boolean;
+      scheduledPublishAt?: Date | null;
+      editedAt?: Date | null;
+    }
   ) {
     const patch: Partial<typeof announcements.$inferInsert> = { updatedAt: new Date() };
+    if (data.title !== undefined) patch.title = data.title;
+    if (data.content !== undefined) patch.content = data.content;
     if (data.pinned !== undefined) patch.pinned = data.pinned;
     if (data.scheduledPublishAt !== undefined) patch.scheduledPublishAt = data.scheduledPublishAt;
+    if (data.editedAt !== undefined) patch.editedAt = data.editedAt;
     return db
       .update(announcements)
       .set(patch)

@@ -140,4 +140,41 @@ describe("duyurular (/api/clubs/:clubId/announcements)", () => {
     });
     expect(over.status).toBe(400);
   });
+
+  it("yayınlanmış duyuru düzenlenir → editedAt dolu", async () => {
+    const title = `Yayın düzenle ${Date.now()}`;
+    const createRes = await reqAuth("POST", `/api/clubs/${techClubId}/announcements`, mustafa, {
+      title,
+      content: "İlk metin.",
+      publish: true,
+    });
+    expect(createRes.status).toBe(201);
+    const announcementId = (await createRes.json()).data.id as string;
+
+    const patchRes = await reqAuth("PATCH", `/api/clubs/${techClubId}/announcements/${announcementId}`, mustafa, {
+      content: "Düzeltilmiş metin.",
+    });
+    expect(patchRes.status).toBe(200);
+    const updated = (await patchRes.json()).data as { editedAt: string | null; content: string };
+    expect(updated.content).toBe("Düzeltilmiş metin.");
+    expect(updated.editedAt).toBeTruthy();
+  });
+
+  it("taslak duyuru düzenlenir → editedAt null kalır", async () => {
+    const title = `Taslak düzenle ${Date.now()}`;
+    const createRes = await reqAuth("POST", `/api/clubs/${techClubId}/announcements`, mustafa, {
+      title,
+      content: "Taslak metin.",
+      publish: false,
+    });
+    expect(createRes.status).toBe(201);
+    const announcementId = (await createRes.json()).data.id as string;
+
+    const patchRes = await reqAuth("PATCH", `/api/clubs/${techClubId}/announcements/${announcementId}`, mustafa, {
+      content: "Taslak düzeltilmiş.",
+    });
+    expect(patchRes.status).toBe(200);
+    const updated = (await patchRes.json()).data as { editedAt: string | null };
+    expect(updated.editedAt).toBeNull();
+  });
 });

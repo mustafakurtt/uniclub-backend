@@ -1,13 +1,9 @@
-import { eq, and, inArray } from "drizzle-orm";
-import { db } from "../../db";
-import * as schema from "../../db/schema";
-import { users } from "../../db/schema";
 import { approvalCommitteesRepository } from "../approval-committees/approval-committees.repository";
 import { adminRepository } from "../admin/admin.repository";
 import { auditService } from "../audit/audit.service";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
-import { badRequest, forbidden, notFound } from "../../shared/utils/errors";
+import { badRequest, forbidden } from "../../shared/utils/errors";
 import { toSafeUser } from "../../shared/utils/user.util";
 import {
   computeCommitteeMajorityThreshold,
@@ -15,6 +11,7 @@ import {
   isCommitteeMajorityStep,
   type ApplicationApprovalRow,
 } from "./club-application-chain.core";
+import { clubApplicationCommitteeRepository } from "./club-application-committee.repository";
 
 export type CommitteeTallySummary = {
   committeeId: string;
@@ -84,10 +81,10 @@ async function notifyCommitteeMembers(
 
 export const clubApplicationCommitteeService = {
   async notifyIfCurrentStepIsCommittee(universityId: string, applicationId: string) {
-    const application = await db.query.clubApplications.findFirst({
-      where: { id: applicationId, universityId },
-      with: { approvals: { orderBy: { step: "asc" } } },
-    });
+    const application = await clubApplicationCommitteeRepository.findApplicationWithApprovals(
+      applicationId,
+      universityId
+    );
     if (!application || application.status !== "pending") return;
 
     const rows = toApprovalRows(application.approvals);
@@ -138,16 +135,12 @@ export const clubApplicationCommitteeService = {
     );
     const requiredApprovals = computeCommitteeMajorityThreshold(memberCount);
 
-    const voteRows = await db.query.clubApplicationCommitteeVotes.findMany({
-      where: {
-        applicationId,
-        approvalStep,
-        committeeId,
-        universityId,
-      },
-      with: { voter: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const voteRows = await clubApplicationCommitteeRepository.findVotesForStep(
+      applicationId,
+      approvalStep,
+      committeeId,
+      universityId
+    );
 
     const approveCount = voteRows.filter((v) => v.vote === "approve").length;
     const rejectCount = voteRows.filter((v) => v.vote === "reject").length;
@@ -185,10 +178,7 @@ export const clubApplicationCommitteeService = {
     );
     const votedIds = new Set(voteRows.map((v) => v.voterUserId));
     const notVotedUserIds = memberUserIds.filter((id) => !votedIds.has(id)).sort();
-    const notVotedUsers =
-      notVotedUserIds.length > 0
-        ? await db.select().from(users).where(inArray(users.id, notVotedUserIds))
-        : [];
+    const notVotedUsers = await clubApplicationCommitteeRepository.findUsersByIds(notVotedUserIds);
     const notVotedById = new Map(notVotedUsers.map((u) => [u.id, u]));
     const notVotedMembers = notVotedUserIds
       .map((id) => notVotedById.get(id))
@@ -242,130 +232,14 @@ export const clubApplicationCommitteeService = {
       throw badRequest("admin.committeeRejectReasonRequired");
     }
 
-    const result = await db.transaction(async (tx) => {
-      const application = await tx.query.clubApplications.findFirst({
-        where: { id: applicationId, universityId },
-        with: { approvals: { orderBy: { step: "asc" } } },
-      });
-
-      if (!application) {
-        throw notFound("admin.applicationNotFound");
-      }
-      if (application.status !== "pending") {
-        throw badRequest("admin.applicationAlreadyDecided");
-      }
-
-      const approvalRows = toApprovalRows(application.approvals);
-      const current = findCurrentApprovalStep(approvalRows);
-      if (!current || !isCommitteeMajorityStep(current) || !current.committeeId) {
-        throw badRequest("admin.committeeStepNotActive");
-      }
-
-      const approvalRow = application.approvals.find((a) => a.step === current.step);
-      if (!approvalRow) {
-        throw badRequest("admin.applicationAlreadyDecided");
-      }
-
-      const committee = await approvalCommitteesRepository.findByIdInUniversity(
-        universityId,
-        current.committeeId
-      );
-      if (!committee) {
-        throw notFound("approvalCommittee.notFound");
-      }
-
-      const isMember = await approvalCommitteesRepository.isActiveMember(
-        current.committeeId,
-        universityId,
-        voterUserId
-      );
-      if (!isMember) {
-        throw forbidden("admin.committeeVoteForbidden");
-      }
-
-      const trimmedReason = input.reason?.trim() ?? null;
-
-      await tx
-        .insert(schema.clubApplicationCommitteeVotes)
-        .values({
-          applicationId,
-          universityId,
-          approvalStep: current.step,
-          committeeId: current.committeeId,
-          voterUserId,
-          vote: input.vote,
-          reason: trimmedReason,
-        })
-        .onConflictDoUpdate({
-          target: [
-            schema.clubApplicationCommitteeVotes.applicationId,
-            schema.clubApplicationCommitteeVotes.approvalStep,
-            schema.clubApplicationCommitteeVotes.voterUserId,
-          ],
-          set: {
-            vote: input.vote,
-            reason: trimmedReason,
-            updatedAt: new Date(),
-          },
-        });
-
-      const votes = await tx.query.clubApplicationCommitteeVotes.findMany({
-        where: {
-          applicationId,
-          approvalStep: current.step,
-          committeeId: current.committeeId,
-        },
-      });
-
-      const memberCount = await approvalCommitteesRepository.countActiveMembers(
-        current.committeeId,
-        universityId
-      );
-      const requiredApprovals = computeCommitteeMajorityThreshold(memberCount);
-      const approveCount = votes.filter((v) => v.vote === "approve").length;
-      const rejectCount = votes.filter((v) => v.vote === "reject").length;
-
-      let stepDecision: "approved" | "rejected" | null = null;
-      if (approveCount >= requiredApprovals) {
-        stepDecision = "approved";
-      } else if (rejectCount >= requiredApprovals) {
-        stepDecision = "rejected";
-      }
-
-      const tallySnapshot = {
-        memberCount,
-        requiredApprovals,
-        approveCount,
-        rejectCount,
-        votes: votes.length,
-      };
-
-      if (!stepDecision) {
-        return {
-          finalized: false as const,
-          application,
-          tally: tallySnapshot,
-        };
-      }
-
-      const finalizeResult = await adminRepository.finalizeApplicationStepInTransaction(
-        tx,
-        universityId,
-        applicationId,
-        application,
-        approvalRow.id,
-        stepDecision,
-        voterUserId,
-        stepDecision === "rejected" ? trimmedReason : trimmedReason
-      );
-
-      return {
-        finalized: true as const,
-        decision: stepDecision,
-        result: finalizeResult,
-        tally: tallySnapshot,
-      };
-    });
+    const trimmedReason = input.reason?.trim() ?? null;
+    const result = await clubApplicationCommitteeRepository.castCommitteeVote(
+      universityId,
+      applicationId,
+      voterUserId,
+      input.vote,
+      trimmedReason
+    );
 
     await auditService.record({
       universityId,
@@ -378,7 +252,7 @@ export const clubApplicationCommitteeService = {
       targetId: applicationId,
       metadata: {
         vote: input.vote,
-        reason: input.reason?.trim() ?? null,
+        reason: trimmedReason,
         tally: result.tally,
         finalized: result.finalized,
         decision: result.finalized ? result.decision : null,
