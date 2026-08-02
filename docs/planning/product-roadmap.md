@@ -1050,7 +1050,7 @@ kitle. Eksenler karışınca her girdi mantıken 2-3 gruba ait olur ve kimse bir
 | --- | --- |
 | 1 — Menü nesneye göre yeniden gruplandı (Çalışma alanı / Ayarlar / Platform) | ✅ |
 | 2 — Ana sayfa bağımsız iş kuyruğu blokları; `resolveAdminHomeVariant` silindi | ✅ |
-| 3 — Kişiler birleşimi (kullanıcı + moderasyon tek sayfada) | ⏳ |
+| 3 — Kişiler birleşimi (kullanıcı + moderasyon tek sayfada) | 🔶 başladı — moderasyon sekmesi eklendi, `/admin/moderation` duruyor |
 | 4 — Etkinlik yönetim ekranı | ✅ |
 | 5 — Kulüp/kişi detay sekmelerinin zenginleştirilmesi | ⏳ **asıl iş** |
 
@@ -1059,9 +1059,11 @@ Liste sayfaları dar olur, detay sayfaları her şeyi barındırır. Bugün tek 
 kişi üç ekrana dağılmış (rolü `users`, yasağı `moderation`, yetkisi
 `permissions`).
 
-**Bilinen borç:** tenant geneli etkinlik listesi ucu yok; ekran tüm kulüpleri
-çekip her biri için sayfaları dolaşıyor. 3 kulüpte sorunsuz, 120 kulüpte
-tarayıcı kendi API'mize yüklenir.
+**Bilinen borç:** `GET /api/admin/universities/:universityId/activities`
+**yazıldı** (keyset, `clubName` gömülü, `activity.moderate` izniyle) ama
+frontend hâlâ tüm kulüpleri çekip her biri için sayfaları dolaşıyor.
+3 kulüpte sorunsuz, 120 kulüpte tarayıcı kendi API'mize yüklenir.
+**Sıradaki FE turunda bu uca geçirilmeli.**
 
 ### M2.8 — Öğrenci / personel ayrımı ⏳ — **teşhis kondu, ertelendi**
 
