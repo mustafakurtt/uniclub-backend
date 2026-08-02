@@ -84,4 +84,40 @@ describe("admin tenant etkinlik listesi", () => {
     expect(photoRow?.clubId).toBe(photoClubId);
     expect(list.nextCursor === null || typeof list.nextCursor === "string").toBe(true);
   });
+
+  it("taslak (upcoming) ve iptal edilmiş (cancelled) listede görünür", async () => {
+    const draftTitle = "Tenant Liste Taslak";
+    const cancelTitle = "Tenant Liste İptal";
+
+    const draftId = await created(
+      await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+        title: draftTitle,
+        startsAt: soon(12),
+        publish: false,
+      })
+    );
+    const cancelId = await created(
+      await reqAuth("POST", `/api/clubs/${techClubId}/activities`, mustafa, {
+        title: cancelTitle,
+        startsAt: soon(13),
+      })
+    );
+    expect(
+      (await reqAuth("POST", `/api/admin/universities/${antalyaUni}/activities/${cancelId}/cancel`, sks)).status
+    ).toBe(200);
+
+    const upcoming = await data<{
+      items: Array<{ id: string; title: string; status: string }>;
+    }>(await get(`${listUrl(antalyaUni)}?scope=upcoming&limit=100`, sks));
+    const draftRow = upcoming.items.find((a) => a.id === draftId);
+    expect(draftRow?.title).toBe(draftTitle);
+    expect(draftRow?.status).toBe("draft");
+
+    const cancelled = await data<{
+      items: Array<{ id: string; title: string; status: string }>;
+    }>(await get(`${listUrl(antalyaUni)}?scope=cancelled&limit=100`, sks));
+    const cancelRow = cancelled.items.find((a) => a.id === cancelId);
+    expect(cancelRow?.title).toBe(cancelTitle);
+    expect(cancelRow?.status).toBe("cancelled");
+  });
 });
