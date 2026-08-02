@@ -17,6 +17,11 @@ const rolesRepo = new BaseRepository(db, schema.roles);
 const permissionsRepo = new BaseRepository(db, schema.permissions);
 
 export const authRepository = {
+  /** Servis katmanı transaction — `db` yalnızca repository'de kalır. */
+  async runInTransaction<T>(fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
+    return await db.transaction(fn);
+  },
+
   /**
    * Domain adresine göre üniversiteyi ve domain tipini bulur.
    */
