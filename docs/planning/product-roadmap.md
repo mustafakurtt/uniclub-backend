@@ -913,6 +913,45 @@ o süreçlere **ulaşılabilir** hâle getiriyor.
 **Neden M3'ten önce:** M3 daha çok varlık ve ilişki getiriyor (dönem, devir teslim,
 tarihçe). Düz liste + modal mimarisi üzerine eklenirse sorun büyüyerek katılaşır.
 
+### M2.7 — Arayüz cilası ve üniversiteler arası keşif ★ — **araya girdi (2026-08-02)**
+
+**Not:** Bu milestone yol haritasından planlı bir sapma. Kullanıcı demo öncesi
+arayüzü elden geçirmek istedi ve bu sırada §10'daki "dünya sekmesi" fikri somut
+bir ilk dilime dönüştü. M3'ün kalanı (T4.4) bundan sonra.
+
+**FE-6 Dashboard sadeleştirme — kısmen yapıldı**
+- Sahte oyunlaştırma kaldırıldı: `useStreak` tamamen localStorage'dı ("3 günlük
+  seri" hiçbir veriye dayanmıyordu), rozet ve "Profil Gücü" kartları gitti
+- `GET /api/feed` nihayet bağlandı — backend'in gerçek kampüs akışı aylarca
+  kullanılmadan durmuş, yerine "Çok yakında" yer tutucuları gösteriliyordu
+- Sayaç kartları, hızlı eylem kutuları, profil özeti ve "Kulüplerim" bloğu
+  kaldırıldı; kulüpler `/clubs`'ta "Kulüplerim / Keşfet" olarak ikiye bölündü
+
+**Kalan:** hero yeniden tasarımı (kurum görseli + şerit), mobil davranışı.
+
+**T10.4 Üniversiteler arası etkinlik keşfi ★ — YENİ**
+
+§10'daki "dünya sekmesi" fikrinin ilk uygulanabilir dilimi: bir öğrenci **diğer
+üniversitelerde** neler olduğunu ayrı bir sayfada görebilsin.
+
+**Mimari engel:** `activity_visibility` bugün yalnızca `university` | `members`.
+Kamuya açık uçlar tek etkinliği ID ile veriyor (QR girişi için), gezilebilir bir
+liste yok. Yani bu iş **yeni bir görünürlük seviyesi** gerektiriyor.
+
+Tasarım kararları (v1):
+- **Opt-in, opt-out değil.** Hiçbir kurumun etkinliği varsayılan olarak dışarı
+  sızmaz. Kulüp (veya SKS) etkinliği paylaşıma açar.
+- **Tenant düzeyinde ana anahtar:** `university.inter_university.enabled` özellik
+  bayrağı (T8.5 altyapısı hazır). Kurum önce ağa katılmayı seçer.
+- **Kişisel veri yok.** Karşı tarafta etkinlik + düzenleyen kulüp + üniversite
+  görünür; katılımcı listesi asla.
+- **Salt okunur.** Başka kurumun etkinliğine RSVP yok — çapraz tenant katılım
+  ayrı ve büyük bir iş (kimlik, kontenjan, yoklama).
+
+**Neden değerli:** Ürünün tek kurumluk bir araçtan **ağ etkisi olan** bir platforma
+dönüştüğü yer burası. Ama tam da bu yüzden tenant izolasyonunu bilerek deldiği
+için dikkatli kurulmalı.
+
 ### M3 — Dönem ve tarihçe
 
 - T9 → **D1/D2** akademik dönem + tam üyelik tarihçesi
