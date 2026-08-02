@@ -67,6 +67,29 @@ export const announcementsService = {
     return rows.filter((a) => a.author).map((a) => ({ ...a, author: toSafeUser(a.author!) }));
   },
 
+  async getUniversityDetail(
+    universityId: string,
+    viewerId: string,
+    viewerUniversityId: string | null,
+    announcementId: string
+  ) {
+    assertTenantViewer(universityId, viewerUniversityId);
+
+    const authz = await resolveAuthz(viewerId);
+    const canManage = authz.permissions.includes(AnnouncementPermission.UNIVERSITY_MANAGE);
+
+    const row = await announcementsRepository.findUniversityAnnouncementDetail(universityId, announcementId);
+    if (!row || !row.author) {
+      throw notFound("announcement.notFound");
+    }
+
+    if (!canManage && row.status !== "published") {
+      throw notFound("announcement.notFound");
+    }
+
+    return { ...row, author: toSafeUser(row.author) };
+  },
+
   async create(universityId: string, clubId: string, authorId: string, data: CreateAnnouncementDTO) {
     if (data.pinned) {
       await assertPinnedCapacity(universityId, clubId);

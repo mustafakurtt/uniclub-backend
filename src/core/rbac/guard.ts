@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { authMiddleware } from "../auth/auth.middleware";
-import { attachAuthz, requirePermission, requireRole, RbacVariables } from "./rbac.middleware";
+import { attachAuthz, requirePermission, RbacVariables } from "./rbac.middleware";
 import { enforceTenantScope } from "./tenant-scope";
 import { auditTrail } from "./audit-hook";
 
@@ -59,13 +59,3 @@ export function guard(permissionKey: string, options?: GuardOptions): BaseGuardC
   return buildChain(permissionKey, requirePermission(permissionKey), options);
 }
 
-/**
- * ROL-tabanlı guard: özne verilen role sahip olmalı. İzin kataloğu kurmak istemeyen,
- * "sadece rol mekanizması" yeten projeler için (guard ile aynı kompozisyon).
- *   ...guardRole("admin")
- */
-export function guardRole(roleName: string): BaseGuardChain;
-export function guardRole(roleName: string, options: GuardOptions & { tenantScoped: true }): TenantScopedGuardChain;
-export function guardRole(roleName: string, options?: GuardOptions): BaseGuardChain | TenantScopedGuardChain {
-  return buildChain(roleName, requireRole(roleName), options);
-}

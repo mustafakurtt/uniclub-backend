@@ -39,6 +39,23 @@ universityAnnouncementsRoutes.get(
   }
 );
 
+universityAnnouncementsRoutes.get(
+  "/:universityId/announcements/:announcementId",
+  authMiddleware,
+  requireActiveUser,
+  async (c) => {
+    const { universityId, announcementId } = c.req.param();
+    const user = c.get("user");
+    const announcement = await announcementsService.getUniversityDetail(
+      universityId,
+      user.userId,
+      user.universityId,
+      announcementId
+    );
+    return ok(c, announcement, "announcement.found");
+  }
+);
+
 universityAnnouncementsRoutes.post(
   "/:universityId/announcements",
   ...guard(AnnouncementPermission.UNIVERSITY_MANAGE, { tenantScoped: true }),

@@ -274,6 +274,7 @@ Okuma (GET) rotaları **tamamen public** (auth gerektirmez) — kayıt formunda 
 | Method | Path | Auth | Açıklama |
 |---|---|---|---|
 | GET | `/api/universities/:universityId/announcements` | Bearer | Tenant duyuruları (öğrenci: yalnızca yayınlanmış) |
+| GET | `/api/universities/:universityId/announcements/:announcementId` | Bearer | Okul duyurusu detayı (öğrenci: yalnızca yayınlanmış; taslak → 404) |
 | POST | `/api/universities/:universityId/announcements` | `announcement.university.manage` | Oluştur / yayınla (saatte 5 hız sınırı) |
 | POST | `/api/universities/:universityId/announcements/:id/publish` | `announcement.university.manage` | Taslak yayınla |
 | PATCH | `/api/universities/:universityId/announcements/:id` | `announcement.university.manage` | Başlık/içerik, sabitleme, zamanlanmış yayın; yayınlanmışta içerik değişince `editedAt` |
@@ -503,13 +504,14 @@ Ayrıntı: `docs/integration/platform-panel.md`.
 | Method | Path | Permission | Açıklama |
 |---|---|---|---|
 | GET | `/api/platform/tenants` | `platform.tenant.view` | Tenant listesi + özet istatistikler (keyset: `limit`, `cursor`, ops. `search`) → `{ items, nextCursor }` |
+| GET | `/api/platform/tenants/:universityId` | `platform.tenant.view` | Tekil tenant detayı (liste öğesiyle aynı şekil: stats dahil) |
 | POST | `/api/platform/tenants/onboard` | `university.create` (+ `platform.tenant.invite` if `initialAdmin`) | Atomik tenant açma + opsiyonel ilk yönetici **daveti** (şifre yok) |
 | GET | `/api/platform/tenants/:universityId/invitations` | `platform.tenant.invite` | Bekleyen tenant yönetici davetleri |
 | POST | `/api/platform/tenants/:universityId/invite-admin` | `platform.tenant.invite` | Tenant yöneticisi daveti (şifre yok; mail commit sonrası) |
 | POST | `/api/platform/tenants/:universityId/invitations/:invitationId/cancel` | `platform.tenant.invite` | Bekleyen daveti iptal |
 | PATCH | `/api/platform/tenants/:universityId/status` | `platform.tenant.manage` | Tenant durumu (`reason` zorunlu) |
 | GET | `/api/platform/users` | `platform.user.view` | Platform hesap listesi |
-| POST | `/api/platform/users` | `super_admin` rolü | Platform hesabı oluştur |
+| POST | `/api/platform/users` | `platform.user.manage` | Platform hesabı oluştur |
 
 ---
 

@@ -58,6 +58,33 @@ export const tenantsService = {
     return { items, nextCursor };
   },
 
+  async getTenant(universityId: string): Promise<TenantListItem> {
+    const tenant = await universityService.getUniversitySummary(universityId);
+    const ids = [universityId];
+    const [domainCounts, userCounts, clubCounts, pendingApplications] = await Promise.all([
+      tenantsRepository.countDomainsByUniversityIds(ids),
+      tenantsRepository.countUsersByUniversityIds(ids),
+      tenantsRepository.countClubsByUniversityIds(ids),
+      tenantsRepository.countPendingApplicationsByUniversityIds(ids),
+    ]);
+
+    return {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+      status: tenant.status,
+      statusReason: tenant.statusReason,
+      statusChangedAt: tenant.statusChangedAt,
+      statusChangedBy: tenant.statusChangedBy,
+      createdAt: tenant.createdAt,
+      updatedAt: tenant.updatedAt,
+      domainCount: domainCounts.get(universityId) ?? 0,
+      userCount: userCounts.get(universityId) ?? 0,
+      clubCount: clubCounts.get(universityId) ?? 0,
+      pendingApplications: pendingApplications.get(universityId) ?? 0,
+    };
+  },
+
   async updateTenantStatus(universityId: string, data: UpdateTenantStatusDTO, actorUserId: string) {
     const tenant = await universityService.getUniversitySummary(universityId);
 

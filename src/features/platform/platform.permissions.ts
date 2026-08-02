@@ -13,6 +13,8 @@ export const PlatformPermission = {
   TENANT_INVITE: "platform.tenant.invite",
   /** Platform hesap listesi (universityId=null). */
   USER_VIEW: "platform.user.view",
+  /** Platform hesabı oluşturma ve rol atama (yalnızca super_admin bundle). */
+  USER_MANAGE: "platform.user.manage",
 } as const;
 
 export type PlatformPermission = (typeof PlatformPermission)[keyof typeof PlatformPermission];
@@ -22,4 +24,5 @@ export const PLATFORM_PERMISSION_CATALOG: { key: PlatformPermission; description
   { key: PlatformPermission.TENANT_MANAGE, description: "Tenant durumu yönetimi (askıya alma / yeniden açma)" },
   { key: PlatformPermission.TENANT_INVITE, description: "Tenant yöneticisi provision (ilk admin davet)" },
   { key: PlatformPermission.USER_VIEW, description: "Platform hesap listesi (salt-okunur)" },
+  { key: PlatformPermission.USER_MANAGE, description: "Platform hesabı oluşturma ve rol atama" },
 ];

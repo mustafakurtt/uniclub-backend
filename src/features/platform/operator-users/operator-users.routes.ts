@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { guard, guardRole } from "../../../core/rbac/guard";
+import { guard } from "../../../core/rbac/guard";
 import { RbacVariables } from "../../../core/rbac/rbac.middleware";
 import { validate } from "../../../shared/utils/validate";
 import { ok, created } from "../../../shared/utils/respond";
@@ -11,7 +11,7 @@ export const operatorUsersRoutes = new Hono<{ Variables: RbacVariables }>();
 
 /**
  * Platform hesapları (`users.universityId = null`) — liste ve provision.
- * Oluşturma yalnızca `super_admin` (platform rolleri yalnızca super_admin atar).
+ * Oluşturma `platform.user.manage` ile korunur (super_admin bundle; platform_support hariç).
  */
 operatorUsersRoutes.get(
   "/users",
@@ -24,7 +24,7 @@ operatorUsersRoutes.get(
 
 operatorUsersRoutes.post(
   "/users",
-  ...guardRole("super_admin"),
+  ...guard(PlatformPermission.USER_MANAGE),
   validate("json", createPlatformUserSchema),
   async (c) => {
     const body = c.req.valid("json");

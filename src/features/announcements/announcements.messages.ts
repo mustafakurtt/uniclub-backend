@@ -14,6 +14,7 @@ export const announcementsMessages = defineCatalog({
     "announcement.universityPinnedLimit": "Okul genelinde en fazla 3 duyuru sabitlenebilir.",
     // başarı
     "announcement.listed": "Duyurular listelendi.",
+    "announcement.found": "Duyuru getirildi.",
     "announcement.created": "Duyuru oluşturuldu.",
     "announcement.published": "Duyuru yayınlandı.",
     "announcement.updated": "Duyuru güncellendi.",
@@ -27,6 +28,7 @@ export const announcementsMessages = defineCatalog({
     "announcement.universityPinnedLimit": "At most 3 university-wide announcements can be pinned.",
     // success
     "announcement.listed": "Announcements listed.",
+    "announcement.found": "Announcement retrieved.",
     "announcement.created": "Announcement created.",
     "announcement.published": "Announcement published.",
     "announcement.updated": "Announcement updated.",

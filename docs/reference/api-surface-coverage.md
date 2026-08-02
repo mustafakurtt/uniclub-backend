@@ -163,6 +163,7 @@ Kaynak rotalar: `uniclub-frontend/src/App.tsx`; API çağrıları:
 | GET | `/api/notifications/ws` | (dahili) — WebSocket upgrade (ticket ile) |
 | POST | `/api/notifications/ws-ticket` | (dahili) — NotificationsProvider WebSocket bileti |
 | GET | `/api/platform/tenants` | — |
+| GET | `/api/platform/tenants/:universityId` | — |
 | GET | `/api/platform/tenants/:universityId/invitations` | — |
 | POST | `/api/platform/tenants/:universityId/invitations/:invitationId/cancel` | — |
 | POST | `/api/platform/tenants/:universityId/invite-admin` | — |
@@ -183,6 +184,7 @@ Kaynak rotalar: `uniclub-frontend/src/App.tsx`; API çağrıları:
 | DELETE | `/api/universities/:universityId/academic-terms/:termId` | /admin/academic-terms |
 | PATCH | `/api/universities/:universityId/academic-terms/:termId` | /admin/academic-terms |
 | GET | `/api/universities/:universityId/announcements` | — |
+| GET | `/api/universities/:universityId/announcements/:announcementId` | — |
 | POST | `/api/universities/:universityId/announcements` | — |
 | DELETE | `/api/universities/:universityId/announcements/:id` | — |
 | PATCH | `/api/universities/:universityId/announcements/:id` | — |
@@ -262,6 +264,7 @@ Kaynak rotalar: `uniclub-frontend/src/App.tsx`; API çağrıları:
 - DELETE `/api/notifications/push-subscribe`
 - POST `/api/notifications/push-subscribe`
 - GET `/api/platform/tenants`
+- GET `/api/platform/tenants/:universityId`
 - GET `/api/platform/tenants/:universityId/invitations`
 - POST `/api/platform/tenants/:universityId/invitations/:invitationId/cancel`
 - POST `/api/platform/tenants/:universityId/invite-admin`
@@ -271,6 +274,7 @@ Kaynak rotalar: `uniclub-frontend/src/App.tsx`; API çağrıları:
 - POST `/api/platform/users`
 - GET `/api/universities`
 - GET `/api/universities/:universityId/announcements`
+- GET `/api/universities/:universityId/announcements/:announcementId`
 - POST `/api/universities/:universityId/announcements`
 - DELETE `/api/universities/:universityId/announcements/:id`
 - PATCH `/api/universities/:universityId/announcements/:id`

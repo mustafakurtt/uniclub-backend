@@ -33,7 +33,7 @@ de `hono/logger`, `hono/cors` diye alan alan dağıtır; `hono/middlewares` diye
 | `requireRole` | `core/rbac` | rol adı (string) |
 | `enforceTenantScope` | `core/rbac/tenant-scope` | `configureTenantScope({ getTenantId, paramName, bypassRoles })` |
 | `auditTrail` | `core/rbac/audit-hook` | `setGuardAuditSink` |
-| `guard` / `guardRole` | `core/rbac/guard` | yukarıdakileri sabit sırayla besteler |
+| `guard` | `core/rbac/guard` | yukarıdakileri sabit sırayla besteler |
 | `createRateLimiter` | `core/ratelimit` | `store`, `keyFn`, `disabled`, `message` |
 | `createLocaleMiddleware` | `core/i18n` | `supported`, `fallback` |
 | `createRequestLogger` | `core/http` | status→level, mesaj, ek alan seam'leri |

@@ -59,6 +59,29 @@ Query: `limit` (varsayılan 50, max 100), `cursor` (opak keyset — önceki yan�
 }
 ```
 
+## `GET /api/platform/tenants/:universityId`
+
+Tekil tenant detayı. Yetki: `platform.tenant.view`. Yanıt şekli liste öğesiyle aynı (`TenantListItem` — stats dahil). Olmayan veya soft-delete tenant → 404.
+
+```jsonc
+// 200 data — liste öğesiyle aynı alanlar
+{
+  "id": "...",
+  "name": "Antalya Bilim Üniversitesi",
+  "slug": "antalya-bilim",
+  "status": "active",
+  "statusReason": null,
+  "statusChangedAt": null,
+  "statusChangedBy": null,
+  "createdAt": "...",
+  "updatedAt": "...",
+  "domainCount": 2,
+  "userCount": 18,
+  "clubCount": 6,
+  "pendingApplications": 1
+}
+```
+
 ## `PATCH /api/platform/tenants/:universityId/status`
 
 Tenant durumu güncelleme. Yetki: `platform.tenant.manage`.
@@ -224,7 +247,7 @@ Platform hesap listesi (`users.universityId = null`). Yetki: `platform.user.view
 
 ## `POST /api/platform/users`
 
-Yeni platform hesabı. Yetki: **`super_admin` rolü** (platform rolleri yalnızca super_admin atar).
+Yeni platform hesabı. Yetki: **`platform.user.manage`** (yalnızca `super_admin` bundle; `platform_support` salt-okunur).
 
 ```jsonc
 // Body

@@ -81,6 +81,44 @@ describe("platform operasyonları (/api/platform)", () => {
     expect(antalya!.domainCount).toBeGreaterThan(0);
   });
 
+  it("super_admin tekil tenant detayını liste öğesiyle aynı şekilde alır", async () => {
+    const listRes = await get("/api/platform/tenants", superAdmin);
+    const page = await data<{
+      items: Array<{
+        id: string;
+        slug: string;
+        domainCount: number;
+        userCount: number;
+        clubCount: number;
+        pendingApplications: number;
+      }>;
+    }>(listRes);
+    const antalya = page.items.find((t) => t.slug === "antalya-bilim");
+    expect(antalya).toBeDefined();
+
+    const detailRes = await get(`/api/platform/tenants/${antalya!.id}`, superAdmin);
+    expect(detailRes.status).toBe(200);
+    const detail = await data<{
+      id: string;
+      slug: string;
+      domainCount: number;
+      userCount: number;
+      clubCount: number;
+      pendingApplications: number;
+    }>(detailRes);
+    expect(detail.id).toBe(antalya!.id);
+    expect(detail.slug).toBe(antalya!.slug);
+    expect(detail.domainCount).toBe(antalya!.domainCount);
+    expect(detail.userCount).toBe(antalya!.userCount);
+    expect(detail.clubCount).toBe(antalya!.clubCount);
+    expect(detail.pendingApplications).toBe(antalya!.pendingApplications);
+  });
+
+  it("olmayan tenant id için 404 döner", async () => {
+    const res = await get("/api/platform/tenants/00000000-0000-4000-8000-000000000099", superAdmin);
+    expect(res.status).toBe(404);
+  });
+
   it("tenant listesi keyset sayfalama eşit createdAt'te satır atlamaz", async () => {
     const seedSlugs = ["antalya-bilim", "ege-bilim", "karadeniz-teknoloji"];
     const allRows = await db
@@ -474,6 +512,17 @@ describe("platform operasyonları (/api/platform)", () => {
       role: "platform_support",
     });
     expect(createRes.status).toBe(403);
+  });
+
+  it("platform.user.manage olmayan hesap POST /platform/users → 403", async () => {
+    const res = await reqAuth("POST", "/api/platform/users", platformSupport, {
+      firstName: "Denied",
+      lastName: "Provision",
+      email: `denied.${Date.now()}@platform.local`,
+      password: "DeniedAccount12!",
+      role: "platform_support",
+    });
+    expect(res.status).toBe(403);
   });
 });
 

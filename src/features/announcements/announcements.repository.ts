@@ -48,6 +48,13 @@ class AnnouncementsRepository extends BaseRepository<typeof announcements, typeo
     });
   }
 
+  findUniversityAnnouncementDetail(universityId: string, announcementId: string) {
+    return db.query.announcements.findFirst({
+      where: { id: announcementId, universityId, clubId: { isNull: true } },
+      with: { author: true },
+    });
+  }
+
   /** Yalnızca yayınlanmış duyurular — kulüp akışı (üye/ziyaretçi). */
   findPublishedByClub(clubId: string) {
     return db.query.announcements.findMany({

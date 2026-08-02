@@ -84,6 +84,53 @@ describe("okul geneli duyurular (/api/universities/:universityId/announcements)"
     expect(staffList.some((a) => a.title === title && a.status === "draft")).toBe(true);
   });
 
+  it("yayınlanmış okul duyurusu detayda görünür; taslak öğrenciye 404", async () => {
+    const publishedTitle = `Detay yayın ${Date.now()}`;
+    const publishedRes = await reqAuth(
+      "POST",
+      `/api/universities/${antalyaUniId}/announcements`,
+      sks,
+      { title: publishedTitle, content: "Yayında.", publish: true }
+    );
+    expect(publishedRes.status).toBe(201);
+    const published = await data<{ id: string; title: string }>(publishedRes);
+
+    const studentDetail = await get(
+      `/api/universities/${antalyaUniId}/announcements/${published.id}`,
+      mustafa
+    );
+    expect(studentDetail.status).toBe(200);
+    const studentBody = await data<{ id: string; title: string; status: string }>(studentDetail);
+    expect(studentBody.id).toBe(published.id);
+    expect(studentBody.title).toBe(publishedTitle);
+    expect(studentBody.status).toBe("published");
+
+    const draftTitle = `Detay taslak ${Date.now()}`;
+    const draftRes = await reqAuth(
+      "POST",
+      `/api/universities/${antalyaUniId}/announcements`,
+      sks,
+      { title: draftTitle, content: "Taslak detay.", publish: false }
+    );
+    expect(draftRes.status).toBe(201);
+    const draft = await data<{ id: string }>(draftRes);
+
+    const studentDraft = await get(
+      `/api/universities/${antalyaUniId}/announcements/${draft.id}`,
+      mustafa
+    );
+    expect(studentDraft.status).toBe(404);
+
+    const staffDraft = await get(
+      `/api/universities/${antalyaUniId}/announcements/${draft.id}`,
+      sks
+    );
+    expect(staffDraft.status).toBe(200);
+    const staffBody = await data<{ id: string; status: string }>(staffDraft);
+    expect(staffBody.id).toBe(draft.id);
+    expect(staffBody.status).toBe("draft");
+  });
+
   it("migration: club_id nullable; mevcut kulüp duyuruları clubId dolu", async () => {
     const clubRows = await db
       .select({ clubId: announcements.clubId })

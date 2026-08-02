@@ -28,6 +28,16 @@ tenantsRoutes.get(
   }
 );
 
+tenantsRoutes.get(
+  "/tenants/:universityId",
+  ...guard(PlatformPermission.TENANT_VIEW),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const tenant = await tenantsService.getTenant(universityId);
+    return ok(c, tenant, "platform.tenantFound");
+  }
+);
+
 tenantsRoutes.post(
   "/tenants/onboard",
   ...guard(UniversityPermission.CREATE),

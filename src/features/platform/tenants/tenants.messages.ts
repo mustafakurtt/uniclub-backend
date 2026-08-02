@@ -13,6 +13,7 @@ export const tenantsMessages = defineCatalog({
     "platform.invalidTenantListCursor": "Geçersiz tenant listesi cursor değeri.",
     // başarı
     "platform.tenantsListed": "Tenant listesi listelendi.",
+    "platform.tenantFound": "Tenant detayı getirildi.",
     "platform.tenantStatusUpdated": "Tenant durumu güncellendi.",
     "platform.tenantOnboarded": "Tenant başarıyla açıldı.",
     "platform.adminInvited": "Tenant yöneticisi daveti oluşturuldu.",
@@ -31,6 +32,7 @@ export const tenantsMessages = defineCatalog({
     "platform.invalidTenantListCursor": "Invalid tenant list cursor value.",
     // success
     "platform.tenantsListed": "Tenant list retrieved.",
+    "platform.tenantFound": "Tenant detail retrieved.",
     "platform.tenantStatusUpdated": "Tenant status updated.",
     "platform.tenantOnboarded": "Tenant onboarded successfully.",
     "platform.adminInvited": "Tenant administrator invitation created.",
