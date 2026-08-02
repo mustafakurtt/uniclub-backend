@@ -33,6 +33,12 @@ import {
 import { adminService } from "./admin.service";
 import { clubApplicationReviewService } from "../clubs/club-application-review.service";
 import { dashboardService } from "../dashboard/dashboard.service";
+import { AuditPermission } from "../audit/audit.permissions";
+import { auditInspectionService } from "../audit/audit-inspection.service";
+import {
+  auditPeriodQuerySchema,
+  auditDecisionListQuerySchema,
+} from "../audit/audit-inspection.schema";
 import { approvalCommitteesRoutes } from "../approval-committees/approval-committees.routes";
 import {
   committeeApplicationGuard,
@@ -69,6 +75,31 @@ adminRoutes.get(
     const { universityId } = c.req.param();
     const summary = await dashboardService.getAdminDashboard(universityId);
     return ok(c, summary, "dashboard.adminLoaded");
+  }
+);
+
+// 0C. DENETİM / Teftiş görünümü (T4.4) — kurum faaliyet özeti + karar odaklı akış
+adminRoutes.get(
+  "/universities/:universityId/audit/summary",
+  ...guard(AuditPermission.VIEW, { tenantScoped: true }),
+  validate("query", auditPeriodQuerySchema),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const query = c.req.valid("query");
+    const summary = await auditInspectionService.getSummary(universityId, query);
+    return ok(c, summary, "audit.summaryLoaded");
+  }
+);
+
+adminRoutes.get(
+  "/universities/:universityId/audit/decisions",
+  ...guard(AuditPermission.VIEW, { tenantScoped: true }),
+  validate("query", auditDecisionListQuerySchema),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const query = c.req.valid("query");
+    const result = await auditInspectionService.listDecisions(universityId, query);
+    return ok(c, result, "audit.decisionsListed");
   }
 );
 

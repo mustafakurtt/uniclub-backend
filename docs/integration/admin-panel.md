@@ -424,6 +424,17 @@ Başvuru detay sayfası (`/admin/applications/:applicationId`):
 
 Liste uçları keyset sayfalar: `cursor` = son öğenin `createdAt` (duyuru/galeri) veya `startsAt` (etkinlik) ISO 8601; yanıt `{ items, nextCursor }`.
 
+### 5.7. T4.4 — Denetim / teftiş görünümü
+
+Kurumsal güvence için ham `audit_logs` listesinin üzerinde iki okuma yüzeyi:
+
+| Uç | Yetki | Açıklama |
+|---|---|---|
+| `GET /api/admin/universities/:uid/audit/summary?from=&to=` veya `academicTermId=` | `audit.view` | Dönem bazlı kurum faaliyet sayımları (başvuru, kulüp, GK, devir, danışman, etkinlik) |
+| `GET /api/admin/universities/:uid/audit/decisions?...` | `audit.view` | Yalnızca **karar niteliğindeki** denetim satırları (`actionLabel`, aktör, gerekçe); keyset `(createdAt, id)` |
+
+`academicTermId` verildiğinde dönem `startsAt`/`endsAt` ile sınırlanır; isteğe bağlı `from`/`to` bu aralığı daraltır. Anonimleştirilmiş aktörlerde `displayName` dönmüyor (`anonymized: true`). Ham kayıt akışı: `GET /api/audit/universities/:uid` (§5.6 tablosu).
+
 ---
 
 ## 6. Sistem / RBAC Yönetimi (`/api/auth`)

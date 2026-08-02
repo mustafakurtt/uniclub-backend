@@ -443,6 +443,8 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 | GET | `/api/admin/universities/:universityId/users/:userId` | `user.view` | Tek kullanıcı (roller, üyelikler, override'lar) |
 | GET | `/api/admin/universities/:universityId/users/:userId/effective-permissions` | `user.view` | Etkin roller + yetkiler |
 | PATCH | `/api/admin/universities/:universityId/users/:userId/department` | `user.manage` | Kullanıcının bölümünü güncelle |
+| GET | `/api/admin/universities/:universityId/audit/summary?from=&to=&academicTermId=` | `audit.view` | Kurum faaliyet özeti (dönem sayımları) |
+| GET | `/api/admin/universities/:universityId/audit/decisions?from=&to=&academicTermId=&limit=&cursor=&actorId=&targetId=` | `audit.view` | Karar odaklı denetim akışı (keyset `(createdAt,id)`) |
 
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/integration/moderation.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
 | GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü; `revision_requested` ayrı kuyruk) |
