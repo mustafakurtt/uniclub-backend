@@ -224,6 +224,41 @@ export const clubsService = {
     return { id: proposalId };
   },
 
+  /** Admin panel — tüm durumlarda filtreli kuruluş önerisi listesi. */
+  async listFormationProposalsForAdmin(
+    universityId: string,
+    status?: "collecting_support" | "submitted" | "withdrawn" | "expired"
+  ) {
+    const settings = await getTenantSettings(universityId);
+    const proposals = await clubsRepository.listFormationProposalsByUniversity(universityId, status);
+    return proposals.map((proposal) => ({
+      ...proposal,
+      supportThreshold: settings.clubFormationSupportThreshold,
+      proposer: proposal.proposer ? toSafeUser(proposal.proposer) : null,
+    }));
+  },
+
+  /** Admin panel — kuruluş önerisi detayı (destekçi listesi dahil). */
+  async getFormationProposalForAdmin(universityId: string, proposalId: string) {
+    const proposal = await clubsRepository.findFormationProposalInUniversity(universityId, proposalId);
+    if (!proposal) {
+      throw notFound("admin.formationProposalNotFound");
+    }
+    const settings = await getTenantSettings(universityId);
+    const supports = await clubsRepository.listFormationSupports(proposalId);
+    return {
+      ...proposal,
+      supportThreshold: settings.clubFormationSupportThreshold,
+      proposer: proposal.proposer ? toSafeUser(proposal.proposer) : null,
+      supporters: supports
+        .filter((s) => s.supporter)
+        .map((s) => ({
+          supportedAt: s.createdAt,
+          user: toSafeUser(s.supporter!),
+        })),
+    };
+  },
+
   /** Başvuranın kendi başvurusunu onay adımlarıyla görüntülemesi. */
   async getMyApplication(applicantId: string, applicationId: string) {
     const application = await clubsRepository.findApplicationByApplicant(applicantId, applicationId);

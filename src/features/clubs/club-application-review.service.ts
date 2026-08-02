@@ -6,6 +6,13 @@ import type { ApplicationReviewChecklistItemDef } from "./application-review-che
 import { clubApplicationReviewRepository } from "./club-application-review.repository";
 import { clubApplicationDocumentsService } from "./club-application-documents.service";
 import { canActorDecideApprovalStep } from "./club-application-chain";
+import { clubApplicationCommitteeService } from "./club-application-committee.service";
+import { committeeApplicationAccessRepository } from "../approval-committees/committee-application-access.repository";
+import { notificationsService } from "../notifications/notifications.service";
+import { NotificationType } from "../notifications/notifications.types";
+import { clubEffects } from "./clubs.cache";
+import { membershipHistoryService } from "../membership-history/membership-history.service";
+import type { DecideClubApplicationResult } from "./club-application.types";
 
 /** Öğrenciye gösterilebilir olay türleri — SKS iç iş akışı ve itiraz denetimi hariç. */
 const STUDENT_VISIBLE_APPLICATION_EVENT_TYPES = new Set([
@@ -19,6 +26,48 @@ function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+/**
+ * Başvuru sahibine kararı bildirir. `notifySafe` kullanılır: bildirim
+ * gönderilemedi diye onay/red işlemi geri alınmaz — karar zaten DB'ye yazılmıştır.
+ */
+async function notifyApplicationDecision(
+  result: DecideClubApplicationResult,
+  decision: "approved" | "rejected"
+) {
+  const { application, club } = result;
+  const approved = decision === "approved";
+
+  await notificationsService.notifySafe(application.applicantId, {
+    type: NotificationType.CLUB_APPLICATION_DECIDED,
+    title: approved ? "Kulüp başvurunuz onaylandı" : "Kulüp başvurunuz reddedildi",
+    body: approved
+      ? `'${application.proposedName}' kulübü kuruldu ve başkanı oldunuz.`
+      : `'${application.proposedName}' başvurunuz olumsuz sonuçlandı.`,
+    data: { applicationId: application.id, status: decision, clubId: club?.id ?? null },
+  });
+}
+
+async function notifyApplicationDecisionIfFinal(result: DecideClubApplicationResult) {
+  const { application } = result;
+  if (application.status === "pending" || application.status === "revision_requested") return;
+  const decision = application.status as "approved" | "rejected";
+  await notifyApplicationDecision(result, decision);
+}
+
+async function notifyApplicationRevisionRequested(
+  result: DecideClubApplicationResult,
+  note: string,
+  step: number
+) {
+  const { application } = result;
+  await notificationsService.notifySafe(application.applicantId, {
+    type: NotificationType.CLUB_APPLICATION_REVISION_REQUESTED,
+    title: "Kulüp başvurunuzda düzeltme talep edildi",
+    body: `'${application.proposedName}' başvurunuz için düzeltme istendi: ${note}`,
+    data: { applicationId: application.id, step },
+  });
 }
 
 function getRejectionApproval(
@@ -379,6 +428,233 @@ export const clubApplicationReviewService = {
         }
         return base;
       }),
+    };
+  },
+
+  async listClubApplications(
+    universityId: string,
+    status?: "pending" | "approved" | "rejected" | "revision_requested"
+  ) {
+    const applications = await clubApplicationReviewRepository.findClubApplicationsByUniversity(
+      universityId,
+      status
+    );
+    return applications.map((application) => ({
+      ...application,
+      applicant: application.applicant ? toSafeUser(application.applicant) : null,
+    }));
+  },
+
+  async listMyCommitteePendingApplications(universityId: string, actorUserId: string) {
+    const rows = await committeeApplicationAccessRepository.listPendingApplicationsAwaitingUserVote(
+      universityId,
+      actorUserId
+    );
+    return rows.map((row) => ({
+      id: row.application.id,
+      proposedName: row.application.proposedName,
+      description: row.application.description,
+      status: row.application.status,
+      createdAt: row.application.createdAt,
+      applicant: row.application.applicant ? toSafeUser(row.application.applicant) : null,
+      committeeStep: row.currentStep,
+      committeeId: row.committeeId,
+      committeeName: row.committeeName,
+    }));
+  },
+
+  async getClubApplication(universityId: string, applicationId: string, actorUserId: string) {
+    const application = await clubApplicationReviewRepository.findClubApplicationDetail(
+      universityId,
+      applicationId
+    );
+    if (!application) {
+      throw notFound("admin.applicationNotFound");
+    }
+    const revisionRequestCount = await clubApplicationReviewRepository.countClubApplicationRevisionRequests(
+      applicationId
+    );
+    const { applicant, approvals, appeal, ...rest } = application;
+    const review = await this.buildReviewEnrichment(
+      universityId,
+      applicationId,
+      { ...application, approvals },
+      appeal
+    );
+    const mappedApprovals = approvals.map((approval) => ({
+      step: approval.step,
+      stepKind: approval.stepKind,
+      committeeId: approval.committeeId,
+      approverRole: approval.approverRole,
+      status: approval.status,
+      note: approval.status === "rejected" || approval.status === "revision_requested"
+        ? approval.note
+        : approval.note,
+      reviewedAt: approval.reviewedAt,
+      approver: approval.approver ? toSafeUser(approval.approver) : null,
+    }));
+    const approvalsWithTally = await clubApplicationCommitteeService.enrichApprovalsWithCommitteeTally(
+      universityId,
+      applicationId,
+      mappedApprovals,
+      actorUserId,
+      false
+    );
+    return {
+      ...rest,
+      applicant: applicant ? toSafeUser(applicant) : null,
+      approvals: approvalsWithTally,
+      revisionRequestCount,
+      ...review,
+    };
+  },
+
+  /**
+   * Onaylama akışında repository, başvuruyu gerçek bir kulübe dönüştürür
+   * (bkz. club-application-review.repository.decideClubApplication).
+   */
+  async approveClubApplication(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    note?: string
+  ) {
+    await this.assertChecklistAllowsApproval(universityId, applicationId);
+    const result = await clubApplicationReviewRepository.decideClubApplication(
+      universityId,
+      applicationId,
+      actorUserId,
+      "approved",
+      note ?? null
+    );
+    await notifyApplicationDecisionIfFinal(result);
+    if (result.application.status === "pending") {
+      await clubApplicationCommitteeService.notifyIfCurrentStepIsCommittee(universityId, applicationId);
+    }
+    if (result.application.status === "approved" && result.club) {
+      await membershipHistoryService.recordJoined(
+        result.club.id,
+        result.application.applicantId,
+        universityId,
+        "president",
+        actorUserId
+      );
+      await clubEffects.clubApproved.emit(universityId);
+    }
+    return result;
+  },
+
+  /**
+   * Ret GEREKÇESİZ yapılamaz: öğrenci neyi düzelteceğini bilmeden yeniden
+   * başvuramaz ve gerekçesiz bir ret denetlenebilir bir karar değildir.
+   * Zorunluluk zod şemasında (rejectApplicationSchema) da var; burası servis
+   * katmanının kendi sözleşmesi — repository'den doğrudan çağıran bir yol
+   * açılırsa kural yine tutar.
+   */
+  async rejectClubApplication(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    note: string
+  ) {
+    if (!note?.trim()) {
+      throw badRequest("admin.rejectionNoteRequired");
+    }
+    const result = await clubApplicationReviewRepository.decideClubApplication(
+      universityId,
+      applicationId,
+      actorUserId,
+      "rejected",
+      note.trim()
+    );
+    await notifyApplicationDecisionIfFinal(result);
+    return result;
+  },
+
+  async requestClubApplicationRevision(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    note: string
+  ) {
+    if (!note?.trim()) {
+      throw badRequest("admin.revisionNoteRequired");
+    }
+    const trimmed = note.trim();
+    const result = await clubApplicationReviewRepository.requestClubApplicationRevision(
+      universityId,
+      applicationId,
+      actorUserId,
+      trimmed
+    );
+    const events = await clubApplicationReviewRepository.findApplicationEventsWithActor(applicationId);
+    const lastRevision = events.filter((e) => e.eventType === "revision_requested").at(-1);
+    if (lastRevision) {
+      await notifyApplicationRevisionRequested(result, trimmed, lastRevision.step);
+    }
+    return result;
+  },
+
+  async castCommitteeVote(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    data: { vote: "approve" | "reject"; reason?: string }
+  ) {
+    if (data.vote === "approve") {
+      await this.assertChecklistAllowsApproval(universityId, applicationId);
+    }
+
+    const voteResult = await clubApplicationCommitteeService.castVote(
+      universityId,
+      applicationId,
+      actorUserId,
+      data
+    );
+
+    if (voteResult.finalized && voteResult.result) {
+      await notifyApplicationDecisionIfFinal(voteResult.result);
+      if (
+        voteResult.result.application.status === "approved" &&
+        voteResult.result.club
+      ) {
+        await membershipHistoryService.recordJoined(
+          voteResult.result.club.id,
+          voteResult.result.application.applicantId,
+          universityId,
+          "president",
+          actorUserId
+        );
+        await clubEffects.clubApproved.emit(universityId);
+      }
+    }
+
+    return voteResult;
+  },
+
+  async getClubApplicationHistory(universityId: string, applicationId: string) {
+    const application = await clubApplicationReviewRepository.findClubApplicationInUniversity(
+      universityId,
+      applicationId
+    );
+    if (!application) {
+      throw notFound("admin.applicationNotFound");
+    }
+    const events = await clubApplicationReviewRepository.findApplicationEventsWithActor(applicationId);
+    const revisionRequestCount = events.filter((e) => e.eventType === "revision_requested").length;
+    return {
+      applicationId,
+      revisionRequestCount,
+      events: events.map((event) => ({
+        id: event.id,
+        step: event.step,
+        eventType: event.eventType,
+        note: event.note,
+        proposedName: event.proposedName,
+        description: event.description,
+        createdAt: event.createdAt,
+        actor: event.actor ? toSafeUser(event.actor) : null,
+      })),
     };
   },
 };

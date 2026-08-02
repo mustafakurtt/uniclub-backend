@@ -5,7 +5,7 @@
 
 import { ClubPermission } from "./clubs.permissions";
 import { resolveAuthz } from "../../shared/rbac/rbac.cache";
-import { adminRepository } from "../admin/admin.repository";
+import { clubApplicationReviewRepository } from "./club-application-review.repository";
 import { badRequest, forbidden } from "../../shared/utils/errors";
 import {
   type ApplicationApprovalRow,
@@ -37,7 +37,7 @@ export async function canActorDecideApprovalStep(
     return hasClubApprove;
   }
 
-  return await adminRepository.userHasRole(actorUserId, approverRole);
+  return await clubApplicationReviewRepository.userHasRole(actorUserId, approverRole);
 }
 
 /**

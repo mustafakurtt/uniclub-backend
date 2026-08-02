@@ -8,6 +8,229 @@ import {
   clubApplicationEvents,
   clubApplications,
 } from "../../db/schema";
+import { slugify } from "../../shared/utils/slug.util";
+import {
+  deriveApplicationStatus,
+  findCurrentApprovalStep,
+  assertActorCanDecideCurrentStep,
+  isCommitteeMajorityStep,
+  type ApplicationApprovalRow,
+} from "./club-application-chain";
+import { approvalCommitteesRepository } from "../approval-committees/approval-committees.repository";
+import { notFound, badRequest, forbidden } from "../../shared/utils/errors";
+import type { Club, ClubApplication } from "./clubs.types";
+import type { DecideClubApplicationResult } from "./club-application.types";
+
+const MAX_SLUG_ATTEMPTS = 5;
+
+type ApplicationStepDecision = "approved" | "rejected" | "revision_requested";
+type ApplicationEventType = ApplicationStepDecision | "resubmitted";
+
+type ApplicationWithApprovals = {
+  id: string;
+  universityId: string;
+  applicantId: string;
+  proposedName: string;
+  description: string | null;
+  status: ClubApplication["status"];
+  approvals: Array<{
+    id: string;
+    step: number;
+    approverRole: string | null;
+    stepKind: "role_sequential" | "committee_majority";
+    committeeId: string | null;
+    status: ApplicationApprovalRow["status"];
+  }>;
+};
+
+function mapApprovalRows(approvals: ApplicationWithApprovals["approvals"]): ApplicationApprovalRow[] {
+  return approvals.map((a) => ({
+    step: a.step,
+    approverRole: a.approverRole,
+    stepKind: a.stepKind,
+    committeeId: a.committeeId,
+    status: a.status,
+  }));
+}
+
+async function insertApplicationEvent(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  data: {
+    applicationId: string;
+    step: number;
+    eventType: ApplicationEventType;
+    actorId: string;
+    note?: string | null;
+    proposedName?: string | null;
+    description?: string | null;
+  }
+) {
+  await tx.insert(schema.clubApplicationEvents).values({
+    applicationId: data.applicationId,
+    step: data.step,
+    eventType: data.eventType,
+    actorId: data.actorId,
+    note: data.note ?? null,
+    proposedName: data.proposedName ?? null,
+    description: data.description ?? null,
+  });
+}
+
+async function finalizeApplicationStepInTransaction(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  universityId: string,
+  applicationId: string,
+  application: ApplicationWithApprovals,
+  approvalRowId: string,
+  decision: ApplicationStepDecision,
+  actorUserId: string,
+  note: string | null
+): Promise<DecideClubApplicationResult> {
+  const approvalRow = application.approvals.find((a) => a.id === approvalRowId);
+  if (!approvalRow) {
+    throw badRequest("admin.applicationAlreadyDecided");
+  }
+
+  await tx
+    .update(schema.clubApplicationApprovals)
+    .set({
+      status: decision,
+      approverId: actorUserId,
+      reviewedAt: new Date(),
+      note,
+    })
+    .where(eq(schema.clubApplicationApprovals.id, approvalRowId));
+
+  await insertApplicationEvent(tx, {
+    applicationId,
+    step: approvalRow.step,
+    eventType: decision,
+    actorId: actorUserId,
+    note,
+  });
+
+  const approvalsAfter = application.approvals.map((a) =>
+    a.id === approvalRowId
+      ? { ...a, status: decision }
+      : a
+  );
+
+  const derivedStatus = deriveApplicationStatus(mapApprovalRows(approvalsAfter));
+
+  const [updatedApplication] = await tx
+    .update(schema.clubApplications)
+    .set({
+      status: derivedStatus,
+      ...(derivedStatus === "rejected"
+        ? { rejectedAt: new Date(), rejectApproverId: actorUserId }
+        : {}),
+    })
+    .where(eq(schema.clubApplications.id, applicationId))
+    .returning();
+
+  if (derivedStatus !== "approved") {
+    return { application: updatedApplication, club: null };
+  }
+
+  const baseSlug = slugify(application.proposedName);
+  let club: Club | undefined;
+
+  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
+    const candidateSlug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+    const existing = await tx.query.clubs.findFirst({
+      where: { universityId, slug: candidateSlug },
+    });
+    if (existing) continue;
+
+    [club] = await tx.insert(schema.clubs).values({
+      universityId,
+      name: application.proposedName,
+      slug: candidateSlug,
+      description: application.description,
+      status: "approved",
+      createdBy: application.applicantId,
+    }).returning();
+    break;
+  }
+
+  if (!club) {
+    throw badRequest("admin.slugGenerationFailed");
+  }
+
+  await tx.insert(schema.clubMembers).values({
+    clubId: club.id,
+    userId: application.applicantId,
+    universityId: club.universityId,
+    role: "president",
+    status: "approved",
+  });
+
+  return { application: updatedApplication, club };
+}
+
+async function applyApplicationStepDecision(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  universityId: string,
+  applicationId: string,
+  actorUserId: string,
+  decision: ApplicationStepDecision,
+  note: string | null
+): Promise<DecideClubApplicationResult> {
+  const application = await tx.query.clubApplications.findFirst({
+    where: { id: applicationId, universityId },
+    with: { approvals: { orderBy: { step: "asc" } } },
+  });
+
+  if (!application) {
+    throw notFound("admin.applicationNotFound");
+  }
+
+  if (application.status !== "pending") {
+    throw badRequest("admin.applicationAlreadyDecided");
+  }
+
+  const approvalRows = mapApprovalRows(application.approvals);
+  const currentStep = findCurrentApprovalStep(approvalRows);
+  if (!currentStep) {
+    throw badRequest("admin.applicationAlreadyDecided");
+  }
+
+  const approvalRow = application.approvals.find((a) => a.step === currentStep.step);
+  if (!approvalRow) {
+    throw badRequest("admin.applicationAlreadyDecided");
+  }
+
+  if (isCommitteeMajorityStep(currentStep)) {
+    if (decision === "revision_requested") {
+      if (!approvalRow.committeeId) {
+        throw badRequest("admin.applicationAlreadyDecided");
+      }
+      const isMember = await approvalCommitteesRepository.isActiveMember(
+        approvalRow.committeeId,
+        universityId,
+        actorUserId
+      );
+      if (!isMember) {
+        throw forbidden("admin.approvalStepForbidden");
+      }
+    } else {
+      throw badRequest("admin.committeeStepUseVoteEndpoint");
+    }
+  } else {
+    await assertActorCanDecideCurrentStep(actorUserId, approvalRows, currentStep);
+  }
+
+  return await finalizeApplicationStepInTransaction(
+    tx,
+    universityId,
+    applicationId,
+    application as ApplicationWithApprovals,
+    approvalRow.id,
+    decision,
+    actorUserId,
+    note
+  );
+}
 
 class ClubApplicationReviewRepository {
   findApplicationById(applicationId: string) {
@@ -231,6 +454,111 @@ class ClubApplicationReviewRepository {
       where: { applicationId },
       orderBy: { createdAt: "asc" },
     });
+  }
+
+  findApplicationEventsWithActor(applicationId: string) {
+    return db.query.clubApplicationEvents.findMany({
+      where: { applicationId },
+      orderBy: { createdAt: "asc" },
+      with: { actor: true },
+    });
+  }
+
+  findClubApplicationsByUniversity(universityId: string, status?: ClubApplication["status"]) {
+    return db.query.clubApplications.findMany({
+      where: { universityId, ...(status ? { status } : {}) },
+      with: {
+        applicant: true,
+        approvals: { orderBy: { step: "asc" } },
+      },
+    });
+  }
+
+  findClubApplicationInUniversity(universityId: string, applicationId: string) {
+    return db.query.clubApplications.findFirst({
+      where: { id: applicationId, universityId },
+    });
+  }
+
+  findClubApplicationDetail(universityId: string, applicationId: string) {
+    return db.query.clubApplications.findFirst({
+      where: { id: applicationId, universityId },
+      with: {
+        applicant: true,
+        approvals: {
+          orderBy: { step: "asc" },
+          with: { approver: true },
+        },
+        appeal: { with: { reviewer: true } },
+      },
+    });
+  }
+
+  async countClubApplicationRevisionRequests(applicationId: string): Promise<number> {
+    const events = await db.query.clubApplicationEvents.findMany({
+      where: { applicationId },
+      columns: { eventType: true },
+    });
+    return events.filter((e) => e.eventType === "revision_requested").length;
+  }
+
+  /**
+   * Başvuruyu onaylar/reddeder — yalnızca sıradaki kademe; özet durum adımlardan türetilir.
+   * Onay tamamlandığında gerçek `clubs` satırı oluşturulur.
+   */
+  decideClubApplication(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    decision: "approved" | "rejected",
+    note: string | null
+  ): Promise<DecideClubApplicationResult> {
+    return db.transaction(async (tx) =>
+      applyApplicationStepDecision(tx, universityId, applicationId, actorUserId, decision, note)
+    );
+  }
+
+  /** Revizyon talebi — gerekçe zorunlu; önceki kademe onayları korunur. */
+  requestClubApplicationRevision(
+    universityId: string,
+    applicationId: string,
+    actorUserId: string,
+    note: string
+  ): Promise<DecideClubApplicationResult> {
+    return db.transaction(async (tx) =>
+      applyApplicationStepDecision(tx, universityId, applicationId, actorUserId, "revision_requested", note)
+    );
+  }
+
+  finalizeApplicationStepInTransaction(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    universityId: string,
+    applicationId: string,
+    application: ApplicationWithApprovals,
+    approvalRowId: string,
+    decision: ApplicationStepDecision,
+    actorUserId: string,
+    note: string | null
+  ) {
+    return finalizeApplicationStepInTransaction(
+      tx,
+      universityId,
+      applicationId,
+      application,
+      approvalRowId,
+      decision,
+      actorUserId,
+      note
+    );
+  }
+
+  /** Kullanıcının belirli bir global role (örn. "advisor") sahip olup olmadığı. */
+  async userHasRole(userId: string, roleName: string): Promise<boolean> {
+    const user = await db.query.users.findFirst({
+      where: { id: userId },
+      with: { roles: { where: { name: roleName }, columns: { id: true } } },
+    });
+    return !!user && user.roles.length > 0;
   }
 }
 

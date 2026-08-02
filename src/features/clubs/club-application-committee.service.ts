@@ -1,5 +1,4 @@
 import { approvalCommitteesRepository } from "../approval-committees/approval-committees.repository";
-import { adminRepository } from "../admin/admin.repository";
 import { auditService } from "../audit/audit.service";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";

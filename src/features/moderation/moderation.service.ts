@@ -9,7 +9,7 @@ import { generatePassword, hashPassword } from "../../core/auth/password";
 import { notificationsService } from "../notifications/notifications.service";
 import { NotificationType } from "../notifications/notifications.types";
 import { auditService } from "../audit/audit.service";
-import type { User } from "../admin/admin.types";
+import type { User } from "../admin/admin-users.types";
 
 /**
  * Kullanıcı moderasyonu iş kuralları — ban/unban (sebepli), admin şifre sıfırlama,

@@ -2,7 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { clubApplicationCommitteeVotes, users } from "../../db/schema";
 import { approvalCommitteesRepository } from "../approval-committees/approval-committees.repository";
-import { adminRepository } from "../admin/admin.repository";
+import { clubApplicationReviewRepository } from "./club-application-review.repository";
 import { badRequest, forbidden, notFound } from "../../shared/utils/errors";
 import {
   computeCommitteeMajorityThreshold,
@@ -184,7 +184,7 @@ export const clubApplicationCommitteeRepository = {
         };
       }
 
-      const finalizeResult = await adminRepository.finalizeApplicationStepInTransaction(
+      const finalizeResult = await clubApplicationReviewRepository.finalizeApplicationStepInTransaction(
         tx,
         universityId,
         applicationId,

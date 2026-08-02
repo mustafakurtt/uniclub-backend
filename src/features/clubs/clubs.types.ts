@@ -56,3 +56,11 @@ export interface UpdateOwnClubPayload {
   coverUrl?: string;
   joinPolicy?: "open" | "approval_required";
 }
+
+export interface UpdateClubPayload {
+  name?: string;
+  description?: string;
+  logoUrl?: string;
+  coverUrl?: string;
+  joinPolicy?: "open" | "approval_required";
+}

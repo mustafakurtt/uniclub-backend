@@ -1,97 +1,39 @@
-import { z } from "zod";
+/** @deprecated Yeni kod doğrudan alt modül şemalarını import etmeli. */
+export {
+  listUsersQuerySchema,
+  updateUserDepartmentSchema,
+  type ListUsersQueryDTO,
+  type UpdateUserDepartmentDTO,
+} from "./admin-users.schema";
 
-export const updateClubStatusSchema = z.object({
-  status: z.enum(["pending", "approved", "rejected", "archived"]),
-});
-export type UpdateClubStatusDTO = z.infer<typeof updateClubStatusSchema>;
+export {
+  listClubApplicationsQuerySchema,
+  rejectApplicationSchema,
+  requestRevisionApplicationSchema,
+  approveApplicationSchema,
+  committeeVoteSchema,
+  patchChecklistItemSchema,
+  reviewAppealSchema,
+  type ListClubApplicationsQueryDTO,
+  type RejectApplicationDTO,
+  type RequestRevisionApplicationDTO,
+  type ApproveApplicationDTO,
+  type CommitteeVoteDTO,
+  type PatchChecklistItemDTO,
+  type ReviewAppealDTO,
+} from "../clubs/club-application-review.schema";
 
-export const listUsersQuerySchema = z.object({
-  status: z.enum(["pending", "active", "suspended"]).optional(),
-  role: z.string().min(1).max(100).optional(),
-});
-export type ListUsersQueryDTO = z.infer<typeof listUsersQuerySchema>;
-
-export const listClubApplicationsQuerySchema = z.object({
-  status: z.enum(["pending", "approved", "rejected", "revision_requested"]).optional(),
-});
-export type ListClubApplicationsQueryDTO = z.infer<typeof listClubApplicationsQuerySchema>;
-
-export const listFormationProposalsQuerySchema = z.object({
-  status: z.enum(["collecting_support", "submitted", "withdrawn", "expired"]).optional(),
-});
-export type ListFormationProposalsQueryDTO = z.infer<typeof listFormationProposalsQuerySchema>;
-
-export const listClubsQuerySchema = z.object({
-  status: z.enum(["pending", "approved", "rejected", "archived"]).optional(),
-});
-export type ListClubsQueryDTO = z.infer<typeof listClubsQuerySchema>;
-
-/**
- * Kulüp kurma başvurusunun REDDİ — gerekçe zorunlu. Öğrenci neyi düzelteceğini
- * bilmeden yeniden başvuramaz; gerekçesiz ret denetlenebilir bir karar değildir.
- * Gerekçe `clubApplicationApprovals.note`'a yazılır.
- */
-export const rejectApplicationSchema = z.object({
-  note: z.string().trim().min(10, "Ret gerekçesi en az 10 karakter olmalıdır.").max(1000),
-});
-export type RejectApplicationDTO = z.infer<typeof rejectApplicationSchema>;
-
-/** Revizyon talebi — ret ile aynı gerekçe kuralı. */
-export const requestRevisionApplicationSchema = z.object({
-  note: z.string().trim().min(10, "Revizyon gerekçesi en az 10 karakter olmalıdır.").max(1000),
-});
-export type RequestRevisionApplicationDTO = z.infer<typeof requestRevisionApplicationSchema>;
-
-/** Onayda not opsiyoneldir (bilgi amaçlı). */
-export const approveApplicationSchema = z.object({
-  note: z.string().trim().max(1000).optional(),
-});
-export type ApproveApplicationDTO = z.infer<typeof approveApplicationSchema>;
-
-/** Kurul kademesi oy — ret için gerekçe zorunlu; onayda opsiyonel. */
-export const committeeVoteSchema = z.object({
-  vote: z.enum(["approve", "reject"]),
-  reason: z.string().trim().max(1000).optional(),
-});
-export type CommitteeVoteDTO = z.infer<typeof committeeVoteSchema>;
-
-export const patchChecklistItemSchema = z.object({
-  checked: z.boolean(),
-  note: z.string().trim().max(500).optional(),
-});
-export type PatchChecklistItemDTO = z.infer<typeof patchChecklistItemSchema>;
-
-export const reviewAppealSchema = z.object({
-  decision: z.enum(["upheld", "dismissed"]),
-  note: z.string().trim().min(10, "İtiraz karar gerekçesi en az 10 karakter olmalıdır.").max(2000),
-});
-export type ReviewAppealDTO = z.infer<typeof reviewAppealSchema>;
-
-export const addAdvisorSchema = z.object({
-  userId: z.string().uuid(),
-  message: z.string().max(2000).optional(),
-});
-export type AddAdvisorDTO = z.infer<typeof addAdvisorSchema>;
-
-export const updateClubSchema = z.object({
-  name: z.string().min(3).max(256).optional(),
-  description: z.string().max(2000).optional(),
-  logoUrl: z.string().url("Geçerli bir URL giriniz.").max(512).optional(),
-  coverUrl: z.string().url("Geçerli bir URL giriniz.").max(512).optional(),
-  joinPolicy: z.enum(["open", "approval_required"]).optional(),
-}).refine((data) => Object.keys(data).length > 0, {
-  message: "Güncellenecek en az bir alan girilmelidir.",
-});
-export type UpdateClubDTO = z.infer<typeof updateClubSchema>;
-
-export const updateUserDepartmentSchema = z.object({
-  departmentId: z.string().uuid().nullable(),
-});
-export type UpdateUserDepartmentDTO = z.infer<typeof updateUserDepartmentSchema>;
-
-/** Kulüp alt-kaynak admin listeleri — keyset sayfalama (`createdAt` ISO cursor). */
-export const adminClubPaginatedListQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  cursor: z.string().datetime().optional(),
-});
-export type AdminClubPaginatedListQueryDTO = z.infer<typeof adminClubPaginatedListQuerySchema>;
+export {
+  updateClubStatusSchema,
+  listClubsQuerySchema,
+  addAdvisorSchema,
+  updateClubSchema,
+  adminClubPaginatedListQuerySchema,
+  listFormationProposalsQuerySchema,
+  type UpdateClubStatusDTO,
+  type ListClubsQueryDTO,
+  type AddAdvisorDTO,
+  type UpdateClubDTO,
+  type AdminClubPaginatedListQueryDTO,
+  type ListFormationProposalsQueryDTO,
+} from "../clubs/clubs-admin.schema";
