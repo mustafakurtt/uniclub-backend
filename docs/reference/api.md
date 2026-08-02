@@ -528,6 +528,7 @@ kullanıcının denetim aktivitesi ve moderasyon geçmişi. Tüm rotalar
 | POST | `/api/moderation/universities/:universityId/users/:userId/ban` | `user.manage` | Kullanıcıyı askıya al (**sebep zorunlu**) |
 | POST | `/api/moderation/universities/:universityId/users/:userId/unban` | `user.manage` | Askıyı kaldır |
 | POST | `/api/moderation/universities/:universityId/users/:userId/reset-password` | `user.manage` | Şifre sıfırla (**geçici şifre bir kez döner**) |
+| POST | `/api/moderation/universities/:universityId/users/:userId/anonymize` | `user.manage` | KVKK hesap anonimleştirme (**onay + gerekçe zorunlu; geri alınamaz**) |
 | GET | `/api/moderation/universities/:universityId/users/:userId/activity` | `user.view` | Kullanıcının denetim (audit) aktivitesi (cursor) |
 | GET | `/api/moderation/universities/:universityId/users/:userId/moderation-history` | `user.view` | Ban/unban/şifre-sıfırlama geçmişi (cursor) |
 
@@ -535,6 +536,7 @@ Body / dönüş:
 - `POST .../ban`: `{ "reason": "string (3-500)" }` → `data`: güncel kullanıcı (`status: "suspended"`).
 - `POST .../unban`: body yok → `data`: kullanıcı (`status: "active"`).
 - `POST .../reset-password`: body yok → `data`: `{ "temporaryPassword": "..." }` (**yalnızca bu yanıtta; güvenli kanaldan iletin**). Kullanıcı bir sonraki girişte `mustChangePassword: true` alır.
+- `POST .../anonymize`: `{ "confirm": true, "reason": "string (10-500)" }` → `data`: anonimleştirilmiş kullanıcı özeti. **Geri alınamaz** — KVKK silme talebi akışı; frontend yüzeyi henüz bağlanmadı (`api-surface-coverage.md` → `(eksik)`).
 - `GET .../activity` & `.../moderation-history`: `?limit=1-100&cursor=<ISO>` → `data`: `{ items, nextCursor }` (keyset sayfalama).
 
 ---
@@ -664,6 +666,7 @@ gömülür (demo katman; yazma ucu yok).
 | DELETE | `.../:activityId/co-hosts/:coClubId` | host staff (co-host kaldır) |
 | POST\|DELETE | `.../:activityId/co-host[/accept]` | co-host staff (daveti kabul / reddet-ayrıl) |
 | POST | `/api/admin/universities/:uid/activities/:activityId/cancel` | `activity.moderate` (tenant) | **Moderasyon:** tenant'taki herhangi bir kulübün etkinliğini iptal etme |
+| GET | `/api/admin/universities/:universityId/activities` | `activity.moderate` (tenant) | Tenant geneli etkinlik listesi — `?scope=upcoming\|past\|cancelled`, `?clubId=`, keyset `cursor` + `limit`; yanıtta `clubName` |
 | PATCH | `/api/admin/universities/:uid/clubs/:clubId/activities/:activityId` | `activity.moderate` (tenant) | Görünürlük güncelle — `{ visibility }` (`inter_university` dahil; SKS) |
 
 Body: `POST create` → `{ title (3-256), description?, location?, coverUrl?, startsAt (ISO), endsAt?, capacity? (pozitif int), visibility? ("university"|"members"), publish? (bool, vars. true), scheduledPublishAtLocal? ("YYYY-MM-DDTHH:mm", tenant yerel) }`; `PATCH` aynı alanlar opsiyonel + `scheduledPublishAtLocal: null` iptal (en az bir). Co-host **M:N**: `:clubId` işlemi yapan kulüp (davet=host, kabul=co-host); yalnızca `accepted` bağ tenant/görünürlükte sayılır — cross-university turnuva böyle kurulur. Bildirim tipleri: `activity.published`, `activity.cancelled`, `activity.coHostInvited`.

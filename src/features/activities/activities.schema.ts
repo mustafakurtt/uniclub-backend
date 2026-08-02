@@ -74,3 +74,12 @@ export const updateActivityVisibilitySchema = z.object({
   visibility: visibilityEnum,
 });
 export type UpdateActivityVisibilityDTO = z.infer<typeof updateActivityVisibilitySchema>;
+
+/** GET /api/admin/universities/:universityId/activities — tenant moderasyon listesi. */
+export const adminTenantActivitiesQuerySchema = z.object({
+  scope: z.enum(["upcoming", "past", "cancelled"]).default("upcoming"),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().min(1).optional(),
+  clubId: z.string().uuid().optional(),
+});
+export type AdminTenantActivitiesQueryDTO = z.infer<typeof adminTenantActivitiesQuerySchema>;

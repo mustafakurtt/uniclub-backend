@@ -19,6 +19,7 @@ const ROOT = resolve(import.meta.dir, "..");
 const DOCS = join(ROOT, "docs");
 const API_MD = join(DOCS, "reference", "api.md");
 const SURFACE_COVERAGE_MD = join(DOCS, "reference", "api-surface-coverage.md");
+const SURFACE_BASELINE_JSON = join(DOCS, "reference", "api-surface-baseline.json");
 const INDEX_TS = join(ROOT, "src", "index.ts");
 
 let failed = false;
@@ -322,19 +323,29 @@ if (expiredReleaseFlags.length === 0) {
   ok("süresi dolmuş release bayrağı yok");
 }
 
-// ── 7. API yüzey kapsaması — boş yüzey yasak ───────────────────────────────
+// ── 7. API yüzey kapsaması — boş yüzey yasak; (eksik) mandal ───────────────
 
 const surfaceMd = readFileSync(SURFACE_COVERAGE_MD, "utf8");
 const surfaceRowRe =
   /^\| (GET|POST|PATCH|PUT|DELETE) \| `([^`]+)` \| (.+?) \|$/gm;
 
+function surfaceKey(method: string, path: string): string {
+  return `${method} ${path}`;
+}
+
 let surfaceRowCount = 0;
 let emptySurfaceCount = 0;
 let invalidSurfaceCount = 0;
+let bareDashSurfaceCount = 0;
+const currentEksik = new Set<string>();
+const surfaceRows = new Map<string, string>();
 
 function isValidSurface(value: string): boolean {
   const trimmed = value.trim();
-  if (trimmed === "—") return true;
+  if (trimmed.startsWith("(eksik)")) return true;
+  if (trimmed.startsWith("(karar bekliyor)")) return true;
+  if (trimmed.startsWith("(dolaylı)")) return true;
+  if (trimmed.startsWith("(iç)")) return true;
   if (trimmed.startsWith("(dahili)")) return true;
   return trimmed.includes("/");
 }
@@ -343,24 +354,104 @@ let surfaceMatch: RegExpExecArray | null;
 surfaceRowRe.lastIndex = 0;
 while ((surfaceMatch = surfaceRowRe.exec(surfaceMd))) {
   surfaceRowCount++;
+  const method = surfaceMatch[1];
+  const path = surfaceMatch[2];
   const surface = surfaceMatch[3].trim();
+  const key = surfaceKey(method, path);
+  surfaceRows.set(key, surface);
+
   if (!surface) {
     emptySurfaceCount++;
     fail(
-      `api-surface-coverage.md: boş yüzey — ${surfaceMatch[1]} ${surfaceMatch[2]}`
+      `api-surface-coverage.md: boş yüzey — ${method} ${path}`
     );
+  } else if (surface === "—") {
+    bareDashSurfaceCount++;
+    fail(
+      `api-surface-coverage.md: ham "—" yüzey — ${method} ${path} ((eksik), (dolaylı) veya (iç) kullanın)`
+    );
+  } else if (surface.startsWith("(eksik)")) {
+    currentEksik.add(key);
   } else if (!isValidSurface(surface)) {
     invalidSurfaceCount++;
     fail(
-      `api-surface-coverage.md: geçersiz yüzey "${surface}" — ${surfaceMatch[1]} ${surfaceMatch[2]} (rota, — veya (dahili) gerekli)`
+      `api-surface-coverage.md: geçersiz yüzey "${surface}" — ${method} ${path} (rota, (eksik), (karar bekliyor), (dolaylı), (iç) veya (dahili) gerekli)`
     );
   }
 }
 
 if (surfaceRowCount === 0) {
   fail("api-surface-coverage.md içinde yüzey tablosu satırı bulunamadı");
-} else if (emptySurfaceCount === 0 && invalidSurfaceCount === 0) {
-  ok(`api-surface-coverage.md yüzey sütunu — ${surfaceRowCount} uç, boş satır yok`);
+}
+
+// Mandal: bilinen (eksik) borç api-surface-baseline.json ile sabitlenir
+type BaselineFile = {
+  eksik?: Array<{ method: string; path: string }>;
+};
+
+let baselineEksik = new Set<string>();
+if (!existsSync(SURFACE_BASELINE_JSON)) {
+  fail("api-surface-baseline.json bulunamadı — bilinen (eksik) borç tabanı gerekli");
+} else {
+  const baselineRaw = JSON.parse(readFileSync(SURFACE_BASELINE_JSON, "utf8")) as BaselineFile;
+  const entries = baselineRaw.eksik ?? [];
+  if (!Array.isArray(entries) || entries.length === 0) {
+    fail("api-surface-baseline.json: eksik dizisi boş veya yok");
+  } else {
+    for (const entry of entries) {
+      if (!entry.method || !entry.path) {
+        fail("api-surface-baseline.json: her kayıtta method ve path gerekli");
+        continue;
+      }
+      baselineEksik.add(surfaceKey(entry.method, entry.path));
+    }
+  }
+}
+
+const newEksikDebt = [...currentEksik].filter((k) => !baselineEksik.has(k));
+for (const key of newEksikDebt) {
+  fail(
+    `api-surface-coverage.md: yeni (eksik) borç — ${key} (yüzeyi bağlayın veya api-surface-baseline.json'a gerekçeyle ekleyin)`
+  );
+}
+
+const baselineOnly = [...baselineEksik].filter((k) => !currentEksik.has(k));
+const debtReduced: string[] = [];
+const baselineBloat: string[] = [];
+
+for (const key of baselineOnly) {
+  const surface = surfaceRows.get(key);
+  if (surface && !surface.startsWith("(eksik)")) {
+    debtReduced.push(key);
+  } else {
+    baselineBloat.push(key);
+  }
+}
+
+if (debtReduced.length > 0) {
+  fail(
+    `api-surface-baseline.json: borç azaldı — tabanı güncelleyin (şu satırları çıkarın): ${debtReduced.join(", ")}`
+  );
+}
+
+for (const key of baselineBloat) {
+  fail(
+    `api-surface-baseline.json: taban büyüdü veya geçersiz kayıt — ${key} (tabloda (eksik) değil; tabandan çıkarın)`
+  );
+}
+
+if (
+  surfaceRowCount > 0 &&
+  emptySurfaceCount === 0 &&
+  bareDashSurfaceCount === 0 &&
+  invalidSurfaceCount === 0 &&
+  newEksikDebt.length === 0 &&
+  debtReduced.length === 0 &&
+  baselineBloat.length === 0
+) {
+  ok(
+    `api-surface-coverage.md yüzey sütunu — ${surfaceRowCount} uç, ${currentEksik.size} bilinen (eksik) mandalda`
+  );
 }
 
 // ── Sonuç ───────────────────────────────────────────────────────────────────

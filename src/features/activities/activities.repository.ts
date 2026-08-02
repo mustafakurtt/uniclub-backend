@@ -1,8 +1,24 @@
-import { and, eq, gte, inArray, lt, sql, getTableColumns, isNotNull, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, or, gt, asc, desc, sql, getTableColumns, isNotNull, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../../db";
 import { activities, activityClubs, activityAttendees, clubs, clubMembers } from "../../db/schema";
 import { BaseRepository } from "../../core/db";
 import { CreateActivityPayload, RsvpStatus } from "./activities.types";
+import type { DiscoverPageCursor } from "../discover/discover.cursor";
+
+function keysetAfterStartsAtId(cursor: DiscoverPageCursor): SQL {
+  return or(
+    gt(activities.startsAt, cursor.startsAt),
+    and(eq(activities.startsAt, cursor.startsAt), gt(activities.id, cursor.id))
+  )!;
+}
+
+function keysetBeforeStartsAtId(cursor: DiscoverPageCursor): SQL {
+  return or(
+    lt(activities.startsAt, cursor.startsAt),
+    and(eq(activities.startsAt, cursor.startsAt), lt(activities.id, cursor.id))
+  )!;
+}
 
 /**
  * Etkinlik veri erişimi. Birincil tablo `activities` — BaseRepository'yi extend
@@ -279,6 +295,73 @@ class ActivitiesRepository extends BaseRepository<typeof activities, typeof db.q
       .innerJoin(activityClubs, eq(activityClubs.activityId, activities.id))
       .where(and(eq(activityClubs.clubId, clubId), eq(activityClubs.status, "accepted"), statusFilter))
       .orderBy(sql`${activities.startsAt} desc`);
+  }
+
+  /**
+   * Tenant moderasyon listesi — üniversitedeki tüm kulüplerin etkinlikleri tek akışta.
+   * Tenant bağ: kabul edilmiş activity_clubs → tenant kulübü; host kulüp adı gömülü.
+   * Sıra: `startsAt` + `id` tie-break (yaklaşan ASC, geçmiş/iptal DESC).
+   */
+  listTenantActivitiesForAdmin(
+    universityId: string,
+    scope: "upcoming" | "past" | "cancelled",
+    limit: number,
+    cursor?: DiscoverPageCursor,
+    clubId?: string
+  ) {
+    const now = new Date();
+    const tenantLink = alias(activityClubs, "tenant_ac");
+    const tenantClub = alias(clubs, "tenant_club");
+    const hostLink = alias(activityClubs, "host_ac");
+    const hostClub = alias(clubs, "host_club");
+
+    const filters: SQL[] = [
+      eq(tenantClub.universityId, universityId),
+      eq(tenantLink.status, "accepted"),
+    ];
+    if (clubId) {
+      filters.push(eq(tenantLink.clubId, clubId));
+    }
+    if (scope === "upcoming") {
+      filters.push(sql`${activities.status} <> 'cancelled'`);
+      filters.push(gte(activities.startsAt, now));
+    } else if (scope === "past") {
+      filters.push(sql`${activities.status} <> 'cancelled'`);
+      filters.push(lt(activities.startsAt, now));
+    } else {
+      filters.push(eq(activities.status, "cancelled"));
+    }
+    if (cursor) {
+      filters.push(
+        scope === "upcoming" ? keysetAfterStartsAtId(cursor) : keysetBeforeStartsAtId(cursor)
+      );
+    }
+
+    const order =
+      scope === "upcoming"
+        ? [asc(activities.startsAt), asc(activities.id)]
+        : [desc(activities.startsAt), desc(activities.id)];
+
+    return db
+      .selectDistinct({
+        ...getTableColumns(activities),
+        clubId: hostClub.id,
+        clubName: hostClub.name,
+      })
+      .from(activities)
+      .innerJoin(
+        tenantLink,
+        and(eq(tenantLink.activityId, activities.id), eq(tenantLink.status, "accepted"))
+      )
+      .innerJoin(tenantClub, eq(tenantClub.id, tenantLink.clubId))
+      .innerJoin(
+        hostLink,
+        and(eq(hostLink.activityId, activities.id), eq(hostLink.role, "host"))
+      )
+      .innerJoin(hostClub, eq(hostClub.id, hostLink.clubId))
+      .where(and(...filters))
+      .orderBy(...order)
+      .limit(limit + 1);
   }
 
   // ── Katılım (RSVP + yoklama) ─────────────────────────────────────────────

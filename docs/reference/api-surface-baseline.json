@@ -1,0 +1,25 @@
+{
+  "_aciklama": "Bilinen frontend yüzey borcu — api-surface-coverage.md içinde (eksik) işaretli uçlar. Hedef: liste küçülür; yeni satır eklemeden önce gerekçe gerekir. Borç kapandığında (yüzey rota/dolaylı/iç olduğunda) bu dosyadan da çıkarın — docs:check mandalı bunu hatırlatır.",
+  "_guncelleme": "2026-08-02 BE-34 mandal",
+  "eksik": [
+    { "method": "DELETE", "path": "/api/clubs/applications/:applicationId/documents/:documentTypeKey" },
+    { "method": "DELETE", "path": "/api/uploads/:mediaId" },
+    { "method": "GET", "path": "/api/admin/universities/:universityId/audit/decisions" },
+    { "method": "GET", "path": "/api/admin/universities/:universityId/audit/summary" },
+    { "method": "GET", "path": "/api/admin/universities/:universityId/dashboard" },
+    { "method": "GET", "path": "/api/moderation/universities/:universityId/users/:userId/activity" },
+    { "method": "GET", "path": "/api/moderation/universities/:universityId/users/:userId/moderation-history" },
+    { "method": "GET", "path": "/api/platform/tenants/:universityId" },
+    { "method": "GET", "path": "/api/users/me/activities" },
+    { "method": "GET", "path": "/api/users/me/notification-preferences" },
+    { "method": "PATCH", "path": "/api/admin/universities/:uid/clubs/:clubId/activities/:activityId" },
+    { "method": "POST", "path": "/api/admin/universities/:uid/activities/:activityId/cancel" },
+    { "method": "POST", "path": "/api/moderation/universities/:universityId/users/:userId/anonymize" },
+    { "method": "POST", "path": "/api/moderation/universities/:universityId/users/:userId/ban" },
+    { "method": "POST", "path": "/api/moderation/universities/:universityId/users/:userId/reset-password" },
+    { "method": "POST", "path": "/api/moderation/universities/:universityId/users/:userId/unban" },
+    { "method": "POST", "path": "/api/uploads" },
+    { "method": "PUT", "path": "/api/clubs/applications/:applicationId/documents/:documentTypeKey" },
+    { "method": "PUT", "path": "/api/users/me/notification-preferences" }
+  ]
+}

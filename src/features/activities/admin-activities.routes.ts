@@ -5,9 +5,22 @@ import { validate } from "../../shared/utils/validate";
 import { ok } from "../../shared/utils/respond";
 import { ActivityPermission } from "./activities.permissions";
 import { activitiesService } from "./activities.service";
-import { updateActivityVisibilitySchema } from "./activities.schema";
+import { updateActivityVisibilitySchema, adminTenantActivitiesQuerySchema } from "./activities.schema";
 
 export const adminActivitiesRoutes = new Hono<{ Variables: RbacVariables }>();
+
+// 16B. TENANT ETKİNLİK LİSTESİ — tüm kulüpler tek akış (activity.moderate; club.view gerekmez)
+adminActivitiesRoutes.get(
+  "/universities/:universityId/activities",
+  ...guard(ActivityPermission.MODERATE, { tenantScoped: true }),
+  validate("query", adminTenantActivitiesQuerySchema),
+  async (c) => {
+    const { universityId } = c.req.param();
+    const query = c.req.valid("query");
+    const result = await activitiesService.listTenantActivities(universityId, query);
+    return ok(c, result, "admin.activitiesListed");
+  }
+);
 
 // 17. ETKİNLİK MODERASYONU — tenant'taki herhangi bir kulübün etkinliğini iptal etme
 // (etkinlik M:N olduğu için :clubId taşımaz; servis etkinliğin tenant'a ait olduğunu doğrular)

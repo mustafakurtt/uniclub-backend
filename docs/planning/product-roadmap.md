@@ -1021,6 +1021,88 @@ Bu projede üç kez öğrenildi — *zorlanmayan kural kural değildir*
 **Sıra:** önce tablo (2), sonra tabloya göre öncelik. Belge akışı (1)
 tablodan bağımsız olarak zaten kesin — araştırmayla kanıtlı.
 
+#### Sonuç — **tamamlandı (2026-08-02)**
+
+Üçü de yapıldı. Ölçüm tablosu (`docs/reference/api-surface-coverage.md`,
+204 uç) + `docs:check` kapısı kuruldu; belge akışı `club_application_documents`
+ile geldi, zorunlu liste tenant ayarı. Tabloya göre kapatılanlar: kulüp
+yönetim paneli, okul geneli duyuru (iki yüzey), platform paneli.
+
+**Tablonun bulduğu ikinci gerçek:** "43 yüzeysiz uç" sayısı yanlıştı.
+Yeniden ölçümde 11'i **dolaylı** (başka ekranın parçası), 2'si **iç akış**
+(mail linki) çıktı. Gerçek borç **24**. Ve *hiçbir uç ölü değil* — silinecek
+bir şey yok. Kapı bu üç durumu ayırt edecek şekilde etiketlendi; aksi hâlde
+her "—" yanlış alarm verir ve yanlış alarm veren kapı görmezden gelinir.
+
+### M2.9 — Yönetim paneli bilgi mimarisi ★ — **kısmen tamamlandı (2026-08-02)**
+
+**Tasarım:** [`docs/design/07-yonetim-bilgi-mimarisi.md`](../design/07-yonetim-bilgi-mimarisi.md)
+
+Kullanıcının tespiti: *"bir sürü alt kategori var, herkes farklı işleri
+farklı yerlerde, bazıları eksik, her şey çok karmaşık."*
+
+Teşhis girdi sayısı değildi: kategoriler **dört ayrı eksende** bölünmüştü —
+"Günlük iş" sıklık, "Kurum yapısı" nesne, "Sistem" teknik katman, "Platform"
+kitle. Eksenler karışınca her girdi mantıken 2-3 gruba ait olur ve kimse bir
+şeyin nerede olduğunu tahmin edemez.
+
+| Dalga | Durum |
+| --- | --- |
+| 1 — Menü nesneye göre yeniden gruplandı (Çalışma alanı / Ayarlar / Platform) | ✅ |
+| 2 — Ana sayfa bağımsız iş kuyruğu blokları; `resolveAdminHomeVariant` silindi | ✅ |
+| 3 — Kişiler birleşimi (kullanıcı + moderasyon tek sayfada) | ⏳ |
+| 4 — Etkinlik yönetim ekranı | ✅ |
+| 5 — Kulüp/kişi detay sekmelerinin zenginleştirilmesi | ⏳ **asıl iş** |
+
+**Asıl fikir dalga 5'te:** bilgi menüden **detay sayfalarına** taşınır.
+Liste sayfaları dar olur, detay sayfaları her şeyi barındırır. Bugün tek bir
+kişi üç ekrana dağılmış (rolü `users`, yasağı `moderation`, yetkisi
+`permissions`).
+
+**Bilinen borç:** tenant geneli etkinlik listesi ucu yok; ekran tüm kulüpleri
+çekip her biri için sayfaları dolaşıyor. 3 kulüpte sorunsuz, 120 kulüpte
+tarayıcı kendi API'mize yüklenir.
+
+### M2.8 — Öğrenci / personel ayrımı ⏳ — **teşhis kondu, ertelendi**
+
+Ayrımı **kapıda biliyoruz ama saklamıyoruz**. `auth-registration.service.ts`:
+
+```ts
+const assignedRole = universityDomain.domainType === "staff" ? "advisor" : "student";
+```
+
+`domainType` bir RBAC rolüne çevrilip atılıyor; `users` tablosunda kalıcı bir
+"öğrenci mi personel mi" alanı yok. İki sonucu var:
+
+1. **Personel = danışman varsayımı yanlış.** SKS görevlisi danışman değil,
+   rektörlük personeli danışman değil — ama kapıdan `advisor` olarak giriyor.
+   Rol değişince personel olduğu bilgisi tamamen siliniyor.
+2. **"Bu kişi personel mi?" sorusuna tahminle cevap veriyoruz.**
+   Frontend: `isAdmin: permissions.length > 0`. Bu, projede altı kez
+   temizlenen *"rol adına göre karar verme"* hatasının veri katmanındaki hâli.
+   Yetki kişinin **ne yapabildiğini** söyler, **kim olduğunu** değil.
+
+`CampusFeed`'deki *"Personel hesaplarında kulüp üyeliği olmayabilir"* metni
+bunun yaması — modelleyemediğimiz bir gerçeği özür metniyle anlatmışız.
+
+**Çözüm:** `users.userType: "student" | "staff"` — kalıcı, kayıtta
+`domainType`'tan gelir, yönetici değiştirebilir (lisansüstü öğrenci +
+araştırma görevlisi gibi çift durumlar var). **Yetki vermez, yetki almaz**;
+yalnızca varsayılan dizilimi belirler. Üç ayrı eksen olur:
+
+| Eksen | Ne söyler | Neyi belirler |
+| --- | --- | --- |
+| `userType` | kişi **ne** | varsayılan dizilim |
+| `permissions` | **ne yapabilir** | erişim |
+| `clubMembers` | **nereye ait** | kişisel içerik |
+
+İki dashboard yazılmaz; tek dashboard, bloklar bağımsız koşullu. Kulübe üye
+olan bir SKS görevlisi ikisini birden görür. **Kimse kısıtlanmaz**, sadece
+boş kutuya bakmaz.
+
+**Neden ertelendi:** migration + kayıt akışı + arayüz demek; staj gösterimi
+öncesi risk. Ucuz kısmı (boş bloğun gizlenmesi) M2.9 dalga 2'de zaten yapıldı.
+
 ### M4 — Katılım ve tanınırlık
 
 - T3.3 **gönüllülük saati + etkinlik transkripti**
