@@ -952,11 +952,23 @@ Tasarım kararları (v1):
 dönüştüğü yer burası. Ama tam da bu yüzden tenant izolasyonunu bilerek deldiği
 için dikkatli kurulmalı.
 
-### M3 — Dönem ve tarihçe
+### M3 — Dönem ve tarihçe — **tamamlandı** (v2.1.0)
 
-- T9 → **D1/D2** akademik dönem + tam üyelik tarihçesi
-- T1.2 danışman onay zinciri, T1.3 **devir teslim**
-- T4.4 denetim görünümü
+| Dilim | Durum |
+| --- | --- |
+| T9 → D1/D2 akademik dönem + üyelik tarihçesi | ✅ Çakışma DB'de engelli (`EXCLUDE USING gist`); aktiflik tarihten türetiliyor, "iki aktif dönem" yapısal olarak imkânsız. Tarihçe append-only. |
+| T1.2 danışman kabul akışı | ✅ Tek taraflı atama kalktı: davet → kabul/ret, süreli, gerekçeli çekilme. Üç yönergenin üçünde de doğrulanmıştı. |
+| T1.6 topluluk organları ve genel kurul | ✅ Karar organı, yönetim/denetleme kurulu, asil/yedek, unvanlar |
+| T1.3 devir teslim | ✅ Genel kurul kararına bağlı; akademik dönem toplantıdan türetiliyor, görev süresi kapanışı tek transaction'da |
+| T4.4 denetim görünümü | ✅ Dönem bazlı faaliyet özeti (11 sayım tek sorguda) + karar odaklı akış |
+
+**Bilinen tutarsızlık:** Devir teslim `club.middleware` üzerinden gittiği için
+`guard()` audit zincirine düşmüyor. Özet sayımları tablodan geliyor ama karar
+görünümünde devir teslim satırı görünmüyor. Ya audit'e bağlanmalı ya da neden
+bağlanmadığı belgelenmeli.
+
+**M3 sırasında araya giren işler:** M2.7 (arayüz cilası + T10.4 üniversiteler
+arası keşif) ve dashboard yeniden tasarımı. İkisi de kayda geçirildi.
 
 ### M4 — Katılım ve tanınırlık
 
