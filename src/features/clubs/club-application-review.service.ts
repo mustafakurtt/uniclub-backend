@@ -4,6 +4,7 @@ import { badRequest, notFound } from "../../shared/utils/errors";
 import { toSafeUser } from "../../shared/utils/user.util";
 import type { ApplicationReviewChecklistItemDef } from "./application-review-checklist.core";
 import { clubApplicationReviewRepository } from "./club-application-review.repository";
+import { clubApplicationDocumentsService } from "./club-application-documents.service";
 import { canActorDecideApprovalStep } from "./club-application-chain";
 
 /** Öğrenciye gösterilebilir olay türleri — SKS iç iş akışı ve itiraz denetimi hariç. */
@@ -324,11 +325,17 @@ export const clubApplicationReviewService = {
       rejectionApproval?.note ?? null
     );
 
+    const documents = await clubApplicationDocumentsService.buildDocumentsEnrichment(
+      universityId,
+      applicationId
+    );
+
     return {
       checklist: {
         items: buildMergedChecklist(settings.clubApplicationReviewChecklist, stored),
         requireChecklistForApproval: settings.clubApplicationRequireChecklistForApproval,
       },
+      documents,
       rejectionReason: appealState.rejectionReason,
       appealDeadline: appealState.appealDeadline,
       canAppeal: appealState.canAppeal,

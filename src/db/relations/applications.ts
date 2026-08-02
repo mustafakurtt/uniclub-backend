@@ -7,6 +7,7 @@ export const applicationsRelations = (r: RelationHelpers) => ({
     approvals: r.many.clubApplicationApprovals(),
     events: r.many.clubApplicationEvents(),
     checklistItems: r.many.clubApplicationChecklistItems(),
+    documents: r.many.clubApplicationDocuments(),
     appeal: r.one.clubApplicationAppeals({
       from: r.clubApplications.id,
       to: r.clubApplicationAppeals.applicationId,
@@ -72,6 +73,20 @@ export const applicationsRelations = (r: RelationHelpers) => ({
     }),
     reviewer: r.one.users({
       from: r.clubApplicationAppeals.reviewedBy,
+      to: r.users.id,
+    }),
+  },
+  clubApplicationDocuments: {
+    application: r.one.clubApplications({
+      from: r.clubApplicationDocuments.applicationId,
+      to: r.clubApplications.id,
+    }),
+    media: r.one.media({
+      from: r.clubApplicationDocuments.mediaId,
+      to: r.media.id,
+    }),
+    uploader: r.one.users({
+      from: r.clubApplicationDocuments.uploadedBy,
       to: r.users.id,
     }),
   },

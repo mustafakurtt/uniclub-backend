@@ -1,11 +1,25 @@
 import { z } from "zod";
 import { CONTACT_PLATFORMS } from "./clubs.types";
+import { APPLICATION_REQUIRED_DOCUMENT_KEY_PATTERN } from "./application-required-documents.core";
+
+const applicationDocumentRefSchema = z.object({
+  documentTypeKey: z
+    .string()
+    .regex(APPLICATION_REQUIRED_DOCUMENT_KEY_PATTERN, "Geçersiz belge türü anahtarı."),
+  mediaId: z.string().uuid("Geçerli bir dosya kimliği giriniz."),
+});
 
 export const createApplicationSchema = z.object({
   proposedName: z.string().min(3, "Kulüp adı en az 3 karakter olmalıdır.").max(256),
   description: z.string().max(2000).optional(),
+  documents: z.array(applicationDocumentRefSchema).max(30).optional(),
 });
 export type CreateApplicationDTO = z.infer<typeof createApplicationSchema>;
+
+export const upsertApplicationDocumentSchema = z.object({
+  mediaId: z.string().uuid("Geçerli bir dosya kimliği giriniz."),
+});
+export type UpsertApplicationDocumentDTO = z.infer<typeof upsertApplicationDocumentSchema>;
 
 /** Revizyon sonrası yeniden gönderim — alanlar başvuru oluşturma ile aynı. */
 export const resubmitApplicationSchema = createApplicationSchema;

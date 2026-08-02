@@ -73,7 +73,7 @@ describe("akademik dönemler", () => {
   });
 
   it("geçmişi olan dönem silinemez", async () => {
-    const y = 2120 + (suffix % 30);
+    const y = 2180 + (suffix % 20);
     const createRes = await post(termsUrl(antalyaUni), admin, {
       name: `Silinemez-${suffix}`,
       startsAt: `${y}-01-01T00:00:00+03:00`,

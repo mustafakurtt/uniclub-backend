@@ -150,6 +150,8 @@ Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı end
 | GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (onay adımlarıyla) |
 | GET | `/api/clubs/applications/:applicationId/history` | Kendi başvurumun süreç geçmişi (sınırlı DTO) |
 | PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
+| PUT | `/api/clubs/applications/:applicationId/documents/:documentTypeKey` | Başvuru belgesi ekle/güncelle |
+| DELETE | `/api/clubs/applications/:applicationId/documents/:documentTypeKey` | Başvuru belgesi kaldır |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 | GET | `/api/users/me/applications` | Tüm başvurularım (özet liste) |
 
@@ -157,9 +159,15 @@ Tenant ayarı `club.formation.support_threshold` **0'dan büyük** ise aynı end
 
 ```jsonc
 // Body
-{ "proposedName": "string (3-256)", "description": "string (max 2000, opsiyonel)" }
+{
+  "proposedName": "string (3-256)",
+  "description": "string (max 2000, opsiyonel)",
+  "documents": [ { "documentTypeKey": "bylaws", "mediaId": "uuid" } ] // opsiyonel
+}
 ```
 `201` + oluşan başvuru (`status: "pending"`, `kind: "application"`) veya öneri (`kind: "formation_proposal"`, `status: "collecting_support"`). İş kuralı: **aynı anda birden fazla aktif başvuru veya açık öneri olamaz** (`pending`/`revision_requested` başvuru veya `collecting_support` öneri) → `400 "Zaten bekleyen bir kulüp başvurunuz var."`. (Reddedilen/geri çekilen başvuru bunu bloklamaz — yeniden başvurulabilir.)
+
+**Belgeler:** Tenant kataloğu `club.application.required_documents` hangi belge türlerinin tanımlandığını belirler (kontrol listesi maddeleriyle aynı `{ key, label, required }` şekli). Dosya önce `POST /api/uploads` (`purpose=application_document`) ile yüklenir; `documents` dizisi veya `PUT .../documents/:documentTypeKey` ile başvuruya bağlanır. `club.application.require_documents_for_submission` **kapalı** (varsayılan) ise eksik zorunlu belgeyle gönderim geçer; **açık** ise tüm `required: true` maddeler yüklenmeden `400 "Zorunlu belgeler eksik — gönderim tamamlanamadı."`. Islak imza gerektiren kurumlar taranmış görsel yükler; ayrı alan yok.
 
 ### 6.2 Başvuru detayı — `GET /api/clubs/applications/:applicationId`
 
@@ -179,6 +187,20 @@ Başvuran self-service; admin `.../club-applications/:id/history` uçundan **far
       "note": "Evrak eksik — lütfen tüzük maddesini düzeltin.",
       "requestedAt": "2026-...",
       "requestedBy": { /* SafeUser — revizyon isteyen yetkili */ }
+    },
+    "documents": {
+      "items": [
+        {
+          "documentTypeKey": "bylaws",
+          "label": "Tüzük",
+          "required": true,
+          "uploadedAt": "2026-...",
+          "fileName": "Tüzük.png",
+          "downloadUrl": "/uploads/....png",
+          "uploadedBy": { /* SafeUser */ }
+        }
+      ],
+      "requireDocumentsForSubmission": false
     }
   }
 }
@@ -208,9 +230,13 @@ Başvuran self-service; admin `.../club-applications/:id/history` uçundan **far
 
 ### 6.3 Revizyon sonrası yeniden gönder — `PATCH /api/clubs/applications/:applicationId/resubmit`
 
-Yalnızca `status: "revision_requested"` başvurular. Body başvuru oluşturma ile aynı (`proposedName`, `description?`). Aynı `id` devam eder; zincir kaldığı yerden sürer (önceki kademe onayları korunur).
+Yalnızca `status: "revision_requested"` başvurular. Body başvuru oluşturma ile aynı (`proposedName`, `description?`, opsiyonel `documents`). Aynı `id` devam eder; zincir kaldığı yerden sürer (önceki kademe onayları korunur). Revizyon sürecinde `PUT/DELETE .../documents/:documentTypeKey` ile belge eklenebilir/değiştirilebilir (`pending` veya `revision_requested`).
 
 `200` + güncellenen başvuru (`status: "pending"`). Hatalar: `404 "Başvuru bulunamadı."` (başkasının başvurusu), `400 "Yalnızca revizyon bekleyen başvuru yeniden gönderilebilir."`.
+
+### 6.3b Başvuru belgesi — `PUT/DELETE /api/clubs/applications/:applicationId/documents/:documentTypeKey`
+
+Yalnızca **başvuran**; başkasının başvurusu → `403`. `PUT` gövdesi `{ "mediaId": "uuid" }` — medya yükleyen başvuran olmalı, `purpose=application_document`. `documentTypeKey` tenant kataloğunda tanımlı olmalı. Yalnızca `pending` veya `revision_requested` aşamada düzenlenebilir → `400 "Bu aşamada belge eklenemez veya değiştirilemez."`. Çapraz tenant → `404`. Yanıtta `storageKey` yok; indirme `downloadUrl` ile.
 
 ### 6.4 Başvuruyu geri çek — `DELETE /api/clubs/applications/:applicationId`
 

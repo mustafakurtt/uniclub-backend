@@ -138,6 +138,8 @@ Kaynak rotalar: `uniclub-frontend/src/App.tsx`; API çağrıları:
 | DELETE | `/api/clubs/applications/:applicationId` | /applications/:applicationId |
 | GET | `/api/clubs/applications/:applicationId` | /applications/:applicationId |
 | GET | `/api/clubs/applications/:applicationId/history` | /applications/:applicationId |
+| PUT | `/api/clubs/applications/:applicationId/documents/:documentTypeKey` | — |
+| DELETE | `/api/clubs/applications/:applicationId/documents/:documentTypeKey` | — |
 | PATCH | `/api/clubs/applications/:applicationId/resubmit` | /applications/:applicationId |
 | GET | `/api/clubs/formation-proposals` | /clubs/proposals, /dashboard |
 | DELETE | `/api/clubs/formation-proposals/:id` | /clubs/proposals/:proposalId |

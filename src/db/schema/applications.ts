@@ -3,6 +3,7 @@ import * as t from "drizzle-orm/pg-core";
 import { timestamps } from "../../core/db/base.entity";
 import { universities } from "./university";
 import { users } from "./users";
+import { media } from "./media";
 import { approvalCommittees, clubApplicationCommitteeVoteEnum } from "./approval-committees";
 import { compositeForeignKey } from "./helpers";
 
@@ -221,3 +222,38 @@ export const clubApplicationCommitteeVotes = table(
     t.index("club_app_committee_votes_application_step_idx").on(cols.applicationId, cols.approvalStep),
   ]
 );
+
+/**
+ * Başvuruya bağlı belgeler — tenant kataloğundaki tür anahtarına göre tek dosya (upsert).
+ * Dosya meta `media` tablosunda; burada yalnızca referans.
+ */
+export const clubApplicationDocuments = table("club_application_documents", {
+  id: t.uuid().primaryKey().defaultRandom(),
+  applicationId: t
+    .uuid("application_id")
+    .references(() => clubApplications.id, { onDelete: "cascade" })
+    .notNull(),
+  universityId: t
+    .uuid("university_id")
+    .references(() => universities.id, { onDelete: "restrict" })
+    .notNull(),
+  documentTypeKey: t.varchar("document_type_key", { length: 64 }).notNull(),
+  mediaId: t
+    .uuid("media_id")
+    .references(() => media.id, { onDelete: "restrict" })
+    .notNull(),
+  uploadedBy: t.uuid("uploaded_by").notNull(),
+  ...timestamps,
+}, (cols) => [
+  compositeForeignKey({
+    columns: [cols.applicationId, cols.universityId],
+    foreignColumns: [clubApplications.id, clubApplications.universityId],
+    name: "club_application_documents_application_tenant_fkey",
+  }).onDelete("cascade"),
+  compositeForeignKey({
+    columns: [cols.uploadedBy, cols.universityId],
+    foreignColumns: [users.id, users.universityId],
+    name: "club_application_documents_uploader_tenant_fkey",
+  }).onDelete("restrict"),
+  t.uniqueIndex("club_application_documents_type_idx").on(cols.applicationId, cols.documentTypeKey),
+]);

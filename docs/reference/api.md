@@ -344,6 +344,8 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | GET | `/api/clubs/applications/:applicationId` | Kendi başvurumun detayı (`revisionRequest` alanı revizyon beklerken) |
 | GET | `/api/clubs/applications/:applicationId/history` | Kendi başvurumun süreç geçmişi (sınırlı DTO — SKS iç notları yok) |
 | PATCH | `/api/clubs/applications/:applicationId/resubmit` | Revizyon sonrası yeniden gönder (aynı kayıt) |
+| PUT | `/api/clubs/applications/:applicationId/documents/:documentTypeKey` | Başvuru belgesi ekle/güncelle (`pending` veya `revision_requested`) |
+| DELETE | `/api/clubs/applications/:applicationId/documents/:documentTypeKey` | Başvuru belgesi kaldır |
 | DELETE | `/api/clubs/applications/:applicationId` | Bekleyen başvurumu geri çek |
 
 **Kuruluş önerisi / dijital destek (tenant eşik > 0):**
@@ -381,7 +383,8 @@ Tüm endpoint'ler `authMiddleware` gerektirir; kendi üniversitenin kulüpleriyl
 | DELETE | `/api/clubs/:clubId/contact-links/:linkId` | officer/başkan |
 
 Body şemaları:
-- `POST /applications`, `PATCH /applications/:id/resubmit`: `{ proposedName (3-256), description? (max 2000) }`
+- `POST /applications`, `PATCH /applications/:id/resubmit`: `{ proposedName (3-256), description? (max 2000), documents? [{ documentTypeKey, mediaId }] }` — belgeler tenant kataloğundaki `club.application.required_documents` anahtarlarıyla eşleşmeli; `mediaId` `POST /api/uploads` (`purpose=application_document`) ile üretilir
+- `PUT /applications/:id/documents/:documentTypeKey`: `{ mediaId }` — yalnızca başvuran; başkasının başvurusu → `403`
 - `POST /applications/:id/appeal`: `{ note (10-2000) }` — reddedilen başvuruya **bir kez** itiraz
 - `POST /:clubId/join`, `DELETE .../leave`: body almaz.
 - `PATCH .../join-requests/:userId`: `{ "decision": "approved" | "rejected" }`
@@ -454,7 +457,7 @@ Tüm endpoint'ler `guard(<permission>, { tenantScoped: true })` zincirinden geç
 > **Kullanıcı durumu (ban/unban), şifre sıfırlama ve kullanıcı aktivitesi artık `/api/moderation` altındadır** (bkz. [Moderation](#8-moderation--apimoderation) ve `docs/integration/moderation.md`). Eski `PATCH .../users/:userId/status` endpoint'i **kaldırıldı**.
 | GET | `/api/admin/universities/:universityId/club-applications?status=` | `club.approve` | Kulüp başvurularını listele (`approvals` gömülü; `revision_requested` ayrı kuyruk) |
 | GET | `/api/admin/universities/:universityId/club-applications/my-committee-pending` | kurul üyeliği | Oy bekleyen kurul başvuruları (`application.view` gerekmez) |
-| GET | `/api/admin/universities/:universityId/club-applications/:applicationId` | `application.view` veya kurul kademesi üyeliği | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`) |
+| GET | `/api/admin/universities/:universityId/club-applications/:applicationId` | `application.view` veya kurul kademesi üyeliği | Tek başvuru detayı (`applicant`, `approvals`, `revisionRequestCount`, `documents`) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/approve` | `application.view` | Sıradaki onay kademesini onayla — **tüm kademeler** onaylandığında kulüp oluşur |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/reject` | `application.view` | Sıradaki kademeyi reddet (`note` zorunlu) |
 | PATCH | `/api/admin/universities/:universityId/club-applications/:applicationId/request-revision` | `application.view` | Revizyon talep et (`note` zorunlu) |
@@ -693,7 +696,7 @@ Akış: **yükle → dönen URL'yi mevcut `*Url` alanına yaz** (endpoint'ler h�
 | DELETE | `/api/uploads/:mediaId` | Bearer | Sil (yalnızca yükleyen) |
 | GET | `/uploads/:key` | Public | Servis (`Cache-Control: immutable`) |
 
-`purpose`: `avatar\|club_logo\|club_cover\|gallery\|other`. Boyut aşımı → `413`; görsel değil → `400`.
+`purpose`: `avatar\|club_logo\|club_cover\|gallery\|application_document\|other`. Boyut aşımı → `413`; görsel değil → `400`.
 
 ---
 

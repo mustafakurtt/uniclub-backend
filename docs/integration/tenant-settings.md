@@ -61,6 +61,19 @@ Authorization: Bearer <token>
     "flagType": "entitlement",
     ...
   },
+  "club.application.required_documents": {
+    "value": [ { "key": "bylaws", "label": "Tüzük", "required": true }, ... ],
+    "kind": "checklist",
+    "editor": "tenant",
+    ...
+  },
+  "club.application.require_documents_for_submission": {
+    "value": false,
+    "default": false,
+    "kind": "boolean",
+    "flagType": "entitlement",
+    ...
+  },
   "club.application.appeal_period_days": {
     "value": 14,
     "default": 14,
@@ -125,6 +138,10 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `club.advisor.invitation_expiry_days` | `14` | 3–60 | tenant |
 | `club.general_meeting.quorum_percent` | `50` | 1–100 | tenant |
 | `club.general_meeting.majority_percent` | `50` | 1–100 | tenant |
+| `club.application.review_checklist` | `[]` (ör. `documents_complete`) | checklist (`key`, `label`, `required`) | tenant |
+| `club.application.require_checklist_for_approval` | `false` | boolean | tenant |
+| `club.application.required_documents` | `[]` | checklist — kurum başına zorunlu belge kataloğu (`bylaws`, `member_list`, …) | tenant |
+| `club.application.require_documents_for_submission` | `false` | boolean — açıkken tüm `required: true` belgeler yüklenmeden başvuru gönderilemez | tenant |
 | `university.export.enabled` | `false` | boolean, `flagType: entitlement` | platform |
 | `university.export.pdf.enabled` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-01` | platform |
 | `university.inter_university.enabled` | `false` | boolean, `flagType: entitlement` | tenant |
@@ -141,6 +158,8 @@ format:** adım nesnesi:
 
 `club_approver` özel token: `club.approve` yetkisini taşıyanlar. Kurul referansı
 `approval_committees` tablosundaki aktif kurula işaret etmelidir.
+
+`club.application.required_documents` — başvuru belge kataloğu; kontrol listesiyle aynı JSON şekli. Boş katalog = belge akışı kapalı (yükleme uçları katalog anahtarı olmadan 400). `club.application.require_documents_for_submission` varsayılan **kapalı** (kontrol listesi kilidiyle aynı gevşek varsayılan); katı kurumlar açabilir.
 
 ---
 

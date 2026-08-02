@@ -19,6 +19,12 @@ import {
   reviewChecklistEquals,
   type ApplicationReviewChecklistItemDef,
 } from "../clubs/application-review-checklist.core";
+import {
+  DEFAULT_APPLICATION_REQUIRED_DOCUMENTS,
+  parseRequiredDocuments,
+  requiredDocumentsEquals,
+  type ApplicationRequiredDocumentDef,
+} from "../clubs/application-required-documents.core";
 
 export const TenantSettingEditor = {
   TENANT: "tenant",
@@ -43,6 +49,10 @@ export const TenantSettingKey = {
   CLUB_APPLICATION_REVIEW_CHECKLIST: "club.application.review_checklist",
   /** Zorunlu kontrol listesi maddeleri işaretlenmeden onay engeli — varsayılan kapalı. */
   CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL: "club.application.require_checklist_for_approval",
+  /** Kuruluş başvurusu zorunlu belge kataloğu (tenant). */
+  CLUB_APPLICATION_REQUIRED_DOCUMENTS: "club.application.required_documents",
+  /** Zorunlu belgeler yüklenmeden gönderim engeli — varsayılan kapalı. */
+  CLUB_APPLICATION_REQUIRE_DOCUMENTS_FOR_SUBMISSION: "club.application.require_documents_for_submission",
   /** Ret sonrası itiraz süresi (gün). */
   CLUB_APPLICATION_APPEAL_PERIOD_DAYS: "club.application.appeal_period_days",
   /** 0 = destek toplama kapalı (doğrudan başvuru). >0 = minimum destek sayısı. */
@@ -157,6 +167,21 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Onay için zorunlu kontrol listesi kilidi",
     labelEn: "Require checklist completion before approval",
   },
+  [TenantSettingKey.CLUB_APPLICATION_REQUIRED_DOCUMENTS]: {
+    kind: "checklist",
+    defaultValue: [...DEFAULT_APPLICATION_REQUIRED_DOCUMENTS],
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Kulüp başvurusu zorunlu belge kataloğu",
+    labelEn: "Club application required document catalog",
+  },
+  [TenantSettingKey.CLUB_APPLICATION_REQUIRE_DOCUMENTS_FOR_SUBMISSION]: {
+    kind: "boolean",
+    defaultValue: false,
+    flagType: "entitlement",
+    editor: TenantSettingEditor.TENANT,
+    labelTr: "Gönderim için zorunlu belge kilidi",
+    labelEn: "Require documents before application submission",
+  },
   [TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS]: {
     kind: "integer",
     defaultValue: 14,
@@ -258,6 +283,7 @@ export type TenantSettingStoredValue =
   | string[]
   | boolean
   | ApplicationReviewChecklistItemDef[]
+  | ApplicationRequiredDocumentDef[]
   | ApprovalChainStep[];
 
 export function parseTenantSettingValue(
@@ -269,6 +295,9 @@ export function parseTenantSettingValue(
     return parseApprovalChainSteps(raw);
   }
   if (def.kind === "checklist") {
+    if (key === TenantSettingKey.CLUB_APPLICATION_REQUIRED_DOCUMENTS) {
+      return parseRequiredDocuments(raw);
+    }
     return parseReviewChecklist(raw);
   }
   if (def.kind === "boolean") {
@@ -292,6 +321,9 @@ export function tenantSettingDefaultEquals(
     return approvalChainStepsEqual(defaults, candidate);
   }
   if (def.kind === "checklist") {
+    if (key === TenantSettingKey.CLUB_APPLICATION_REQUIRED_DOCUMENTS) {
+      return requiredDocumentsEquals(def.defaultValue as ApplicationRequiredDocumentDef[], value as ApplicationRequiredDocumentDef[]);
+    }
     return reviewChecklistEquals(def.defaultValue, value as ApplicationReviewChecklistItemDef[]);
   }
   return value === def.defaultValue;
@@ -305,6 +337,8 @@ export interface ResolvedTenantSettings {
   clubApplicationApprovalChain: ApprovalChainStep[];
   clubApplicationReviewChecklist: ApplicationReviewChecklistItemDef[];
   clubApplicationRequireChecklistForApproval: boolean;
+  clubApplicationRequiredDocuments: ApplicationRequiredDocumentDef[];
+  clubApplicationRequireDocumentsForSubmission: boolean;
   clubApplicationAppealPeriodDays: number;
   clubFormationSupportThreshold: number;
   clubFormationProposalExpiryDays: number;
@@ -329,6 +363,10 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
     clubApplicationReviewChecklist: [...DEFAULT_APPLICATION_REVIEW_CHECKLIST],
     clubApplicationRequireChecklistForApproval:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL]
+        .defaultValue as boolean,
+    clubApplicationRequiredDocuments: [...DEFAULT_APPLICATION_REQUIRED_DOCUMENTS],
+    clubApplicationRequireDocumentsForSubmission:
+      TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_APPLICATION_REQUIRE_DOCUMENTS_FOR_SUBMISSION]
         .defaultValue as boolean,
     clubApplicationAppealPeriodDays:
       TENANT_SETTING_CATALOG[TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS].defaultValue as number,
@@ -377,6 +415,13 @@ export function mergeOverridesIntoResolved(
     clubApplicationRequireChecklistForApproval:
       (overrides[TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL] as boolean | undefined) ??
       defaults.clubApplicationRequireChecklistForApproval,
+    clubApplicationRequiredDocuments:
+      (overrides[TenantSettingKey.CLUB_APPLICATION_REQUIRED_DOCUMENTS] as
+        | ApplicationRequiredDocumentDef[]
+        | undefined) ?? defaults.clubApplicationRequiredDocuments,
+    clubApplicationRequireDocumentsForSubmission:
+      (overrides[TenantSettingKey.CLUB_APPLICATION_REQUIRE_DOCUMENTS_FOR_SUBMISSION] as boolean | undefined) ??
+      defaults.clubApplicationRequireDocumentsForSubmission,
     clubApplicationAppealPeriodDays:
       (overrides[TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS] as number | undefined) ??
       defaults.clubApplicationAppealPeriodDays,
@@ -427,6 +472,10 @@ export function getResolvedSettingValue(
       return resolved.clubApplicationReviewChecklist;
     case TenantSettingKey.CLUB_APPLICATION_REQUIRE_CHECKLIST_FOR_APPROVAL:
       return resolved.clubApplicationRequireChecklistForApproval;
+    case TenantSettingKey.CLUB_APPLICATION_REQUIRED_DOCUMENTS:
+      return resolved.clubApplicationRequiredDocuments;
+    case TenantSettingKey.CLUB_APPLICATION_REQUIRE_DOCUMENTS_FOR_SUBMISSION:
+      return resolved.clubApplicationRequireDocumentsForSubmission;
     case TenantSettingKey.CLUB_APPLICATION_APPEAL_PERIOD_DAYS:
       return resolved.clubApplicationAppealPeriodDays;
     case TenantSettingKey.CLUB_FORMATION_SUPPORT_THRESHOLD:

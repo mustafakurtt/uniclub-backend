@@ -14,6 +14,7 @@ export const MediaPurpose = {
   CLUB_LOGO: "club_logo",
   CLUB_COVER: "club_cover",
   GALLERY: "gallery",
+  APPLICATION_DOCUMENT: "application_document",
   OTHER: "other",
 } as const;
 

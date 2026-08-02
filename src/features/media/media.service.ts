@@ -10,9 +10,13 @@ import { badRequest, notFound, forbidden } from "../../shared/utils/errors";
 const KEY_PATTERN = /^[0-9a-f-]{36}\.[a-z0-9]{2,5}$/;
 
 /** storageKey'den servis edilebilir URL üretir (mutlak base varsa mutlak, yoksa relatif). */
-function buildUrl(key: string): string {
+export function buildMediaPublicUrl(key: string): string {
   const base = env.UPLOAD_PUBLIC_BASE_URL?.replace(/\/+$/, "") ?? "";
   return `${base}/uploads/${key}`;
+}
+
+function buildUrl(key: string): string {
+  return buildMediaPublicUrl(key);
 }
 
 /**

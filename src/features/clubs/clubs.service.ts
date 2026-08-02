@@ -16,6 +16,7 @@ import { findRevisionRequestedStep } from "./club-application-chain.core";
 import { clubApplicationReviewService } from "./club-application-review.service";
 import { membershipHistoryService } from "../membership-history/membership-history.service";
 import { clubApplicationCommitteeService } from "./club-application-committee.service";
+import { clubApplicationDocumentsService } from "./club-application-documents.service";
 
 export const clubsService = {
   async listClubs(universityId: string, search?: string) {
@@ -91,7 +92,27 @@ export const clubsService = {
       };
     }
 
+    if (settings.clubApplicationRequireDocumentsForSubmission) {
+      const refs = data.documents ?? [];
+      const keys = new Set(refs.map((r) => r.documentTypeKey));
+      const missing = settings.clubApplicationRequiredDocuments.filter(
+        (item) => item.required && !keys.has(item.key)
+      );
+      if (missing.length > 0) {
+        throw badRequest("club.requiredDocumentsIncomplete");
+      }
+    }
+
     const application = await clubsRepository.createApplication(universityId, applicantId, data);
+    if (data.documents?.length) {
+      await clubApplicationDocumentsService.linkDocumentsFromRefs(
+        universityId,
+        application.id,
+        applicantId,
+        data.documents
+      );
+    }
+    await clubApplicationDocumentsService.assertSubmissionAllowed(universityId, application.id);
     await clubApplicationCommitteeService.notifyIfCurrentStepIsCommittee(universityId, application.id);
     return { ...application, kind: "application" as const };
   },
@@ -246,6 +267,7 @@ export const clubsService = {
     return {
       ...application,
       approvals: approvalsWithTally,
+      documents: review.documents,
       revisionRequest: revisionApproval
         ? {
             step: revisionApproval.step,
@@ -265,6 +287,21 @@ export const clubsService = {
 
   /** Revizyon talebi sonrası başvuruyu güncelle ve yeniden gönder — aynı kayıt devam eder. */
   async resubmitApplication(applicantId: string, applicationId: string, data: ResubmitApplicationDTO) {
+    const existing = await clubsRepository.findApplicationByApplicant(applicantId, applicationId);
+    if (!existing || existing.status !== "revision_requested") {
+      throw badRequest("club.applicationNotResubmittable");
+    }
+
+    if (data.documents?.length) {
+      await clubApplicationDocumentsService.linkDocumentsFromRefs(
+        existing.universityId,
+        applicationId,
+        applicantId,
+        data.documents
+      );
+    }
+    await clubApplicationDocumentsService.assertSubmissionAllowed(existing.universityId, applicationId);
+
     const updated = await clubsRepository.resubmitApplication(applicationId, applicantId, data);
     if (!updated) {
       throw badRequest("club.applicationNotResubmittable");

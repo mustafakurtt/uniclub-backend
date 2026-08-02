@@ -41,6 +41,7 @@ export type ContactPlatform = (typeof CONTACT_PLATFORMS)[number];
 export interface CreateClubApplicationPayload {
   proposedName: string;
   description?: string;
+  documents?: { documentTypeKey: string; mediaId: string }[];
 }
 
 export interface CreateContactLinkPayload {

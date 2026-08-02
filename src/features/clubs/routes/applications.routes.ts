@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../../core/auth/auth.middleware";
 import { ClubVariables } from "../../../middlewares/club.middleware";
-import { createApplicationSchema, resubmitApplicationSchema, submitAppealSchema } from "../clubs.schema";
+import { createApplicationSchema, resubmitApplicationSchema, submitAppealSchema, upsertApplicationDocumentSchema } from "../clubs.schema";
 import { clubsService } from "../clubs.service";
 import { clubApplicationReviewService } from "../club-application-review.service";
+import { clubApplicationDocumentsService } from "../club-application-documents.service";
 import { requireTenant } from "../../../shared/utils/tenant.util";
 import { validate } from "../../../shared/utils/validate";
 import { ok, created, done } from "../../../shared/utils/respond";
@@ -88,3 +89,38 @@ applicationsRoutes.post(
     return created(c, appeal, "club.applicationAppealSubmitted");
   }
 );
+
+// 6. BAŞVURU BELGESİ EKLE/GÜNCELLE (yalnızca başvuran; pending veya revision_requested)
+applicationsRoutes.put(
+  "/applications/:applicationId/documents/:documentTypeKey",
+  authMiddleware,
+  validate("json", upsertApplicationDocumentSchema),
+  async (c) => {
+    const user = c.get("user");
+    const { applicationId, documentTypeKey } = c.req.param();
+    const { mediaId } = c.req.valid("json");
+    const universityId = requireTenant(user.universityId);
+    await clubApplicationDocumentsService.validateAndUpsert(
+      universityId,
+      applicationId,
+      user.userId,
+      documentTypeKey,
+      mediaId
+    );
+    return ok(c, { documentTypeKey }, "club.applicationDocumentUpserted");
+  }
+);
+
+// 7. BAŞVURU BELGESİ KALDIR
+applicationsRoutes.delete("/applications/:applicationId/documents/:documentTypeKey", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const { applicationId, documentTypeKey } = c.req.param();
+  const universityId = requireTenant(user.universityId);
+  const result = await clubApplicationDocumentsService.removeDocument(
+    universityId,
+    applicationId,
+    user.userId,
+    documentTypeKey
+  );
+  return ok(c, result, "club.applicationDocumentRemoved");
+});
