@@ -128,6 +128,10 @@ Değişiklik anında etkilidir (cache SET); TTL beklenmez.
 | `university.export.enabled` | `false` | boolean, `flagType: entitlement` | platform |
 | `university.export.pdf.enabled` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-01` | platform |
 | `university.inter_university.enabled` | `false` | boolean, `flagType: entitlement` | tenant |
+| `feed.social.preview` | `false` | boolean, `flagType: release`, `sunsetAfter: 2026-11-02` | platform |
+
+`feed.social.preview` — akış kartlarında demo yorum/beğeni önizlemesi (salt okunur;
+T2.7 gerçek özellik geldiğinde kaldırılacak/değişecek). Seed'de yalnızca Antalya Bilim açık.
 
 `club.application.approval_chain` — JSON dizi (1–3 kademe). **Geriye dönük uyum:**
 her eleman yalnızca rol string'i olabilir (`["advisor", "student_affairs"]`). **Yeni

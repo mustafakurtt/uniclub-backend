@@ -17,6 +17,8 @@ import {
   TenantSettingKey,
   isTenantFeatureEnabled,
 } from "../tenant-settings/tenant-settings.catalog";
+import { socialPreviewService } from "../social-preview/social-preview.service";
+import { clubsRepository } from "../clubs/clubs.repository";
 
 type ActivityDetail = NonNullable<Awaited<ReturnType<typeof activitiesRepository.findDetailById>>>;
 type AcceptedClubLink = ActivityDetail["activityClubs"][number];
@@ -302,11 +304,23 @@ export const activitiesService = {
    * görünürlüğündekiler yalnızca üyeye/staff'a; sıradan ziyaretçiye yalnızca
    * yayınlanmış + university.
    */
-  async listByClub(clubId: string, viewerId: string) {
+  async listByClub(clubId: string, viewerId: string, universityId: string) {
+    const club = await clubsRepository.findClubInUniversity(universityId, clubId);
+    if (!club) {
+      throw notFound("club.notFound");
+    }
+
     const isStaff = await activitiesRepository.isClubStaff(clubId, viewerId);
     const canSeeMembers = isStaff || (await activitiesRepository.isApprovedMemberOfAny(viewerId, [clubId]));
     const rows = await activitiesRepository.listByClub(clubId, isStaff);
-    return canSeeMembers ? rows : rows.filter((a) => a.visibility === "university");
+    const filtered = canSeeMembers ? rows : rows.filter((a) => a.visibility === "university");
+
+    if (!(await socialPreviewService.isEnabled(universityId))) {
+      return filtered;
+    }
+
+    const stats = await socialPreviewService.loadForActivities(universityId, filtered.map((a) => a.id));
+    return socialPreviewService.attachActivitySocial(filtered, stats);
   },
 
   // ── Co-host davet/kabul ────────────────────────────────────────────────────
@@ -419,13 +433,22 @@ export const activitiesService = {
   // ═══════════════════════════════════════════════
   /** Üniversite geneli yayınlanmış + `university` görünürlüğündeki etkinlikler. */
   async listDiscovery(universityId: string, query: ListActivitiesQueryDTO) {
+    let rows;
     // Aramalı keşif cache'lenmez (çok anahtar, düşük değer — university.cache ile aynı ilke).
     if (query.search) {
-      return await activitiesRepository.listForUniversity(universityId, query.scope, query.search);
+      rows = await activitiesRepository.listForUniversity(universityId, query.scope, query.search);
+    } else {
+      rows = await activitiesCache.discovery(universityId, query.scope).read(() =>
+        activitiesRepository.listForUniversity(universityId, query.scope)
+      );
     }
-    return await activitiesCache.discovery(universityId, query.scope).read(() =>
-      activitiesRepository.listForUniversity(universityId, query.scope)
-    );
+
+    if (!(await socialPreviewService.isEnabled(universityId))) {
+      return rows;
+    }
+
+    const stats = await socialPreviewService.loadForActivities(universityId, rows.map((a) => a.id));
+    return socialPreviewService.attachActivitySocial(rows, stats);
   },
 
   /**

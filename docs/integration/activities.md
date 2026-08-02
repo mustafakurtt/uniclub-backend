@@ -56,6 +56,12 @@ Tümü `Bearer` ister; tenant JWT'den çözülür (path'te `universityId` yoktur
 > DÖNMEZ** — onlar kulübün kendi listesinde (`GET /api/clubs/:clubId/activities`)
 > yalnızca üyelere görünür.
 
+**Keşif ve kulüp listelerinde sosyal önizleme (demo)** — tenant `feed.social.preview`
+bayrağı açık olduğunda her etkinlik kartına `commentCount`, `likeCount`, `recentComments`
+(son 3 yorum) gömülür. Bu katman **salt okunur** demo verisidir; yazma ucu yoktur.
+Gerçek yorum/beğeni özelliği T2.7 kapsamındadır. Bayrak kapalı tenant'ta alanlar
+**hiç dönmez**.
+
 ### Detay yanıtı (`data`)
 ```jsonc
 {

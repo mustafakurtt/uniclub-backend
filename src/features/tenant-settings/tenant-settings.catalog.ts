@@ -60,6 +60,8 @@ export const TenantSettingKey = {
   UNIVERSITY_EXPORT_PDF_ENABLED: "university.export.pdf.enabled",
   /** Üniversiteler arası etkinlik keşfi (T10.4) — entitlement; varsayılan kapalı. */
   UNIVERSITY_INTER_UNIVERSITY_ENABLED: "university.inter_university.enabled",
+  /** Akış demo sosyal önizleme (T2.7 öncesi) — release; varsayılan kapalı. */
+  FEED_SOCIAL_PREVIEW: "feed.social.preview",
 } as const;
 
 export type TenantSettingKey = (typeof TenantSettingKey)[keyof typeof TenantSettingKey];
@@ -234,6 +236,15 @@ export const TENANT_SETTING_CATALOG: Record<TenantSettingKey, TenantSettingDefin
     labelTr: "Üniversiteler arası etkinlik keşfi",
     labelEn: "Inter-university activity discovery",
   },
+  [TenantSettingKey.FEED_SOCIAL_PREVIEW]: {
+    kind: "boolean",
+    defaultValue: false,
+    flagType: "release",
+    sunsetAfter: "2026-11-02",
+    editor: TenantSettingEditor.PLATFORM,
+    labelTr: "Akış sosyal önizleme (demo)",
+    labelEn: "Feed social preview (demo)",
+  },
 };
 
 export const TENANT_SETTING_KEYS = Object.keys(TENANT_SETTING_CATALOG) as TenantSettingKey[];
@@ -303,6 +314,7 @@ export interface ResolvedTenantSettings {
   universityExportEnabled: boolean;
   universityExportPdfEnabled: boolean;
   universityInterUniversityEnabled: boolean;
+  feedSocialPreviewEnabled: boolean;
 }
 
 export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
@@ -336,6 +348,8 @@ export function buildDefaultResolvedSettings(): ResolvedTenantSettings {
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_EXPORT_PDF_ENABLED].defaultValue as boolean,
     universityInterUniversityEnabled:
       TENANT_SETTING_CATALOG[TenantSettingKey.UNIVERSITY_INTER_UNIVERSITY_ENABLED].defaultValue as boolean,
+    feedSocialPreviewEnabled:
+      TENANT_SETTING_CATALOG[TenantSettingKey.FEED_SOCIAL_PREVIEW].defaultValue as boolean,
   };
 }
 
@@ -390,6 +404,9 @@ export function mergeOverridesIntoResolved(
     universityInterUniversityEnabled:
       (overrides[TenantSettingKey.UNIVERSITY_INTER_UNIVERSITY_ENABLED] as boolean | undefined) ??
       defaults.universityInterUniversityEnabled,
+    feedSocialPreviewEnabled:
+      (overrides[TenantSettingKey.FEED_SOCIAL_PREVIEW] as boolean | undefined) ??
+      defaults.feedSocialPreviewEnabled,
   };
 }
 
@@ -428,6 +445,8 @@ export function getResolvedSettingValue(
       return resolved.universityExportPdfEnabled;
     case TenantSettingKey.UNIVERSITY_INTER_UNIVERSITY_ENABLED:
       return resolved.universityInterUniversityEnabled;
+    case TenantSettingKey.FEED_SOCIAL_PREVIEW:
+      return resolved.feedSocialPreviewEnabled;
   }
 }
 

@@ -16,6 +16,7 @@ export default defineConfig({
     "./src/db/schema/club-formation.ts",
     "./src/db/schema/audit.ts",
     "./src/db/schema/activities.ts",
+    "./src/db/schema/social-preview.ts",
     "./src/db/schema/media.ts",
     "./src/db/schema/invitations.ts",
     "./src/db/schema/tenant-settings.ts",

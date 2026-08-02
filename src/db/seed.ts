@@ -260,12 +260,14 @@ async function main(): Promise<() => Promise<void>> {
       capacity?: number;
       visibility?: "university" | "members" | "inter_university";
       status?: "draft" | "published" | "cancelled";
+      coverUrl?: string | null;
       attendees?: { userId: string; status?: "going" | "interested" | "waitlist" }[];
     }) {
       const [activity] = await tx.insert(schema.activities).values({
         title: a.title,
         description: a.description ?? null,
         location: a.location ?? null,
+        coverUrl: a.coverUrl ?? null,
         startsAt: a.startsAt,
         endsAt: a.endsAt ?? null,
         capacity: a.capacity ?? null,
@@ -384,6 +386,12 @@ async function main(): Promise<() => Promise<void>> {
     await tx.insert(schema.tenantSettings).values({
       universityId: antalya.id,
       key: TenantSettingKey.UNIVERSITY_INTER_UNIVERSITY_ENABLED,
+      value: true,
+      updatedBy: antalyaSks,
+    });
+    await tx.insert(schema.tenantSettings).values({
+      universityId: antalya.id,
+      key: TenantSettingKey.FEED_SOCIAL_PREVIEW,
       value: true,
       updatedBy: antalyaSks,
     });
@@ -590,12 +598,27 @@ async function main(): Promise<() => Promise<void>> {
         pinned: false,
       },
     ]);
-    await tx.insert(schema.clubGallery).values([
-      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: mustafa, imageUrl: "https://picsum.photos/seed/tech-meetup-1/800/600", caption: "Haftalık buluşmamızdan bir kare" },
-      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: can, imageUrl: "https://picsum.photos/seed/tech-hackathon-1/800/600", caption: "Hackathon gecesi" },
-      { clubId: photographyClub.id, universityId: photographyClub.universityId, uploadedBy: ayse, imageUrl: "https://picsum.photos/seed/photo-kaleici-1/800/600", caption: "Kaleiçi gezisinden" },
-      { clubId: musicClub.id, universityId: musicClub.universityId, uploadedBy: can, imageUrl: "https://picsum.photos/seed/music-night-1/800/600", caption: "Geçen dönemin kapanış konseri" },
-    ]);
+    // Demo galeri görselleri: Picsum (serbest lisanslı yer tutucu, 16:9 1280×720).
+    // Gerçek kurulumda kurumun kendi görselleriyle değiştirilecektir.
+    const picsum16x9 = (seed: string) => `https://picsum.photos/seed/${seed}/1280/720`;
+
+    const antalyaGalleryImages = await tx.insert(schema.clubGallery).values([
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: mustafa, imageUrl: picsum16x9("tech-meetup-1"), caption: "Haftalık buluşmamızdan bir kare" },
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: can, imageUrl: picsum16x9("tech-hackathon-1"), caption: "Hackathon gecesi — takımlar sahneye" },
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: sen, imageUrl: picsum16x9("tech-workshop-1"), caption: "React atölyesi öncesi hazırlık" },
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: emre, imageUrl: picsum16x9("tech-lab-1"), caption: "Lab ortamında birlikte kod yazıyoruz" },
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: burak, imageUrl: picsum16x9("tech-pizza-1"), caption: "Gece yarısı pizza + debug" },
+      { clubId: techClub.id, universityId: techClub.universityId, uploadedBy: mustafa, imageUrl: picsum16x9("tech-standup-1"), caption: "Stand-up notları kulüp duvarında" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, uploadedBy: ayse, imageUrl: picsum16x9("photo-kaleici-1"), caption: "Kaleiçi gezisinden gün batımı" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, uploadedBy: ayse, imageUrl: picsum16x9("photo-portrait-1"), caption: "Stüdyo portre çalışması" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, uploadedBy: burak, imageUrl: picsum16x9("photo-campus-1"), caption: "Kampüsten minimal kare" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, uploadedBy: ayse, imageUrl: picsum16x9("photo-night-1"), caption: "Gece çekimi denemesi" },
+      { clubId: photographyClub.id, universityId: photographyClub.universityId, uploadedBy: burak, imageUrl: picsum16x9("photo-exhibit-1"), caption: "Kulüp sergimizden bir detay" },
+      { clubId: musicClub.id, universityId: musicClub.universityId, uploadedBy: can, imageUrl: picsum16x9("music-night-1"), caption: "Geçen dönemin kapanış konseri" },
+      { clubId: musicClub.id, universityId: musicClub.universityId, uploadedBy: emre, imageUrl: picsum16x9("music-acoustic-1"), caption: "Akustik gece provası" },
+      { clubId: musicClub.id, universityId: musicClub.universityId, uploadedBy: can, imageUrl: picsum16x9("music-choir-1"), caption: "Koro provasından bir an" },
+      { clubId: musicClub.id, universityId: musicClub.universityId, uploadedBy: emre, imageUrl: picsum16x9("music-stage-1"), caption: "Amfi sahnesinde soundcheck" },
+    ]).returning();
 
     // --- Kulüp kurma başvuruları (onay zincirinin 3 durumu da mevcut) ---
     console.log("   📝 Antalya başvuruları...");
@@ -844,19 +867,23 @@ async function main(): Promise<() => Promise<void>> {
     // ═══════════════════════════════════════════════════════════════
     console.log("🎉 Etkinlikler (activities) kuruluyor...");
 
+    const picsum16x9Activity = (seed: string) => `https://picsum.photos/seed/${seed}/1280/720`;
+
     // 1) Tek host, kapasiteli, yaklaşan — keşif + RSVP akışının temel örneği.
-    await createActivity({
+    const reactWorkshop = await createActivity({
       hostClubId: techClub.id, createdBy: mustafa,
       title: "React ile Web Atölyesi", description: "Sıfırdan bir SPA kuruyoruz.",
       location: "B Blok Lab 2", startsAt: inDays(7), endsAt: inDays(7), capacity: 30,
+      coverUrl: picsum16x9Activity("activity-react-workshop"),
       attendees: [{ userId: sen }, { userId: can }, { userId: emre, status: "interested" }],
     });
 
     // 2) AYNI üniversiteden co-host (Yazılım + Müzik) — tek üniversitede birlikte etkinlik.
-    await createActivity({
+    const kodMuzikGecesi = await createActivity({
       hostClubId: techClub.id, coHostClubIds: [musicClub.id], createdBy: can,
       title: "Kod & Müzik Gecesi", description: "Canlı kodlama + akustik performans.",
       location: "Merkezi Amfi", startsAt: inDays(14), capacity: 100,
+      coverUrl: picsum16x9Activity("activity-kod-muzik"),
       attendees: [{ userId: mustafa }, { userId: can }, { userId: emre }],
     });
 
@@ -869,12 +896,11 @@ async function main(): Promise<() => Promise<void>> {
     });
 
     // 4) ⭐ ÇOK-ÜNİVERSİTELİ TURNUVA — Antalya (host) + Ege (co_host).
-    //    Tek etkinlik iki üniversitenin kulüplerini birleştirir; universityId
-    //    denormalize EDİLMEDİĞİ için bu ŞEMA DEĞİŞMEDEN mümkün olur.
-    await createActivity({
+    const hackathon = await createActivity({
       hostClubId: techClub.id, coHostClubIds: [egeTechClub.id], createdBy: mustafa,
       title: "Üniversitelerarası Hackathon 2026", description: "Antalya ve Ege kulüpleri ortak turnuva.",
       location: "Online + Kampüsler", startsAt: inDays(21), endsAt: inDays(23), capacity: 200,
+      coverUrl: picsum16x9Activity("activity-hackathon"),
       attendees: [{ userId: mustafa }, { userId: cem }, { userId: gizem }, { userId: sen, status: "interested" }],
     });
 
@@ -911,6 +937,56 @@ async function main(): Promise<() => Promise<void>> {
       description: "Kendi üniversitesi discover listesinde filtrelenir.",
       location: "Antalya Kampüs", startsAt: inDays(16), visibility: "inter_university",
     });
+
+    // Demo sosyal önizleme (salt okunur) — yalnızca Antalya tenant bayrağı açıkken API'de görünür.
+    console.log("   💬 Demo sosyal önizleme (yorum/beğeni) verisi...");
+    const techImg1 = antalyaGalleryImages[0]!;
+    const techImg2 = antalyaGalleryImages[1]!;
+    const photoImg1 = antalyaGalleryImages[6]!;
+    const musicImg1 = antalyaGalleryImages[11]!;
+
+    await tx.insert(schema.gallerySocialPreviewComments).values([
+      { universityId: antalya.id, galleryImageId: techImg1.id, authorId: sen, body: "Bu fotoğraftaki enerji harika, bir sonraki buluşmada da aynı mekanda olalım!" },
+      { universityId: antalya.id, galleryImageId: techImg1.id, authorId: can, body: "Sunum slaytlarını kulüp kanalında paylaşır mısınız?" },
+      { universityId: antalya.id, galleryImageId: techImg1.id, authorId: emre, body: "Geç kaldım ama kayıt var mı?" },
+      { universityId: antalya.id, galleryImageId: techImg2.id, authorId: mustafa, body: "Hackathon takımları için Discord odası açıldı." },
+      { universityId: antalya.id, galleryImageId: techImg2.id, authorId: sen, body: "Backend takımı arıyoruz, DM atın." },
+      { universityId: antalya.id, galleryImageId: photoImg1.id, authorId: ayse, body: "Kaleiçi gezisinde ISO ayarlarını konuştuk, çok verimli oldu." },
+      { universityId: antalya.id, galleryImageId: photoImg1.id, authorId: burak, body: "Bu kare sergide de yer alacak!" },
+      { universityId: antalya.id, galleryImageId: musicImg1.id, authorId: can, body: "Kapanış konseri için prova listesi güncellendi." },
+      { universityId: antalya.id, galleryImageId: musicImg1.id, authorId: emre, body: "Sahne ışıkları bu sefer çok iyi ayarlandı." },
+    ]);
+    await tx.insert(schema.gallerySocialPreviewLikes).values([
+      { universityId: antalya.id, galleryImageId: techImg1.id, userId: sen },
+      { universityId: antalya.id, galleryImageId: techImg1.id, userId: can },
+      { universityId: antalya.id, galleryImageId: techImg1.id, userId: emre },
+      { universityId: antalya.id, galleryImageId: techImg1.id, userId: burak },
+      { universityId: antalya.id, galleryImageId: techImg2.id, userId: mustafa },
+      { universityId: antalya.id, galleryImageId: techImg2.id, userId: sen },
+      { universityId: antalya.id, galleryImageId: photoImg1.id, userId: ayse },
+      { universityId: antalya.id, galleryImageId: photoImg1.id, userId: burak },
+      { universityId: antalya.id, galleryImageId: musicImg1.id, userId: can },
+      { universityId: antalya.id, galleryImageId: musicImg1.id, userId: emre },
+    ]);
+    await tx.insert(schema.activitySocialPreviewComments).values([
+      { universityId: antalya.id, activityId: reactWorkshop.id, authorId: sen, body: "React atölyesine kesinlikle katılacağım, laptop getiriyorum." },
+      { universityId: antalya.id, activityId: reactWorkshop.id, authorId: can, body: "Başlangıç seviyesi için uygun mu?" },
+      { universityId: antalya.id, activityId: reactWorkshop.id, authorId: emre, body: "Orta seviye de rahat eder, kayıt linki yakında." },
+      { universityId: antalya.id, activityId: kodMuzikGecesi.id, authorId: mustafa, body: "Canlı kodlama bölümü için demo repo hazır." },
+      { universityId: antalya.id, activityId: kodMuzikGecesi.id, authorId: emre, body: "Akustik set için gitar getiriyorum." },
+      { universityId: antalya.id, activityId: hackathon.id, authorId: sen, body: "Takım arıyorum — mobil tarafına odaklanabilirim." },
+      { universityId: antalya.id, activityId: hackathon.id, authorId: cem, body: "Ege'den katılacağız, Antalya ekibiyle tanışmak güzel olur." },
+    ]);
+    await tx.insert(schema.activitySocialPreviewLikes).values([
+      { universityId: antalya.id, activityId: reactWorkshop.id, userId: sen },
+      { universityId: antalya.id, activityId: reactWorkshop.id, userId: can },
+      { universityId: antalya.id, activityId: reactWorkshop.id, userId: emre },
+      { universityId: antalya.id, activityId: kodMuzikGecesi.id, userId: mustafa },
+      { universityId: antalya.id, activityId: kodMuzikGecesi.id, userId: can },
+      { universityId: antalya.id, activityId: hackathon.id, userId: mustafa },
+      { universityId: antalya.id, activityId: hackathon.id, userId: sen },
+      { universityId: antalya.id, activityId: hackathon.id, userId: cem },
+    ]);
   });
 
   // tenant_settings transaction içinde yazıldı; öncesinde getTenantSettings çağrılmışsa

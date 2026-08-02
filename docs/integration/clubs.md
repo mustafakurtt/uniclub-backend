@@ -407,6 +407,11 @@ Ayrıntılı yaşam döngüsü, görünürlük ve bildirim kuralları: [announce
 
 `POST` body: `{ "imageUrl": "url (max 512)", "caption": "string (max 256, opsiyonel)" }`.
 
+**Liste yanıtı (`GET`)** — tenant `feed.social.preview` bayrağı **açık** olduğunda her görsele
+gömülür (demo katman; T2.7 gerçek yorum/beğeni özelliği geldiğinde değişecek):
+`commentCount`, `likeCount`, `recentComments` (son 3 yorum: `authorName`, `body`, `createdAt`).
+Bayrak kapalı tenant'ta bu alanlar **hiç dönmez** (404 değil — veri zenginleştirme).
+
 > Dosya upload endpoint'i yoktur — tüm `*Url` alanları düz URL string alır (S3/Cloudinary vb. frontend/ayrı servis işidir).
 
 ---

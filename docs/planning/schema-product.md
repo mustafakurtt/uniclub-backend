@@ -61,6 +61,13 @@ Uygulandı (2026-07-31): `password_resets` tablosu + `POST /api/auth/forgot-pass
 `inter_university` eklendi (opt-in; migration mevcut satırları değiştirmez). Kalan borç:
 yukarıdaki merge maddeleri.
 
+**Demo sosyal önizleme (salt okunur):** `gallery_social_preview_*` ve
+`activity_social_preview_*` tabloları — yalnızca seed ile doldurulur; API'de yazma ucu yok.
+Tenant `feed.social.preview` release bayrağı (`sunsetAfter: 2026-11-02`) açık tenant'larda
+galeri/etkinlik listelerine `commentCount`, `likeCount`, `recentComments` gömülür.
+Gerçek yorum/beğeni özelliği T2.7 kapsamındadır; bu tablolar o zaman moderasyon ve
+yazma uçlarıyla değiştirilecek veya kaldırılacaktır.
+
 ### 3.2 Duyuru yaşam döngüsü
 
 **Durum:** Uygulandı — kulüp duyuruları (`/api/clubs/:clubId/announcements`) ve okul

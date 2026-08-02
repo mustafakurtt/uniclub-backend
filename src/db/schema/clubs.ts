@@ -164,6 +164,8 @@ export const clubGallery = table("club_gallery", {
     foreignColumns: [clubs.id, clubs.universityId],
     name: "club_gallery_club_tenant_fkey",
   }).onDelete("cascade"),
+  // Bileşik tenant kilidi için (gallery_social_preview_* → club_gallery).
+  t.unique("club_gallery_id_university_unique").on(cols.id, cols.universityId),
   // Kulüp detay sayfasının galeri sorgusu.
   t.index("club_gallery_club_idx").on(cols.clubId, cols.createdAt.desc()),
 ]);

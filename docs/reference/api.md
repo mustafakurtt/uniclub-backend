@@ -427,6 +427,8 @@ Body şemaları:
 
 **POST** body: `{ "imageUrl": "url (max 512)", "caption": "string (max 256, opsiyonel)" }`
 
+`GET` yanıtında tenant `feed.social.preview` açıkken her görsele `commentCount`, `likeCount`, `recentComments` (demo; T2.7'de gerçek özellik). Bayrak kapalı → alanlar yok.
+
 > Not: `imageUrl`/`logoUrl`/`coverUrl`/`photoUrl` her yerde düz URL string olarak alınır. Bu URL'yi **`POST /api/uploads`** ile (gerçek dosya yükleyip) üretebilirsiniz — bkz. [Media](#13-media--dosya-yükleme). Alternatif olarak harici bir servisin (S3/Cloudinary) URL'si de verilebilir.
 
 ---
@@ -619,6 +621,10 @@ request/response örnekleri): [`docs/integration/activities.md`](../integration/
 Kilit tasarım: etkinlik ↔ kulüp **M:N** (`activity_clubs`, host/co_host). Bir etkinliğin
 tek bir `universityId`'si **yoktur** — tenant'ı katılan kulüplerden türetilir; co-hosted
 etkinlik birden fazla üniversitenin keşif akışında görünebilir (turnuva senaryosu).
+
+`GET /api/activities` ve `GET /api/clubs/:clubId/activities` listelerinde tenant
+`feed.social.preview` açıkken kartlara `commentCount`, `likeCount`, `recentComments`
+gömülür (demo katman; yazma ucu yok).
 
 **Keşif + RSVP** (Bearer; tenant JWT'den):
 
