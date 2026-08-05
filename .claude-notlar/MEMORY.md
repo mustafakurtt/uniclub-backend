@@ -1,0 +1,17 @@
+- [PM rolü ve denetim düzeni](pm-rolu-ve-denetim-duzeni.md) — Claude kod yazmaz, prompt yazar ve her iddiayı koda karşı doğrular; 3 kapı + migration + commit Claude'da
+- [İki agent paralel model](iki-agent-paralel-model.md) — TEK BE + TEK FE; üçe çıkarmak denendi ve geri alındı, darboğaz doğrulama
+- [Ajan prompt desenleri](ajan-prompt-desenleri.md) — neyin işe yaradığı deneyle ölçüldü: yasak listesi, kritik kural en başa, "gerçek çıktıyı yapıştır", alan adlarını iki prompt'a sabitle
+- [Doğrulama refleksleri](dogrulama-refleksleri.md) — yeşil test ≠ çalışan sistem; canlı prob at, dosyanın baytına bak, postgres tükenmesi kod hatası değil
+- [Tıklama provası](tiklama-provasi.md) — sürüm/demo öncesi ZORUNLU; 530 testin göremediği 5 sorunu gerçek hesapla tıklamak buldu
+- [Ürün yol haritası ve durum](urun-yol-haritasi-ve-durum.md) — M1 ve M2 bitti; sırada M3 DEĞİL, M2.5 arayüz bilgi mimarisi (modal → rota)
+- [Frontend bilgi mimarisi teşhisi](frontend-bilgi-mimarisi.md) — "geniş ama sığ": 11 rota / 1 detay rotası / 4 modal; modal'ın bedeli işlevsel
+- [Yüzey kapsaması](yuzey-kapsamasi.md) — ÇÖZÜLDÜ: 206 uç ölçüldü, gerçek borç 19, docs:check mandalı büyümeye izin vermiyor
+- [Yönetim bilgi mimarisi](yonetim-bilgi-mimarisi.md) — panel dört ayrı eksende bölünmüştü; menü nesneye göre, bilgi detay sayfalarına
+- [Yönerge araştırması](yonerge-arastirmasi.md) — docs/research/yonergeler/; onay şekli kurul↔zincir ikiye ayrılıyor, kurucu 8/15/50; PDF'i pdfjs-dist ile çıkar, arama özetine güvenme
+- [Çalışma akışı: develop üzerinde](calisma-akisi-develop-uzerinde.md) — her tur PR yok; develop'a commit, PR birikince, etiket/release Claude'da (gh)
+- [Komutları ben çalıştırırım](komutlari-ben-calistiririm.md) — Cursor kodlar, Claude denetler; raporlar koda karşı doğrulanır
+- [Onay bekleme yok](onay-bekleme-yok.md) — her tur "devam edeyim mi?" SORMA; değerlendir, karar ver, prompt'ları doğrudan yaz, gerekçeyi anlat
+- [Depo dal kuralları](depo-dal-kurallari.md) — FE main korumalı (PR + CI şart), BE develop serbest; FE ajanı dalı sürekli şaşırıyor
+- [Masaüstünden prod erişimi](desktop-prod-access.md) — uniclub.test → laptop; IP DHCP'den kayıyor, açılmazsa önce güncel LAN IP'yi teyit et
+- [hono-core soyutlaması](hono-core-extraction.md) — core'u proje-bağımsız kütüphaneye çevirme; adım adım, pilot=university
+- [Eski teknik günlük](project-status-shelved.md) — TARİHSEL: 2026-07 cache/perf/activities turlarının ayrıntılı kaydı. "Proje rafa kaldırıldı" kısmı ARTIK GEÇERSİZ; proje çok aktif

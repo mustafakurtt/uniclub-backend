@@ -235,7 +235,15 @@ function scanDeadPaths(dir: string) {
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry);
     if (statSync(p).isDirectory()) {
-      if (entry === "node_modules" || entry === ".git" || entry === "src/db/migrations") continue;
+      // .claude-notlar: kişisel çalışma notlarının yedeği — proje dokümanı
+      // değil, tarihsel kayıt tutar (eski path'lere atıf yapması normaldir).
+      if (
+        entry === "node_modules" ||
+        entry === ".git" ||
+        entry === "src/db/migrations" ||
+        entry === ".claude-notlar"
+      )
+        continue;
       scanDeadPaths(p);
     } else if (scanExts.some((ext) => entry.endsWith(ext))) {
       if (relative(ROOT, p) === "scripts/update-doc-links.ts") continue;
